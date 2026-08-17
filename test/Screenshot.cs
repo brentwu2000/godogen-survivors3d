@@ -4,7 +4,7 @@ using Godot;
 /// visual confirmation rather than a passing build.
 ///
 ///   godot --script test/Screenshot.cs
-///   godot --script test/Screenshot.cs -- 0 0 mixed
+///   godot --script test/Screenshot.cs -- 0 0 mixed throw
 ///
 /// Not headless — the null rendering driver has nothing to capture.
 ///
@@ -26,6 +26,7 @@ public partial class Screenshot : SceneTree
     private int _frame;
     private Vector3? _teleport;
     private bool _mixed;
+    private bool _throw;
     private Node? _scene;
 
     public override void _Initialize()
@@ -61,6 +62,7 @@ public partial class Screenshot : SceneTree
         foreach (string arg in args)
         {
             _mixed |= arg == "mixed";
+            _throw |= arg == "throw";
             if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
                 _warmup = Mathf.Max(1, frames);
         }
@@ -88,6 +90,23 @@ public partial class Screenshot : SceneTree
                     horde.SpawnByIntensity(player.GlobalPosition + new Vector3(
                         Mathf.Cos(angle) * radius, 0.0f, Mathf.Sin(angle) * radius));
                 }
+            }
+
+            // After the crowd, not before. Thrown items resolve instantly and the
+            // fire burns out, so the only way to photograph either is to spend
+            // one on the frame being taken — and spending it on an empty field
+            // photographs nothing.
+            if (_throw && player is Player thrower)
+            {
+                foreach (string name in new[] { "molotov", "pipe_bomb" })
+                {
+                    var item = GD.Load<ItemResource>($"res://resources/items/{name}.tres");
+                    if (item != null)
+                        thrower.Backpack.TryAdd(item, 1);
+                }
+
+                thrower.TryThrow();
+                thrower.TryThrow();
             }
         }
 

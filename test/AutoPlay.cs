@@ -275,6 +275,16 @@ public partial class AutoPlay : SceneTree
             return;
         }
 
+        // Throw when the crowd is worth a throw. A player who dies holding two
+        // pipe bombs has been measured as a player who had no pipe bombs, and
+        // the balance table then says the item does nothing.
+        if (_player.ThrowableCount > 0 && CrowdedAhead() >= ThrowThreshold)
+        {
+            Tap("throw");
+            _thrown++;
+            return;
+        }
+
         // Off a dry weapon, and back onto the gun once there are rounds for it.
         bool holdingMelee = _weapons?.Weapon is { MagazineSize: 0 };
         if (_weapons is { OtherSlotReady: true } && (_weapons.IsDry || holdingMelee))
@@ -359,6 +369,31 @@ public partial class AutoPlay : SceneTree
     private FlowField? _navField;
     private Vector3 _navTarget = new(float.MaxValue, 0.0f, float.MaxValue);
 
+    /// Enemies inside the blast if the throw went out now. Counted where the
+    /// item would land rather than around the player, because that is the only
+    /// number that decides whether throwing is worth its sale price.
+    private const int ThrowThreshold = 6;
+
+    private int CrowdedAhead()
+    {
+        Vector2 aim = _player.Facing == Vector2.Zero ? Vector2.Down : _player.Facing;
+        Vector3 landing = _player.GlobalPosition + new Vector3(aim.X, 0.0f, aim.Y) * _player.ThrowRange;
+
+        const float radius = 4.5f;
+        int count = 0;
+
+        for (int i = 0; i < _horde.Pool.Count; i++)
+        {
+            Vector3 delta = _horde.Pool.Position[i] - landing;
+            if (delta.X * delta.X + delta.Z * delta.Z < radius * radius)
+                count++;
+        }
+
+        return count;
+    }
+
+    private int _thrown;
+
     /// Whether the bag holds anything that does something when used. The player
     /// can see this; the bot has to look, or it presses a dead key forever.
     private bool CarriesUsable()
@@ -422,7 +457,8 @@ public partial class AutoPlay : SceneTree
                $"  armour {_player.Armour:F0}, speed {_player.MoveSpeed:F2}, " +
                $"search x{_player.SearchSpeed:F2}, max HP {_player.MaxHealth:F0}\n" +
                $"  holding {_weapons?.Weapon?.WeaponName ?? "(none)"} " +
-               $"{_weapons?.Ammo ?? 0}/{_weapons?.Reserve ?? 0}, {ammo}";
+               $"{_weapons?.Ammo ?? 0}/{_weapons?.Reserve ?? 0}, {ammo}\n" +
+               $"  threw {_thrown}, still carrying {_player.ThrowableCount}";
     }
 
     private bool Bind()

@@ -33,6 +33,9 @@ public interface IInputSource
     /// Switches to the other weapon slot.
     bool SwapPressed { get; }
 
+    /// Throws the cheapest carried item that acts on the world.
+    bool ThrowPressed { get; }
+
     /// Called once per frame before the properties are read. Sources that need
     /// to project a screen position into the world (mouse aim) use the player's
     /// position as the ground plane height.

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_7npms"]
+
+[resource]
+script = ExtResource("1_7npms")
+ItemName = "Molotov"
+Rarity = 1
+Value = 70
+Weight = 1.3
+Effect = 5
+EffectAmount = 22.0
+EffectRadius = 3.5
+EffectDuration = 7.0

@@ -69,6 +69,13 @@ public partial class Horde : Node3D
     /// than in the weapon handler's pool, which only ever hurts enemies.
     public ProjectilePool EnemyShots { get; private set; } = null!;
 
+    /// Burning ground from thrown incendiaries. Owned here because the horde is
+    /// what walks into it — the thing that ticks damage should be the thing that
+    /// already iterates every enemy once a frame.
+    public HazardField Hazards { get; private set; } = null!;
+
+    [Export] public int HazardCapacity { get; set; } = 8;
+
     private SpatialGrid _grid = null!;
     private FlowField _field = null!;
     private HordeRenderer _renderer = null!;
@@ -101,6 +108,8 @@ public partial class Horde : Node3D
 
         Pool = new EnemyPool(Capacity);
         EnemyShots = new ProjectilePool(EnemyProjectileCapacity);
+        Hazards = new HazardField(HazardCapacity);
+        BuildHazardDecals();
         _grid = new SpatialGrid(Vector2.Zero, ArenaExtent, SeparationRadius * 2.0f, Capacity);
         _field = new FlowField(Vector2.Zero, ArenaExtent, 1.5f);
         _neighbours = new int[Capacity];
@@ -202,6 +211,69 @@ public partial class Horde : Node3D
     /// so re-marking them on every rebuild would be pure waste.
     public void BlockBox(Vector2 center, Vector2 halfExtents) => _field.BlockBox(center, halfExtents);
 
+    /// One flat disc per hazard slot, built once and moved as patches come and
+    /// go. Creating a node per throw would allocate in the middle of the fight
+    /// the throw was meant to win.
+    private void BuildHazardDecals()
+    {
+        _hazardDecals = new MeshInstance3D[HazardCapacity];
+
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(1.0f, 0.32f, 0.04f, 0.6f),
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+
+            // Same reason the blob shadow does it: coplanar ground decals
+            // z-fight each other otherwise.
+            DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
+        };
+
+        for (int i = 0; i < HazardCapacity; i++)
+        {
+            var decal = new MeshInstance3D
+            {
+                Name = $"Hazard{i}",
+                Mesh = new CylinderMesh { TopRadius = 1.0f, BottomRadius = 1.0f, Height = 0.04f },
+                MaterialOverride = material,
+                CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+                Visible = false,
+            };
+
+            AddChild(decal);
+            _hazardDecals[i] = decal;
+        }
+    }
+
+    private MeshInstance3D[] _hazardDecals = System.Array.Empty<MeshInstance3D>();
+
+    /// Ticks the burning ground and shows where it is. Enemies only: the thrower
+    /// picks the spot, and a patch they also have to avoid turns a tactical item
+    /// into a way to kill yourself while being pushed backwards. The bloater
+    /// already owns "your own kills can hurt you".
+    private void StepHazards(float delta)
+    {
+        Hazards.Step(delta);
+
+        for (int i = Pool.Count - 1; i >= 0; i--)
+        {
+            float dps = Hazards.DamageAt(Pool.Position[i]);
+            if (dps > 0.0f)
+                Damage(i, dps * delta, Vector2.Zero);
+        }
+
+        for (int i = 0; i < _hazardDecals.Length; i++)
+        {
+            bool active = i < Hazards.Count;
+            _hazardDecals[i].Visible = active;
+            if (!active)
+                continue;
+
+            _hazardDecals[i].Position = Hazards.Position[i] + new Vector3(0.0f, 0.02f, 0.0f);
+            _hazardDecals[i].Scale = new Vector3(Hazards.Radius[i], 1.0f, Hazards.Radius[i]);
+        }
+    }
+
     /// Re-reads level geometry into the field. Obstacles are static within a
     /// run, so this is not needed in play — but a level regenerated underneath a
     /// live field leaves the field describing the previous map, which is exactly
@@ -271,6 +343,7 @@ public partial class Horde : Node3D
         if (_player == null || Pool.Count == 0)
         {
             StepEnemyShots(step);
+            StepHazards(step);
             _renderer.Sync(Pool, Types);
             return;
         }
@@ -346,6 +419,7 @@ public partial class Horde : Node3D
             player.TakeContactDamage(contactDamage, step);
 
         StepEnemyShots(step);
+        StepHazards(step);
 
         _tick++;
         _renderer.Sync(Pool, Types);
@@ -533,6 +607,33 @@ public partial class Horde : Node3D
 
         EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
+    }
+
+    /// A thrown charge going off. Enemies only, for the same reason the burning
+    /// ground is: the player chose where it lands, and a grenade that can also
+    /// kill them is a mistake generator on a map that is constantly pushing them
+    /// backwards. Returns how many it killed, so the thrower can say so.
+    ///
+    /// Blast kills do not chain into bloaters. One thrown item resolving into a
+    /// pile of secondary explosions is a depth nobody chose, exactly as it is
+    /// when a bloater starts it.
+    public int Detonate(Vector3 center, float radius, float damage)
+    {
+        int killed = 0;
+
+        for (int i = Pool.Count - 1; i >= 0; i--)
+        {
+            if (FlatDistanceSquared(Pool.Position[i], center) >= radius * radius)
+                continue;
+
+            Vector3 away = Pool.Position[i] - center;
+            var push = new Vector2(away.X, away.Z).Normalized() * 0.4f;
+
+            if (Damage(i, damage, push, allowBlast: false))
+                killed++;
+        }
+
+        return killed;
     }
 
     /// A death blast, resolved one level deep — blast kills cannot blast in turn.

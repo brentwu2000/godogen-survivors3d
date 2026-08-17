@@ -38,6 +38,14 @@ public partial class BuildItems : SceneTree
                     Effect = ItemEffect.Adrenaline, EffectAmount = 8.0f },
             new() { ItemName = "Medkit", Rarity = ItemRarity.Uncommon, Value = 80, Bulk = 2, Weight = 1.6f,
                     Effect = ItemEffect.Heal, EffectAmount = 45.0f },
+            // The first two things the backpack can do to the world rather than
+            // to the person carrying it. A burst answers a crowd; a fire answers
+            // a doorway — and both cost their sale price to find out.
+            new() { ItemName = "Pipe Bomb", Rarity = ItemRarity.Uncommon, Value = 90, Bulk = 1, Weight = 1.3f,
+                    Effect = ItemEffect.Explosive, EffectAmount = 55.0f, EffectRadius = 4.5f },
+            new() { ItemName = "Molotov", Rarity = ItemRarity.Uncommon, Value = 70, Bulk = 1, Weight = 1.3f,
+                    Effect = ItemEffect.Incendiary, EffectAmount = 22.0f, EffectRadius = 3.5f, EffectDuration = 7.0f },
+
             new() { ItemName = "Circuit Board", Rarity = ItemRarity.Uncommon, Value = 120, Bulk = 1, Weight = 1.2f },
             new() { ItemName = "Antiviral Serum", Rarity = ItemRarity.Rare, Value = 440, Bulk = 2, Weight = 0.35f },
         };

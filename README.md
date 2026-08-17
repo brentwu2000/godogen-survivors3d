@@ -4,9 +4,10 @@ A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Braw
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
-Status: the loop is complete and playable end to end — camera and movement, the horde and its
-performance floor, weapons and proficiency, loot and extraction, the meta layer and saves, and the
-proof video. Every probe below passes. Build gate re-verified 2026-08-17.
+Status: both loops close. A run is fight, loot, grow, extract on an arena generated fresh each time;
+between runs a base screen turns what came back into gear that changes the next one, and dying in
+that gear loses it. Five enemy variants, finite ammo, items you can use or throw. Every probe below
+passes. Build gate re-verified 2026-08-17.
 
 ## Running it
 
@@ -18,8 +19,8 @@ godot                                # play — opens at the base
 ```
 
 WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
-reloads, `[F]` secures the top item into the safe box, `[Q]` uses a carried item, `[Tab]` swaps
-weapons, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
+reloads, `[F]` secures the top item into the safe box, `[Q]` uses a carried item, `[G]` throws one,
+`[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
 touch implementation drives the same code with two virtual sticks.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
@@ -32,7 +33,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
-| `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not |
+| `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not, and throwing is its own verb |
 | `test/LevelProbe.cs` | yes | A seed reproduces its arena, nothing is placed in a wall, the horde routes around what was generated, and 100 seeds produce no sealed exit |
 | `test/ShopProbe.cs` | yes | A v1 save migrates, a newer one is refused, buying is all-or-nothing, and dying costs the kit but not the practice |
 | `test/BaseLoopProbe.cs` | yes | Base → launch → die → back at the base, driven from the keys |
@@ -66,8 +67,11 @@ ffmpeg -y -framerate 30 -pattern_type glob -i 'screenshots/result/frame*.png' \
 
 `Presentation.cs` injects compressed values into `_Initialize` — 70 enemies at open, a 110 s run,
 extraction open from t=0, spawn 6→16/s — and does not touch `RunDirector`'s own defaults. Shot at
-shipping numbers the first minute is an empty field: correct by design, and nothing to film. The two
-crates sit on opposite corners deliberately, so the walk back to the pad is part of the shot.
+shipping numbers the first minute is an empty field: correct by design, and nothing to film.
+
+It also still expects two crates on opposite corners, which a hand-placed arena promised and a
+generated one does not. The seed is pinned so the shot is at least repeatable, but this has not been
+re-cut since the map stopped being fixed — see the end of this file.
 
 The camera's `Position` and `RotationDegrees` are set in `BuildMain.BuildCameraRig`, because the first
 movie frame renders before `_Process` and `CameraRig`'s lerp has not run yet.
@@ -160,6 +164,17 @@ shot buys 8 seconds of +35% speed. Using one costs exactly its extraction value,
 health and money in the same slots and every heal is money not banked. Only if it would help: nothing
 is spent at full health or into a full reserve. The two most valuable items are pure cargo and cannot
 be used at any price, which is what makes carrying the serum a gamble rather than a stockpile.
+
+**`[G]` throws.** A pipe bomb does 55 in 4.5 m where it lands; a molotov leaves a patch burning at
+22/s for 7 seconds — a burst answers a crowd, a fire answers a doorway. It is a separate verb from
+`[Q]` on purpose: one shared "spend something" key is how a player heals by blowing a hole in the
+crowd they were running from. Throws land a fixed 8 m along the facing rather than at the nearest
+cluster, because an item whose landing point cannot be predicted is one nobody spends.
+
+Both hurt enemies only. The thrower chose the spot, and a patch they also have to avoid turns a
+tactical item into a way to kill yourself while being pushed backwards — the bloater already owns
+"your own kills can hurt you". Blast kills do not chain into bloaters either, for the same reason
+theirs do not chain into each other.
 
 **Firearms run out.** The rifle starts with 240 rounds behind its magazine, capped at 360, and reloads
 draw from that reserve rather than conjuring one. Melee and the bow have no magazine and so can never

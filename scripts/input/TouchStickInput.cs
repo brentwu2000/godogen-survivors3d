@@ -22,6 +22,7 @@ public sealed class TouchStickInput : IInputSource
     public bool SecurePressed { get; private set; }
     public bool UsePressed { get; private set; }
     public bool SwapPressed { get; private set; }
+    public bool ThrowPressed { get; private set; }
 
     public TouchStickInput(VirtualStick moveStick, VirtualStick aimStick)
     {

@@ -73,6 +73,9 @@ public partial class ItemProbe : SceneTree
             case 3: return RunStage(StageAdrenaline, "adrenaline is speed for a price, and expires");
             case 4: return RunStage(StageDryThenSwap, "a dry rifle stops; the sidearm does not");
             case 5: return RunStage(StageSlotsAreSeparate, "each slot keeps its own ammo and levels");
+            case 6: return RunStage(StageThrowSeparate, "throwing is its own verb, not the use key");
+            case 7: return RunStage(StageExplosive, "a thrown charge clears a radius where it lands");
+            case 8: return RunStage(StageIncendiary, "fire keeps burning, then goes out");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -92,6 +95,131 @@ public partial class ItemProbe : SceneTree
         _stageTick = 0;
         return false;
     }
+
+    /// The use key must not reach for a grenade and the throw key must not reach
+    /// for a medkit. One shared "spend something" verb is how a player heals by
+    /// blowing themselves a hole in the crowd they were running from.
+    private bool? StageThrowSeparate(int tick)
+    {
+        ItemResource? bomb = Load("pipe_bomb");
+        ItemResource? medkit = Load("medkit");
+        if (bomb == null || medkit == null)
+            return false;
+
+        _horde!.Pool.Clear();
+        _player!.Heal(9999.0f);
+        _player.Backpack.Clear();
+        _player.Backpack.TryAdd(bomb, 1);
+
+        // Hurt, carrying only a bomb: the use key has nothing it may spend.
+        _player.TakeDamage(40.0f);
+        int usedWithOnlyABomb = _player.TryUseBest();
+
+        _player.Backpack.Clear();
+        _player.Backpack.TryAdd(medkit, 1);
+        int thrownWithOnlyAMedkit = _player.TryThrow();
+
+        GD.Print($"  use key with only a bomb spent {usedWithOnlyABomb}; " +
+                 $"throw key with only a medkit spent {thrownWithOnlyAMedkit}; " +
+                 $"bomb usable = {bomb.IsUsable}, supply = {bomb.IsSupply}");
+
+        return usedWithOnlyABomb == 0
+            && thrownWithOnlyAMedkit == 0
+            && bomb.IsThrowable
+            && !bomb.IsSupply;
+    }
+
+    private bool? StageExplosive(int tick)
+    {
+        ItemResource? bomb = Load("pipe_bomb");
+        if (bomb == null)
+            return false;
+
+        _horde!.Pool.Clear();
+        _player!.Heal(9999.0f);
+        _player.Backpack.Clear();
+        _player.Backpack.TryAdd(bomb, 1);
+
+        // Facing is the last non-zero heading, and the probe never moves the
+        // player, so it is whatever the default is — read it rather than assume.
+        Vector2 aim = _player.Facing;
+        Vector3 landing = _player.GlobalPosition +
+                          new Vector3(aim.X, 0.0f, aim.Y) * _player.ThrowRange;
+
+        // Three inside the blast, one well outside it.
+        for (int i = 0; i < 3; i++)
+            _horde.Spawn(landing + new Vector3(i * 0.8f, 0.0f, 0.0f));
+
+        Vector3 bystanderAt = landing + new Vector3(bomb.EffectRadius + 5.0f, 0.0f, 0.0f);
+        _horde.Spawn(bystanderAt);
+
+        int before = _horde.Pool.Count;
+        int spent = _player.TryThrow();
+        int after = _horde.Pool.Count;
+
+        bool bystanderLived = after == 1 &&
+            Mathf.Abs(_horde.Pool.Position[0].X - bystanderAt.X) < 0.5f;
+
+        GD.Print($"  {bomb.ItemName} ({bomb.EffectAmount:F0} in {bomb.EffectRadius:F1}m) for {spent}: " +
+                 $"{before} -> {after} enemies, the one outside survived = {bystanderLived}");
+
+        return spent == bomb.Value && before == 4 && after == 1 && bystanderLived;
+    }
+
+    private bool? StageIncendiary(int tick)
+    {
+        ItemResource? molotov = Load("molotov");
+        if (molotov == null)
+            return false;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _horde.Hazards.Clear();
+            _player!.Heal(9999.0f);
+            _player.Backpack.Clear();
+            _player.Backpack.TryAdd(molotov, 1);
+
+            Vector2 aim = _player.Facing;
+            _fireAt = _player.GlobalPosition + new Vector3(aim.X, 0.0f, aim.Y) * _player.ThrowRange;
+
+            // A brute, because it has to survive long enough to be measured
+            // burning rather than dying to the first tick.
+            _horde.Spawn(_fireAt, 2);
+            _spentOnFire = _player.TryThrow();
+            _healthAtLight = _horde.Pool.Count > 0 ? _horde.Pool.Health[0] : 0.0f;
+            return null;
+        }
+
+        // Half a second in: burning, still alive, patch still there.
+        if (tick == 30)
+        {
+            _healthWhileBurning = _horde!.Pool.Count > 0 ? _horde.Pool.Health[0] : 0.0f;
+            _patchesWhileBurning = _horde.Hazards.Count;
+            return null;
+        }
+
+        // Past its duration: the patch is gone.
+        if (tick < 60 + (int)(molotov.EffectDuration * 60.0f))
+            return null;
+
+        int patchesAfter = _horde!.Hazards.Count;
+
+        GD.Print($"  {molotov.ItemName} for {_spentOnFire}: brute {_healthAtLight:F0} -> " +
+                 $"{_healthWhileBurning:F0} HP in 0.5s ({_patchesWhileBurning} patch alight); " +
+                 $"after {molotov.EffectDuration:F0}s there are {patchesAfter}");
+
+        return _spentOnFire == molotov.Value
+            && _patchesWhileBurning == 1
+            && _healthWhileBurning < _healthAtLight
+            && patchesAfter == 0;
+    }
+
+    private Vector3 _fireAt;
+    private int _spentOnFire;
+    private float _healthAtLight;
+    private float _healthWhileBurning;
+    private int _patchesWhileBurning;
 
     private static ItemResource? Load(string name) =>
         GD.Load<ItemResource>($"res://resources/items/{name}.tres");

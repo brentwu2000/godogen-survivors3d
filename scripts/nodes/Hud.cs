@@ -164,7 +164,9 @@ public partial class Hud : CanvasLayer
               (_weapons.Weapon.MagazineSize > 0
                   ? $" {_weapons.Ammo}/{_weapons.Reserve}" + (_weapons.IsDry ? " DRY" : "")
                   : "") +
-              "   [Tab] swap   [Q] use\n";
+              "   [Tab] swap   [Q] use" +
+              (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "") +
+              "\n";
 
         return $"{minutes:00}:{seconds:00}   HP {health:F0}/{maxHealth:F0}{growth}\n" +
                arms +

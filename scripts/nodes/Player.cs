@@ -44,6 +44,7 @@ public partial class Player : CharacterBody3D
     private IInputSource _input = null!;
     private Sprite3D _sprite = null!;
     private WeaponHandler? _weapons;
+    private Horde? _horde;
 
     /// Lets the HUD install the touch source once the sticks exist. Without a
     /// call, the player falls back to keyboard and mouse.
@@ -53,6 +54,7 @@ public partial class Player : CharacterBody3D
     {
         _sprite = GetNode<Sprite3D>("Sprite");
         _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
+        _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
         Health = MaxHealth;
         Backpack = new Inventory(CarryCapacity);
@@ -96,6 +98,73 @@ public partial class Player : CharacterBody3D
 
         Backpack.RemoveOne(best);
         return chosen.Value;
+    }
+
+    /// How far a throw lands, along the direction the player is facing. Fixed
+    /// rather than aimed at the nearest crowd: a thrown item the player cannot
+    /// predict the landing of is one they will not spend.
+    [Export] public float ThrowRange { get; set; } = 8.0f;
+
+    /// Throws the cheapest thing in the bag that acts on the world, and returns
+    /// what it cost. Its own verb because a heal and a grenade on one key is a
+    /// grenade thrown at the wrong moment.
+    public int TryThrow()
+    {
+        int best = -1;
+        int bestValue = int.MaxValue;
+
+        for (int i = 0; i < Backpack.EntryCount; i++)
+        {
+            ItemResource item = Backpack.ItemAt(i);
+            if (!item.IsThrowable || item.Value >= bestValue)
+                continue;
+
+            best = i;
+            bestValue = item.Value;
+        }
+
+        if (best < 0 || _horde == null)
+            return 0;
+
+        ItemResource chosen = Backpack.ItemAt(best);
+        Vector2 aim = Facing == Vector2.Zero ? Vector2.Down : Facing;
+        Vector3 landing = GlobalPosition + new Vector3(aim.X, 0.0f, aim.Y) * ThrowRange;
+        landing.Y = 0.0f;
+
+        switch (chosen.Effect)
+        {
+            case ItemEffect.Explosive:
+                int killed = _horde.Detonate(landing, chosen.EffectRadius, chosen.EffectAmount);
+                GD.Print($"threw {chosen.ItemName}: {killed} killed");
+                break;
+
+            case ItemEffect.Incendiary:
+                _horde.Hazards.Add(landing, chosen.EffectRadius, chosen.EffectAmount, chosen.EffectDuration);
+                break;
+
+            default:
+                return 0;
+        }
+
+        Backpack.RemoveOne(best);
+        return chosen.Value;
+    }
+
+    /// How many throwables are in the bag, for the readout. A tactical item the
+    /// player has to open a menu to count is one they forget they have.
+    public int ThrowableCount
+    {
+        get
+        {
+            int total = 0;
+            for (int i = 0; i < Backpack.EntryCount; i++)
+            {
+                if (Backpack.ItemAt(i).IsThrowable)
+                    total += Backpack.CountAt(i);
+            }
+
+            return total;
+        }
     }
 
     private bool WouldHelp(ItemResource item) => item.Effect switch
@@ -229,6 +298,9 @@ public partial class Player : CharacterBody3D
 
         if (_input.UsePressed)
             TryUseBest();
+
+        if (_input.ThrowPressed)
+            TryThrow();
 
         if (_input.SwapPressed)
             _weapons?.SwapWeapon();

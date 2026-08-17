@@ -13,6 +13,7 @@ public sealed class KeyboardMouseInput : IInputSource
     public bool SecurePressed => Input.IsActionJustPressed("secure");
     public bool UsePressed => Input.IsActionJustPressed("use");
     public bool SwapPressed => Input.IsActionJustPressed("swap");
+    public bool ThrowPressed => Input.IsActionJustPressed("throw");
 
     public KeyboardMouseInput(Camera3D camera)
     {

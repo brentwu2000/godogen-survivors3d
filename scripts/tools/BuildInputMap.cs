@@ -33,6 +33,7 @@ public partial class BuildInputMap : SceneTree
         Define("secure", Keys(Key.F));
         Define("use", Keys(Key.Q));
         Define("swap", Keys(Key.Tab));
+        Define("throw", Keys(Key.G));
 
         // Level-up picks. Real actions rather than raw key reads, so a play-test
         // can press them the way a player does instead of reaching past the
