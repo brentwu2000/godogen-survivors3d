@@ -9,3 +9,5 @@ Rarity = 1
 Value = 80
 Bulk = 2
 Weight = 1.6
+Effect = 1
+EffectAmount = 45.0

@@ -102,9 +102,22 @@ public partial class Hud : CanvasLayer
             ? ""
             : $"   lv {_weapons.Level}/{_weapons.MaxLevel}" +
               (_weapons.AtCeiling ? " MAX" : "") +
-              (_player?.Armour > 0.0f ? $"   armour {_player.Armour:F0}" : "");
+              (_player?.Armour > 0.0f ? $"   armour {_player.Armour:F0}" : "") +
+              (_player?.AdrenalineActive == true ? $"   ADRENALINE {_player.AdrenalineRemaining:F0}s" : "");
+
+        // Ammo is only meaningful for a weapon that can run out, so a melee
+        // sidearm reads as the answer to being dry rather than as a broken gun
+        // with no numbers.
+        string arms = _weapons?.Weapon == null
+            ? ""
+            : $"{_weapons.Weapon.WeaponName}" +
+              (_weapons.Weapon.MagazineSize > 0
+                  ? $" {_weapons.Ammo}/{_weapons.Reserve}" + (_weapons.IsDry ? " DRY" : "")
+                  : "") +
+              "   [Tab] swap   [Q] use\n";
 
         return $"{minutes:00}:{seconds:00}   HP {health:F0}/{maxHealth:F0}{growth}\n" +
+               arms +
                $"bag {bag?.UsedBulk ?? 0}/{bag?.Capacity ?? 0}   value {bag?.TotalValue ?? 0}   " +
                $"safe {safe?.UsedBulk ?? 0}/{safe?.Capacity ?? 0}   [F] secure\n" +
                $"extract now: {Mathf.RoundToInt(carried * multiplier)}   (x{multiplier:F2})\n" +

@@ -43,6 +43,7 @@ public partial class Player : CharacterBody3D
     // Both are assigned in _Ready, which always runs before anything reads them.
     private IInputSource _input = null!;
     private Sprite3D _sprite = null!;
+    private WeaponHandler? _weapons;
 
     /// Lets the HUD install the touch source once the sticks exist. Without a
     /// call, the player falls back to keyboard and mouse.
@@ -51,10 +52,78 @@ public partial class Player : CharacterBody3D
     public override void _Ready()
     {
         _sprite = GetNode<Sprite3D>("Sprite");
+        _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
         Health = MaxHealth;
         Backpack = new Inventory(CarryCapacity);
         SafeBox = new Inventory(SafeBoxCapacity);
+    }
+
+    /// Speed multiplier while adrenaline is running.
+    [Export] public float AdrenalineBoost { get; set; } = 0.35f;
+
+    public float AdrenalineRemaining { get; private set; }
+    public bool AdrenalineActive => AdrenalineRemaining > 0.0f;
+
+    /// Spends the cheapest carried item that would do something right now, and
+    /// returns what it cost — which is exactly its extraction value, because the
+    /// backpack holds health and money in the same slots.
+    ///
+    /// Cheapest first, and only if it helps: the tinned food goes before the
+    /// medkit, and neither is spent at full health. Nothing here ever reaches
+    /// for the serum, because pure cargo is not usable at any price.
+    public int TryUseBest()
+    {
+        int best = -1;
+        int bestValue = int.MaxValue;
+
+        for (int i = 0; i < Backpack.EntryCount; i++)
+        {
+            ItemResource item = Backpack.ItemAt(i);
+            if (!item.IsUsable || item.Value >= bestValue || !WouldHelp(item))
+                continue;
+
+            best = i;
+            bestValue = item.Value;
+        }
+
+        if (best < 0)
+            return 0;
+
+        ItemResource chosen = Backpack.ItemAt(best);
+        if (!Use(chosen))
+            return 0;
+
+        Backpack.RemoveOne(best);
+        return chosen.Value;
+    }
+
+    private bool WouldHelp(ItemResource item) => item.Effect switch
+    {
+        ItemEffect.Heal => Health < MaxHealth,
+        ItemEffect.Ammo => _weapons?.WantsAmmo ?? false,
+        ItemEffect.Adrenaline => !AdrenalineActive,
+        _ => false,
+    };
+
+    private bool Use(ItemResource item)
+    {
+        switch (item.Effect)
+        {
+            case ItemEffect.Heal:
+                Heal(item.EffectAmount);
+                return true;
+
+            case ItemEffect.Ammo:
+                return _weapons?.AddReserve(Mathf.RoundToInt(item.EffectAmount)) > 0;
+
+            case ItemEffect.Adrenaline:
+                AdrenalineRemaining = item.EffectAmount;
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /// Moves one unit of the most valuable backpack item into the safe box.
@@ -136,8 +205,12 @@ public partial class Player : CharacterBody3D
     {
         _input.Update(GlobalPosition);
 
+        if (AdrenalineRemaining > 0.0f)
+            AdrenalineRemaining = Mathf.Max(0.0f, AdrenalineRemaining - (float)delta);
+
         Vector2 move = _input.Move;
-        var desired = new Vector3(move.X, 0.0f, move.Y) * MoveSpeed;
+        float speed = AdrenalineActive ? MoveSpeed * (1.0f + AdrenalineBoost) : MoveSpeed;
+        var desired = new Vector3(move.X, 0.0f, move.Y) * speed;
 
         // Frame-rate-independent damping (godot.md:50): exponential decay toward
         // the target, never a fixed fraction per tick — the latter changes feel
@@ -153,6 +226,12 @@ public partial class Player : CharacterBody3D
 
         if (_input.SecurePressed)
             TrySecureBest();
+
+        if (_input.UsePressed)
+            TryUseBest();
+
+        if (_input.SwapPressed)
+            _weapons?.SwapWeapon();
     }
 
     /// One sprite direction, mirrored at runtime. Generators cannot reliably draw

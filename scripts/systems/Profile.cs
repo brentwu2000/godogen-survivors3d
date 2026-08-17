@@ -21,6 +21,11 @@ public sealed class Profile
 
     public string LoadoutWeapon { get; set; } = "res://resources/weapons/scavenged_rifle.tres";
 
+    /// The sidearm. A new key rather than a new version: every field here is
+    /// read with a default, so a file written before this existed still loads
+    /// and simply arrives with the knife.
+    public string LoadoutSecondary { get; set; } = "res://resources/weapons/combat_knife.tres";
+
     public int RunsSurvived { get; set; }
     public int RunsLost { get; set; }
 
@@ -45,6 +50,7 @@ public sealed class Profile
             { "stash", Stash },
             { "proficiency", proficiency },
             { "loadout", LoadoutWeapon },
+            { "loadout_secondary", LoadoutSecondary },
             { "runs_survived", RunsSurvived },
             { "runs_lost", RunsLost },
         };
@@ -84,6 +90,9 @@ public sealed class Profile
 
         if (root.TryGetValue("loadout", out Variant loadout))
             profile.LoadoutWeapon = loadout.AsString();
+
+        if (root.TryGetValue("loadout_secondary", out Variant secondary))
+            profile.LoadoutSecondary = secondary.AsString();
 
         if (root.TryGetValue("runs_survived", out Variant survived))
             profile.RunsSurvived = survived.AsInt32();

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_h5rrx"]
+
+[resource]
+script = ExtResource("1_h5rrx")
+ItemName = "Adrenaline Shot"
+Rarity = 1
+Value = 60
+Weight = 1.4
+Effect = 3
+EffectAmount = 8.0

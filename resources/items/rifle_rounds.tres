@@ -9,3 +9,5 @@ Value = 18
 Weight = 3.5
 MinStack = 2
 MaxStack = 6
+Effect = 2
+EffectAmount = 30.0

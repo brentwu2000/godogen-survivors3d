@@ -55,11 +55,22 @@ public partial class MetaManager : Node
         for (int i = 0; i < Profile.Proficiency.Length; i++)
             _weapons.SetProficiency((WeaponCategory)i, Profile.Proficiency[i]);
 
-        var weapon = GD.Load<WeaponResource>(Profile.LoadoutWeapon);
+        // Slot 1 last would leave it active; the primary is what a run starts
+        // holding, and the sidearm is what it falls back to.
+        EquipInto(1, Profile.LoadoutSecondary);
+        EquipInto(0, Profile.LoadoutWeapon);
+    }
+
+    private void EquipInto(int slot, string path)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        var weapon = GD.Load<WeaponResource>(path);
         if (weapon != null)
-            _weapons.Equip(weapon);
+            _weapons!.Equip(slot, weapon);
         else
-            GD.PushWarning($"MetaManager: loadout {Profile.LoadoutWeapon} did not load; keeping the default");
+            GD.PushWarning($"MetaManager: loadout {path} did not load; slot {slot} left empty");
     }
 
     /// Sums the equipped pieces into the player's starting stats and into how

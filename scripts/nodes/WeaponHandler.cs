@@ -21,13 +21,35 @@ public partial class WeaponHandler : Node3D
     /// Metres above the ground that shots leave from and projectiles fly at.
     [Export] public float MuzzleHeight { get; set; } = 1.0f;
 
-    public WeaponResource? Weapon { get; private set; }
-    public int Ammo { get; private set; }
-    public bool Reloading => _reloadRemaining > 0.0f;
+    /// One weapon's entire live state. Two of these rather than one, because a
+    /// swap has to keep the other weapon's magazine, cooldown and levels — a
+    /// sidearm that resets every time it is put away is not a sidearm.
+    private sealed class Slot
+    {
+        public WeaponResource? Weapon;
+        public int Ammo;
+        public int Reserve;
+        public int RunUpgrades;
+        public float Cooldown;
+        public float ReloadRemaining;
+    }
+
+    private readonly Slot[] _slots = { new(), new() };
+    private int _active;
+
+    public WeaponResource? Weapon => _slots[_active].Weapon;
+    public int Ammo => _slots[_active].Ammo;
+    public int Reserve => _slots[_active].Reserve;
+    public bool Reloading => _slots[_active].ReloadRemaining > 0.0f;
+    public int ActiveSlot => _active;
+
+    /// Out of magazine and out of reserve. Not a failure state — it is the
+    /// moment the other weapon becomes the answer.
+    public bool IsDry => Weapon is { MagazineSize: > 0 } && Ammo <= 0 && Reserve <= 0;
 
     /// Levels bought with this run's kills. Reset by starting a run, never
     /// carried out of one: what the player keeps is the loot and the practice.
-    public int RunUpgrades { get; private set; }
+    public int RunUpgrades => _slots[_active].RunUpgrades;
 
     /// Where this run begins. Practice counts for at most half the weapon's
     /// ceiling, so a veteran starts further along but never arrives — there is
@@ -46,7 +68,66 @@ public partial class WeaponHandler : Node3D
     public int MaxLevel => Weapon?.MaxLevel ?? 0;
     public bool AtCeiling => Weapon != null && Level >= Weapon.MaxLevel;
 
-    public void AddRunUpgrade() => RunUpgrades++;
+    public void AddRunUpgrade() => _slots[_active].RunUpgrades++;
+
+    /// Puts looted rounds into whichever slot takes a magazine, active or not.
+    /// Returns how many fit; zero means the item did nothing and should not have
+    /// been spent, so the caller checks before using rather than after.
+    ///
+    /// Not "the active weapon": rounds go in the pouch, not in the gun that
+    /// happens to be in hand. Filling only the active slot means that swapping
+    /// to the knife when the rifle runs out turns every round in the backpack
+    /// into dead weight, at exactly the moment they matter most.
+    public int AddReserve(int rounds)
+    {
+        Slot? slot = MagazineSlot;
+        if (slot?.Weapon is not { } weapon)
+            return 0;
+
+        int taken = Mathf.Min(rounds, weapon.MaxReserve - slot.Reserve);
+        if (taken <= 0)
+            return 0;
+
+        slot.Reserve += taken;
+        return taken;
+    }
+
+    /// True when topping up would do something. Asked before an ammo item is
+    /// spent, so a full reserve leaves the rounds worth their sale price.
+    public bool WantsAmmo => MagazineSlot is { Weapon: { } weapon } slot && slot.Reserve < weapon.MaxReserve;
+
+    /// The slot that consumes ammo, preferring the one in hand when both do.
+    private Slot? MagazineSlot
+    {
+        get
+        {
+            if (_slots[_active].Weapon is { MagazineSize: > 0 })
+                return _slots[_active];
+
+            Slot other = _slots[1 - _active];
+            return other.Weapon is { MagazineSize: > 0 } ? other : null;
+        }
+    }
+
+    /// Whether the weapon not in hand could fire right now. What makes swapping
+    /// an answer rather than a gesture.
+    public bool OtherSlotReady
+    {
+        get
+        {
+            Slot other = _slots[1 - _active];
+            return other.Weapon is { } weapon
+                && (weapon.MagazineSize == 0 || other.Ammo > 0 || other.Reserve > 0);
+        }
+    }
+
+    public void SwapWeapon()
+    {
+        if (_slots[1 - _active].Weapon == null)
+            return;
+
+        _active = 1 - _active;
+    }
 
     /// Practice per weapon category, so switching from a rifle to a spear does
     /// not carry the rifle's skill across.
@@ -64,8 +145,6 @@ public partial class WeaponHandler : Node3D
     private Player? _player;
     private HordeRenderer? _projectileRenderer;
     private int[] _hitList = null!;
-    private float _cooldown;
-    private float _reloadRemaining;
     private ulong _rng = 0xD1B54A32D192ED03UL;
 
     /// Hits per point of practice, and the most a single run can teach.
@@ -118,16 +197,23 @@ public partial class WeaponHandler : Node3D
         }
     }
 
-    public void Equip(WeaponResource weapon)
-    {
-        Weapon = weapon;
-        Ammo = weapon.MagazineSize;
-        _cooldown = 0.0f;
-        _reloadRemaining = 0.0f;
+    public void Equip(WeaponResource weapon) => Equip(0, weapon);
 
-        // Run upgrades belong to the weapon that earned them. Swapping mid-run
-        // would otherwise carry a maxed rifle's levels onto a fresh axe.
-        RunUpgrades = 0;
+    /// Fills a slot from scratch. Run upgrades belong to the weapon that earned
+    /// them, so a new weapon in a slot starts at the bottom of its own curve
+    /// rather than inheriting the last one's.
+    public void Equip(int slotIndex, WeaponResource weapon)
+    {
+        if (slotIndex < 0 || slotIndex >= _slots.Length)
+            return;
+
+        Slot slot = _slots[slotIndex];
+        slot.Weapon = weapon;
+        slot.Ammo = weapon.MagazineSize;
+        slot.Reserve = Mathf.Min(weapon.StartingReserve, weapon.MaxReserve);
+        slot.Cooldown = 0.0f;
+        slot.ReloadRemaining = 0.0f;
+        slot.RunUpgrades = 0;
     }
 
     public int GetProficiency(WeaponCategory category) => _proficiency[(int)category];
@@ -139,34 +225,51 @@ public partial class WeaponHandler : Node3D
         float step = (float)delta;
         StepProjectiles(step);
 
-        if (Weapon == null || _horde == null)
+        Slot slot = _slots[_active];
+        if (slot.Weapon is not { } weapon || _horde == null)
             return;
 
         int level = Level;
 
-        if (_reloadRemaining > 0.0f)
+        if (slot.ReloadRemaining > 0.0f)
         {
-            _reloadRemaining -= step;
-            if (_reloadRemaining <= 0.0f)
-                Ammo = Weapon.MagazineSize;
+            slot.ReloadRemaining -= step;
+            if (slot.ReloadRemaining <= 0.0f)
+            {
+                // A magazine is drawn from the reserve, not conjured. A partial
+                // one is loaded when that is all there is — the last few rounds
+                // still fire, they just do not last.
+                int loaded = Mathf.Min(weapon.MagazineSize, slot.Reserve);
+                slot.Reserve -= loaded;
+                slot.Ammo = loaded;
+            }
             return;
         }
 
-        _cooldown -= step;
-        if (_cooldown > 0.0f)
+        // Dry: no magazine and nothing to fill it with. The weapon simply stops,
+        // which is the cue to swap rather than a message to read.
+        if (weapon.MagazineSize > 0 && slot.Ammo <= 0)
+        {
+            if (slot.Reserve > 0)
+                slot.ReloadRemaining = weapon.GetEffectiveReloadTime(level);
+            return;
+        }
+
+        slot.Cooldown -= step;
+        if (slot.Cooldown > 0.0f)
             return;
 
         Vector3 origin = GlobalPosition;
-        float range = Weapon.GetEffectiveRange(level);
+        float range = weapon.GetEffectiveRange(level);
 
         if (!TryGetAimDirection(origin, range, out Vector2 direction))
             return;
 
         Fire(origin, direction, level);
-        _cooldown = Weapon.GetEffectiveAttackDelay(level);
+        slot.Cooldown = weapon.GetEffectiveAttackDelay(level);
 
-        if (Weapon.MagazineSize > 0 && --Ammo <= 0)
-            _reloadRemaining = Weapon.GetEffectiveReloadTime(level);
+        if (weapon.MagazineSize > 0)
+            slot.Ammo--;
     }
 
     private bool TryGetAimDirection(Vector3 origin, float range, out Vector2 direction)

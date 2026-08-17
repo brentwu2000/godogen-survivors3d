@@ -8,3 +8,5 @@ ItemName = "Canned Food"
 Value = 14
 Weight = 4.0
 MaxStack = 3
+Effect = 1
+EffectAmount = 15.0

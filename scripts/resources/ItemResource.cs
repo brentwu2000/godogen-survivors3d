@@ -7,6 +7,22 @@ public enum ItemRarity
     Rare,
 }
 
+public enum ItemEffect
+{
+    /// Pure cargo. Worth carrying out and nothing else — which is what makes
+    /// the serum a gamble rather than a resource.
+    None,
+
+    Heal,
+
+    /// Refills the magazine reserve of whatever is equipped.
+    Ammo,
+
+    /// A timed burst of speed. The only consumable that buys position rather
+    /// than health, and the only answer to being surrounded that is not a wall.
+    Adrenaline,
+}
+
 /// A lootable item. Value is what makes extracting worth the walk, and Bulk is
 /// what stops the answer being "carry everything".
 [GlobalClass]
@@ -26,4 +42,14 @@ public partial class ItemResource : Resource
 
     [Export] public int MinStack { get; set; } = 1;
     [Export] public int MaxStack { get; set; } = 1;
+
+    /// What using one does. Every usable item is worth something at extraction
+    /// too, so spending it costs exactly its Value — the backpack holds health
+    /// and money in the same slots, and the choice between them is the point.
+    [Export] public ItemEffect Effect { get; set; } = ItemEffect.None;
+
+    /// Health restored, rounds added, or seconds of speed, depending on Effect.
+    [Export] public float EffectAmount { get; set; }
+
+    public bool IsUsable => Effect != ItemEffect.None;
 }

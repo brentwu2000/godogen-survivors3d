@@ -79,6 +79,13 @@ public partial class BuildWeapons : SceneTree
                 BaseSpreadDegrees = 9.0f,
                 BaseReloadTime = 2.2f,
                 MagazineSize = 30,
+
+                // Eight magazines in, which at the rate this fires is a couple
+                // of minutes of shooting. Looted rounds are what carry a long
+                // run past that, and the cap is what keeps them from becoming a
+                // hoard rather than a decision.
+                StartingReserve = 240,
+                MaxReserve = 360,
                 Penetration = 1,
                 Knockback = 0.08f,
             },

@@ -27,6 +27,12 @@ public interface IInputSource
     /// compete with whatever Interact grows into.
     bool SecurePressed { get; }
 
+    /// Spends the cheapest carried item that would currently help.
+    bool UsePressed { get; }
+
+    /// Switches to the other weapon slot.
+    bool SwapPressed { get; }
+
     /// Called once per frame before the properties are read. Sources that need
     /// to project a screen position into the world (mouse aim) use the player's
     /// position as the ground plane height.

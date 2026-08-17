@@ -5,6 +5,7 @@ using Godot;
 ///
 ///   godot --headless --script test/AutoPlay.cs
 ///   godot --headless --script test/AutoPlay.cs -- linger:120
+///   godot --headless --script test/AutoPlay.cs -- linger:120 noloot
 ///   godot --script test/AutoPlay.cs -- shots      (also writes frames)
 ///   godot --headless --script test/AutoPlay.cs -- profile   (uses the real save)
 ///
@@ -24,6 +25,7 @@ public partial class AutoPlay : SceneTree
     private RunDirector _director = null!;
     private ExtractionZone _extraction = null!;
     private LootContainer[] _crates = System.Array.Empty<LootContainer>();
+    private LootContainer[] _allCrates = System.Array.Empty<LootContainer>();
 
     private Vector3[] _route = System.Array.Empty<Vector3>();
     private string[] _routeLabels = System.Array.Empty<string>();
@@ -61,6 +63,7 @@ public partial class AutoPlay : SceneTree
     {
         string[] args = OS.GetCmdlineUserArgs();
         _wantShots = System.Array.IndexOf(args, "shots") >= 0;
+        _noLoot = System.Array.IndexOf(args, "noloot") >= 0;
         foreach (string arg in args)
         {
             if (arg.StartsWith("linger:") && float.TryParse(arg[7..], out float seconds))
@@ -214,17 +217,26 @@ public partial class AutoPlay : SceneTree
         return false;
     }
 
-    /// Answers a level-up the way a player does — by pressing the key, not by
-    /// calling the method. Prefers the weapon whenever it is dealt, so what this
-    /// measures is the weapon-focused climb the ceiling target is written for.
+    /// Everything the player does with a key that is not movement: answering a
+    /// level-up, spending a consumable, swapping off a dry weapon.
     ///
-    /// Press one tick, release the next: IsActionJustPressed needs an edge, and
-    /// a press that lands a frame after the offer appears is still answered,
-    /// because the offer waits.
+    /// One tap at a time, pressed on one tick and released on the next, because
+    /// IsActionJustPressed needs an edge. Nothing here reaches past the input
+    /// layer — a route that cannot be played with the keys is not a route.
     private void TakeGrowthPick()
     {
         if (_ceilingAt < 0.0f && _weapons is { Weapon: not null, AtCeiling: true })
             _ceilingAt = _director.Elapsed;
+
+        if (_weapons is { Weapon.MagazineSize: > 0 })
+            _lowestReserve = Mathf.Min(_lowestReserve, _weapons.Reserve);
+
+        if (_weapons?.IsDry == true)
+        {
+            _everDry = true;
+            if (_dryAt < 0.0f)
+                _dryAt = _director.Elapsed;
+        }
 
         if (_pickHeld != null)
         {
@@ -233,9 +245,32 @@ public partial class AutoPlay : SceneTree
             return;
         }
 
-        if (_growth is not { HasOffer: true })
+        if (_growth is { HasOffer: true })
+        {
+            TakeCard();
             return;
+        }
 
+        // Spend something only when it is both carried and wanted. "Wanted" is
+        // not the same as "below the cap": topping a nearly full reserve burns
+        // the sale price of a stack to gain nothing, and pressing the key with
+        // an empty bag is a no-op that would starve every branch below this one.
+        bool hurt = _player.Health < _player.MaxHealth * 0.6f;
+        bool lowOnAmmo = _weapons is { Weapon.MagazineSize: > 0 } && _weapons.Reserve < 30;
+        if ((hurt || lowOnAmmo) && CarriesUsable())
+        {
+            Tap("use");
+            return;
+        }
+
+        // Off a dry weapon, and back onto the gun once there are rounds for it.
+        bool holdingMelee = _weapons?.Weapon is { MagazineSize: 0 };
+        if (_weapons is { OtherSlotReady: true } && (_weapons.IsDry || holdingMelee))
+            Tap("swap");
+    }
+
+    private void TakeCard()
+    {
         // Weapon first while healthy, survival first when not. A bot that always
         // takes damage measures a player who never notices they are dying, and
         // reports the run as harder than it is.
@@ -244,18 +279,45 @@ public partial class AutoPlay : SceneTree
             ? IndexOf(GrowthOption.MaxHealth, GrowthOption.Armour, GrowthOption.WeaponLevel)
             : IndexOf(GrowthOption.WeaponLevel, GrowthOption.Armour, GrowthOption.MaxHealth);
 
-        _pickHeld = $"pick_{index + 1}";
-        Input.ActionPress(_pickHeld);
+        Tap($"pick_{index + 1}");
         _picksTaken++;
 
         // Every pick, with what was on the table. Which cards were refused is as
         // much of the balance picture as which were taken — a deck that keeps
         // dealing the same three is a deck the player never really chose from.
-        GD.Print($"  pick {_picksTaken} at {_director.Elapsed:F0}s: {_growth.Offer[index]} " +
+        GD.Print($"  pick {_picksTaken} at {_director.Elapsed:F0}s: {_growth!.Offer[index]} " +
                  $"from [{string.Join(", ", _growth.Offer)}]");
     }
 
+    private void Tap(string action)
+    {
+        _pickHeld = action;
+        Input.ActionPress(action);
+    }
+
+    /// Whether the bag holds anything that does something when used. The player
+    /// can see this; the bot has to look, or it presses a dead key forever.
+    private bool CarriesUsable()
+    {
+        for (int i = 0; i < _player.Backpack.EntryCount; i++)
+        {
+            if (_player.Backpack.ItemAt(i).IsUsable)
+                return true;
+        }
+
+        return false;
+    }
+
     private string? _pickHeld;
+    private bool _everDry;
+    private float _dryAt = -1.0f;
+    private int _lowestReserve = int.MaxValue;
+
+    /// Circles instead of searching during the linger. The two behaviours answer
+    /// different questions: looting measures the game with its supply line in
+    /// it, and refusing to loot measures how long the starting reserve lasts on
+    /// its own — which is the only way to tell whether ammo is a resource.
+    private bool _noLoot;
 
     /// First preference present in the offer, or 0 — something always gets
     /// taken, because the offer does not go away on its own.
@@ -283,10 +345,20 @@ public partial class AutoPlay : SceneTree
             ? "never reached"
             : $"reached at {_ceilingAt:F0}s ({_ceilingAt / run * 100.0f:F0}% of the run, target ~60%)";
 
+        // How close the reserve came to zero is the question, not whether it hit
+        // it. A run that never drops below its starting load has ammo that is
+        // only money; one that runs down and is refilled by looting has a supply
+        // line, which is the point of putting rounds in crates.
+        string ammo = _everDry
+            ? $"ran dry at {_dryAt:F0}s"
+            : $"lowest reserve {(_lowestReserve == int.MaxValue ? 0 : _lowestReserve)}, never dry";
+
         return $"  growth: level {_growth?.Level ?? 0}, {_picksTaken} picks, " +
                $"weapon {_weapons?.Level ?? 0}/{_weapons?.MaxLevel ?? 0}, ceiling {ceiling}\n" +
                $"  armour {_player.Armour:F0}, speed {_player.MoveSpeed:F2}, " +
-               $"search x{_player.SearchSpeed:F2}, max HP {_player.MaxHealth:F0}";
+               $"search x{_player.SearchSpeed:F2}, max HP {_player.MaxHealth:F0}\n" +
+               $"  holding {_weapons?.Weapon?.WeaponName ?? "(none)"} " +
+               $"{_weapons?.Ammo ?? 0}/{_weapons?.Reserve ?? 0}, {ammo}";
     }
 
     private bool Bind()
@@ -319,7 +391,9 @@ public partial class AutoPlay : SceneTree
         }
 
         // Two crates then the pad: enough to prove looting is worth a detour
-        // without turning the test into a full clear.
+        // without turning the test into a full clear. The rest stay on the map
+        // as the supply the linger phase can go and find.
+        _allCrates = found.ToArray();
         _crates = found.Count >= 2 ? new[] { found[0], found[1] } : found.ToArray();
 
         var route = new System.Collections.Generic.List<Vector3>();
@@ -346,10 +420,40 @@ public partial class AutoPlay : SceneTree
 
     private string Label() => _leg < _routeLabels.Length ? _routeLabels[_leg] : "done";
 
-    /// A wide circuit of the arena. Kiting is what a competent player does while
-    /// waiting out a timer, so measuring difficulty against a stationary target
-    /// would flatter the design.
+    /// Where to be while waiting out the timer: the nearest crate still worth
+    /// opening, or a wide circuit once they are all empty.
+    ///
+    /// Looting during the linger is not decoration. Ammo comes out of crates, so
+    /// a bot that loots its route once and then circles measures a game where
+    /// the reserve can only ever run down — which is a different game from the
+    /// one with a supply line in it.
     private Vector3 OrbitPoint()
+    {
+        LootContainer? nearest = null;
+        float bestDistance = float.MaxValue;
+
+        if (_noLoot)
+            return Circuit();
+
+        foreach (LootContainer crate in _allCrates)
+        {
+            if (crate.Looted)
+                continue;
+
+            float distance = crate.GlobalPosition.DistanceTo(_player.GlobalPosition);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                nearest = crate;
+            }
+        }
+
+        return nearest?.GlobalPosition ?? Circuit();
+    }
+
+    /// Kiting is what a competent player does with nothing left to search, so
+    /// measuring difficulty against a stationary target would flatter the design.
+    private Vector3 Circuit()
     {
         const float radius = 16.0f;
         float angle = _director.Elapsed * 0.55f;

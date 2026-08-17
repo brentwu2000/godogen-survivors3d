@@ -18,7 +18,8 @@ godot                                # play
 ```
 
 WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
-reloads, `[F]` secures the top item into the safe box, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
+reloads, `[F]` secures the top item into the safe box, `[Q]` uses a carried item, `[Tab]` swaps
+weapons, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
 touch implementation drives the same code with two virtual sticks.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
@@ -31,6 +32,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
+| `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
@@ -120,7 +122,21 @@ answer to a crowd of walkers and never the answer to a brute. A fifth always get
 armour that can reach zero turns the weakest variant into scenery.
 
 The backpack holds **20 bulk, not 20 slots** — dumping bulky scrap to fit a small vial is the trade,
-and a full bag still takes what fits rather than refusing the crate. Banking pays
+and a full bag still takes what fits rather than refusing the crate.
+
+**Carried items are worth something before they are sold.** `[Q]` spends the cheapest thing that would
+currently help — tinned food heals 15, a medkit 45, rifle rounds refill the reserve, an adrenaline
+shot buys 8 seconds of +35% speed. Using one costs exactly its extraction value, so the backpack holds
+health and money in the same slots and every heal is money not banked. Only if it would help: nothing
+is spent at full health or into a full reserve. The two most valuable items are pure cargo and cannot
+be used at any price, which is what makes carrying the serum a gamble rather than a stockpile.
+
+**Firearms run out.** The rifle starts with 240 rounds behind its magazine, capped at 360, and reloads
+draw from that reserve rather than conjuring one. Melee and the bow have no magazine and so can never
+run dry — running out has to be a change of tactics, never a dead end. `[Tab]` swaps between two
+slots, each keeping its own magazine, cooldown and levels; looted rounds go into whichever slot takes
+a magazine whether or not it is in hand, because otherwise swapping to the knife when the rifle
+empties turns every round in the bag into dead weight at exactly the moment they matter. Banking pays
 `value × ExtractionMultiplier`, which climbs 1.0 → 3.0 across the run. The safe box holds 4 bulk,
 takes one item at a time while the horde keeps coming, and pays **face value only** — it is the hedge
 against dying, never a way to farm the multiplier. Die and the backpack is lost; the safe box and all
@@ -250,16 +266,26 @@ the route's crates were emptied in 11.4 s. The enrage curve could never be reach
 Three changes followed: the time-scaled extraction multiplier, the run clock cut 600 → 300 s (the bot
 died at 246 s, so 600 was fiction), and a HUD line showing what extracting *right now* pays.
 
-| Loiter | Extract at | Banked | Weapon level | Peak enemies |
-| ---: | ---: | ---: | :--- | ---: |
-| 0 s | 18.8 s | 299 | 1/8 | 33 |
-| 60 s | 70.0 s | 390 | 3/8 | 43 |
-| 120 s | 129.8 s | 496 | 6/8 | 55 |
-| 180 s | died at 178 s | 36 | 7/8 | 108 |
+| Loiter | Extract at | Banked | Ammo |
+| ---: | ---: | ---: | :--- |
+| 0 s | 18.8 s | 315 | never below 180 |
+| 60 s | 69.9 s | 487 | down to 30, refilled by looting |
+| 120 s | died at 118 s | 36 | resupplied, still holding the rifle |
+| 120 s, refusing to loot | died at 129 s | 36 | **ran dry at 95 s**, finished on the knife |
 
 Staying pays more until it kills you, which is the property the multiplier exists to create. The
-weapon climbs about a level every 15 s and would reach its ceiling near 195 s — around 65% of the
-run, close to the 60% the curve is aimed at, so the last stretch is the horde growing alone.
+weapon climbs about a level every 15 s and reaches its ceiling near 195 s — around 65% of the run,
+close to the 60% the curve is aimed at, so the last stretch is the horde growing alone.
+
+**The reserve is calibrated so that ammo runs out if and only if you stop looting.** That is the last
+row: a bot that opens two crates and then circles is dry at 95 s and ends the run with a knife against
+a hundred enemies, while the same bot searching as it goes never empties. Looting is not a phase that
+finishes in the first minute any more — it is the supply line.
+
+The 120 s row now dies *earlier* than the one that refuses to loot, and that is the design rather than
+a regression: searching means standing still while the horde walks in, and the bot has no judgment
+about when a crate is worth the seconds. It fell to contact damage at 62 enemies, where circling
+survived to 125.
 
 **These are measured on a fresh profile, and the earlier ones were not.** The table recorded when
 variants landed was taken against a save with 37 points of firearm practice on it, which under the
@@ -311,14 +337,14 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The horde has five variants and a run now climbs a growth curve; the rest of the content is still
-thin. Every run is the same 120×120 field and the same five blocks, the six lootables are pure
-numbers with no use, only one weapon can be carried and its ammo is infinite, gear is a fixed set
-nobody chose — and **banked credits still buy nothing**. That last one is the in-run "no reason to
-stay" problem one level up: the run-level trade was fixed, the meta-level one wasn't, so a second run
-changes nothing about a third. It is also what the growth model is now waiting on, since gear is the
-half of it that has to be bought. Planned in order: item effects and finite ammo, generated levels
-with several extraction pads, then the shop.
+The horde has five variants, a run climbs a growth curve, and loot is a supply line rather than a
+score. What is left is the world and the meta. Every run is the same 120×120 field with the same five
+blocks and one extraction pad, gear is a fixed set nobody chose, and **banked credits still buy
+nothing**. That last one is the in-run "no reason to stay" problem one level up: the run-level trade
+was fixed, the meta-level one wasn't, so a second run changes nothing about a third. It is also what
+the growth model is waiting on, since gear is the half of it that has to be bought, and what the two
+weapon slots are waiting on, since nothing chooses what goes in the second. Planned in order:
+generated levels with several extraction pads, then the shop.
 
 Engineering gaps, separately:
 

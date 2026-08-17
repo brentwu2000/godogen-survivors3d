@@ -36,8 +36,19 @@ public partial class WeaponResource : Resource
 
     [Export] public float BaseReloadTime { get; set; } = 2.0f;
 
-    /// 0 means the weapon never reloads.
+    /// 0 means the weapon never reloads — and, with it, never runs dry. Melee
+    /// and bows are deliberately in that group: running out has to be a change
+    /// of tactics, never a dead end.
     [Export] public int MagazineSize { get; set; } = 30;
+
+    /// Rounds carried at the start of a run, outside the magazine. Looted ammo
+    /// tops this up, which is the only reason a common lootable is worth keeping
+    /// instead of selling.
+    [Export] public int StartingReserve { get; set; }
+
+    /// What the reserve can hold. A cap is what stops ammo from being a pure
+    /// hoard — past it, rounds are only worth their sale price.
+    [Export] public int MaxReserve { get; set; } = 300;
 
     /// How many enemies one shot passes through. 1 stops at the first.
     [Export] public int Penetration { get; set; } = 1;
