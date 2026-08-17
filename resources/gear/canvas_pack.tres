@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_074d7"]
+
+[resource]
+script = ExtResource("1_074d7")
+GearName = "Canvas Pack"
+Slot = 1
+SearchUpgradeCap = 2

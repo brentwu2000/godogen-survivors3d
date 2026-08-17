@@ -48,16 +48,37 @@ public partial class WeaponResource : Resource
 
     [Export] public float Knockback { get; set; }
 
+    /// The ceiling. Every curve below stops here, and so does in-run growth —
+    /// this is what a better weapon actually buys: a longer climb, not a bigger
+    /// number bolted on the end.
+    [Export] public int MaxLevel { get; set; } = 8;
+
+    /// Levels the weapon itself is worth on arrival, before practice. Gear moves
+    /// the starting point; practice moves it too, but only halfway (see
+    /// WeaponHandler.StartLevel) so there is always a climb left to make.
+    [Export] public int TierStartBonus { get; set; }
+
     public bool IsMelee => Category is WeaponCategory.MeleeShort or WeaponCategory.MeleeLong;
     public bool IsProjectile => Category == WeaponCategory.BowCrossbow;
     public bool IsHitscan => Category == WeaponCategory.Firearm;
+
+    /// Every curve below is read at a level clamped to MaxLevel, so a ceiling is
+    /// one rule applied in one place rather than five caps that drift apart.
+    public int ClampLevel(int level) => Mathf.Clamp(level, 0, MaxLevel);
+
+    /// Damage grows with level, unlike everything else here, which grows reach
+    /// and rate. Without it a weapon gets faster and further forever while each
+    /// hit stays exactly as hard — the one axis a growth system cannot leave
+    /// flat, because it is the one the player is actually watching.
+    public float GetEffectiveDamage(int proficiency) =>
+        BaseDamage * (1.0f + ClampLevel(proficiency) * 0.06f);
 
     /// Melee and bows grow their reach with practice; firearms do not — a rifle's
     /// range is the cartridge's, not the shooter's.
     public float GetEffectiveRange(int proficiency) => Category switch
     {
         WeaponCategory.MeleeShort or WeaponCategory.MeleeLong or WeaponCategory.BowCrossbow =>
-            BaseRange * (1.0f + proficiency * 0.05f),
+            BaseRange * (1.0f + ClampLevel(proficiency) * 0.05f),
         _ => BaseRange,
     };
 
@@ -67,7 +88,7 @@ public partial class WeaponResource : Resource
         float multiplier = Category switch
         {
             WeaponCategory.MeleeShort or WeaponCategory.MeleeLong or WeaponCategory.BowCrossbow =>
-                1.0f + proficiency * 0.04f,
+                1.0f + ClampLevel(proficiency) * 0.04f,
             _ => 1.0f,
         };
         return 1.0f / Mathf.Max(0.01f, BaseAttackSpeed * multiplier);
@@ -82,16 +103,16 @@ public partial class WeaponResource : Resource
 
         return Mathf.Max(
             BaseSpreadDegrees * 0.2f,
-            BaseSpreadDegrees * (1.0f - proficiency * 0.08f));
+            BaseSpreadDegrees * (1.0f - ClampLevel(proficiency) * 0.08f));
     }
 
     public float GetEffectiveReloadTime(int proficiency) => Category == WeaponCategory.Firearm
-        ? Mathf.Max(BaseReloadTime * 0.3f, BaseReloadTime * (1.0f - proficiency * 0.06f))
+        ? Mathf.Max(BaseReloadTime * 0.3f, BaseReloadTime * (1.0f - ClampLevel(proficiency) * 0.06f))
         : BaseReloadTime;
 
     /// Bows gain arrow velocity with practice; a faster arrow drops less and is
     /// easier to lead with.
     public float GetEffectiveProjectileSpeed(int proficiency) => Category == WeaponCategory.BowCrossbow
-        ? ProjectileSpeed * (1.0f + proficiency * 0.03f)
+        ? ProjectileSpeed * (1.0f + ClampLevel(proficiency) * 0.03f)
         : ProjectileSpeed;
 }

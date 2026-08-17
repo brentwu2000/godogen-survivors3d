@@ -17,8 +17,11 @@ public partial class Screenshot : SceneTree
     private const string OutputPath = "res://screenshots/main.png";
 
     /// Long enough for the camera rig to settle onto the player; its follow is a
-    /// lerp, so frame one still shows it at the origin.
+    /// lerp, so frame one still shows it at the origin. Override with "frames:N"
+    /// to photograph something that needs the run to get going first — a level-up
+    /// offer, say, which cannot appear until enough has been killed to earn it.
     private const int WarmupFrames = 30;
+    private int _warmup = WarmupFrames;
 
     private int _frame;
     private Vector3? _teleport;
@@ -35,6 +38,13 @@ public partial class Screenshot : SceneTree
             return;
         }
 
+        // Capture tools do not spend the player's save. A run that ends while
+        // being photographed still banks, and these had been writing credits and
+        // practice into the real profile as a side effect of taking a picture.
+        var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
+        if (meta != null)
+            meta.Ephemeral = true;
+
         GetRoot().AddChild(scene);
         _scene = scene;
 
@@ -49,7 +59,11 @@ public partial class Screenshot : SceneTree
         }
 
         foreach (string arg in args)
+        {
             _mixed |= arg == "mixed";
+            if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
+                _warmup = Mathf.Max(1, frames);
+        }
     }
 
     public override bool _Process(double delta)
@@ -77,7 +91,7 @@ public partial class Screenshot : SceneTree
             }
         }
 
-        if (++_frame < WarmupFrames)
+        if (++_frame < _warmup)
             return false;
 
         Image image = GetRoot().GetTexture().GetImage();

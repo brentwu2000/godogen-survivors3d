@@ -25,28 +25,67 @@ public partial class WeaponHandler : Node3D
     public int Ammo { get; private set; }
     public bool Reloading => _reloadRemaining > 0.0f;
 
+    /// Levels bought with this run's kills. Reset by starting a run, never
+    /// carried out of one: what the player keeps is the loot and the practice.
+    public int RunUpgrades { get; private set; }
+
+    /// Where this run begins. Practice counts for at most half the weapon's
+    /// ceiling, so a veteran starts further along but never arrives — there is
+    /// always a climb left, which is the only reason in-run growth is worth
+    /// offering to a veteran at all.
+    ///
+    /// Practice above that half is not wasted, it is unspent: a weapon with a
+    /// higher ceiling lets more of the same practice count.
+    public int StartLevel => Weapon == null
+        ? 0
+        : Mathf.Min(_proficiency[(int)Weapon.Category], Weapon.MaxLevel / 2) + Weapon.TierStartBonus;
+
+    /// The one number every curve is read at.
+    public int Level => Weapon == null ? 0 : Weapon.ClampLevel(StartLevel + RunUpgrades);
+
+    public int MaxLevel => Weapon?.MaxLevel ?? 0;
+    public bool AtCeiling => Weapon != null && Level >= Weapon.MaxLevel;
+
+    public void AddRunUpgrade() => RunUpgrades++;
+
     /// Practice per weapon category, so switching from a rifle to a spear does
     /// not carry the rifle's skill across.
     private readonly int[] _proficiency = new int[4];
-    private readonly float[] _experience = new float[4];
+
+    /// Hits landed this run, per category. Banked into practice once at the end
+    /// rather than levelled as they land: two growth curves moving at the same
+    /// time are two curves the player cannot tell apart, and that nobody can
+    /// balance separately.
+    private readonly int[] _hits = new int[4];
 
     public ProjectilePool Projectiles { get; private set; } = null!;
 
     private Horde? _horde;
     private Player? _player;
     private HordeRenderer? _projectileRenderer;
-    private int[] _hits = null!;
+    private int[] _hitList = null!;
     private float _cooldown;
     private float _reloadRemaining;
     private ulong _rng = 0xD1B54A32D192ED03UL;
 
-    /// Hits needed for the next level, scaling so early levels come quickly and
-    /// mastery does not arrive by accident.
-    private static float ExperienceForLevel(int level) => 12.0f + level * 8.0f;
+    /// Hits per point of practice, and the most a single run can teach.
+    ///
+    /// The cap is what keeps practice a slow axis. Without it one long run with
+    /// a wide melee arc banks more levels than a dozen careful ones — every
+    /// enemy caught by a swing used to count, so the widest weapon learned
+    /// fastest and had the most to gain from learning.
+    private const int HitsPerProficiency = 250;
+    private const int MaxProficiencyPerRun = 3;
+
+    /// Practice earned this run, for the meta layer to bank when it ends.
+    public int ProficiencyGain(WeaponCategory category) =>
+        Mathf.Min(MaxProficiencyPerRun, _hits[(int)category] / HitsPerProficiency);
+
+    public int HitsThisRun(WeaponCategory category) => _hits[(int)category];
 
     public override void _Ready()
     {
-        _hits = new int[512];
+        _hitList = new int[512];
         Projectiles = new ProjectilePool(ProjectileCapacity);
 
         _horde = GetParent().GetNodeOrNull<Horde>("Horde") ?? GetParent().GetParent()?.GetNodeOrNull<Horde>("Horde");
@@ -85,6 +124,10 @@ public partial class WeaponHandler : Node3D
         Ammo = weapon.MagazineSize;
         _cooldown = 0.0f;
         _reloadRemaining = 0.0f;
+
+        // Run upgrades belong to the weapon that earned them. Swapping mid-run
+        // would otherwise carry a maxed rifle's levels onto a fresh axe.
+        RunUpgrades = 0;
     }
 
     public int GetProficiency(WeaponCategory category) => _proficiency[(int)category];
@@ -99,7 +142,7 @@ public partial class WeaponHandler : Node3D
         if (Weapon == null || _horde == null)
             return;
 
-        int level = _proficiency[(int)Weapon.Category];
+        int level = Level;
 
         if (_reloadRemaining > 0.0f)
         {
@@ -159,18 +202,19 @@ public partial class WeaponHandler : Node3D
     {
         WeaponResource weapon = Weapon!;
         float range = weapon.GetEffectiveRange(level);
+        float damage = weapon.GetEffectiveDamage(level);
 
         if (weapon.IsMelee)
         {
             // SwingArcDegrees is the full sweep; the query wants the half-angle.
-            int count = _horde!.QueryArc(origin, direction, range, weapon.SwingArcDegrees * 0.5f, _hits);
+            int count = _horde!.QueryArc(origin, direction, range, weapon.SwingArcDegrees * 0.5f, _hitList);
 
             // Backwards: a kill swap-removes the last element into the killed
             // slot, which would silently skip an enemy on a forward walk.
             for (int i = count - 1; i >= 0; i--)
             {
-                _horde.Damage(_hits[i], weapon.BaseDamage, direction * weapon.Knockback);
-                AddExperience(weapon.Category);
+                _horde.Damage(_hitList[i], damage, direction * weapon.Knockback);
+                RecordHit(weapon.Category);
             }
             return;
         }
@@ -183,14 +227,14 @@ public partial class WeaponHandler : Node3D
             Projectiles.TrySpawn(
                 new Vector3(origin.X, 0.0f, origin.Z),
                 shot * speed,
-                weapon.BaseDamage,
+                damage,
                 weapon.Knockback,
                 range / speed,
                 weapon.Penetration);
             return;
         }
 
-        int hits = _horde!.QueryRay(origin, shot, range, HitscanThickness, _hits);
+        int hits = _horde!.QueryRay(origin, shot, range, HitscanThickness, _hitList);
         int remaining = weapon.Penetration;
 
         // A hitscan shot resolves instantly and would otherwise be invisible —
@@ -204,12 +248,12 @@ public partial class WeaponHandler : Node3D
         // swap by re-reading positions rather than trusting stale indices.
         for (int i = 0; i < hits && remaining > 0; i++)
         {
-            int index = _hits[i];
+            int index = _hitList[i];
             if (index >= _horde.Pool.Count)
                 continue;
 
-            _horde.Damage(index, weapon.BaseDamage, shot * weapon.Knockback);
-            AddExperience(weapon.Category);
+            _horde.Damage(index, damage, shot * weapon.Knockback);
+            RecordHit(weapon.Category);
             remaining--;
         }
     }
@@ -254,7 +298,7 @@ public partial class WeaponHandler : Node3D
                 continue;
 
             _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
-            AddExperience(WeaponCategory.BowCrossbow);
+            RecordHit(WeaponCategory.BowCrossbow);
 
             if (--Projectiles.Pierce[i] <= 0)
                 Projectiles.DespawnAt(i);
@@ -263,17 +307,7 @@ public partial class WeaponHandler : Node3D
         _projectileRenderer?.Sync(Projectiles, ProjectileHeight);
     }
 
-    private void AddExperience(WeaponCategory category)
-    {
-        int index = (int)category;
-        _experience[index] += 1.0f;
-
-        while (_experience[index] >= ExperienceForLevel(_proficiency[index]))
-        {
-            _experience[index] -= ExperienceForLevel(_proficiency[index]);
-            _proficiency[index]++;
-        }
-    }
+    private void RecordHit(WeaponCategory category) => _hits[(int)category]++;
 
     /// Rotates the shot by a uniform angle inside the cone. Deterministic and
     /// allocation-free, so a capture run reproduces exactly.

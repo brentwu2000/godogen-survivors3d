@@ -100,8 +100,24 @@ public partial class WeaponProbe : SceneTree
 
         float spread0 = rifle.GetEffectiveSpreadDegrees(0);
         float spread5 = rifle.GetEffectiveSpreadDegrees(5);
-        float spreadFloor = rifle.GetEffectiveSpreadDegrees(99);
-        bool spreadOk = spread5 < spread0 && Mathf.IsEqualApprox(spreadFloor, rifle.BaseSpreadDegrees * 0.2f);
+
+        // The 20% floor is now the second line of defence, not the first: every
+        // curve is read at a level clamped to the weapon's MaxLevel, and this
+        // rifle's ceiling of 8 binds before the floor at 10 ever would. The floor
+        // still has to hold for a weapon whose ceiling is high enough to reach
+        // it, so it is tested on one — the invariant is "however long the climb,
+        // practice never turns a shotgun into a laser", not "the rifle gets
+        // there".
+        var deepCeiling = new WeaponResource
+        {
+            Category = WeaponCategory.Firearm,
+            BaseSpreadDegrees = rifle.BaseSpreadDegrees,
+            MaxLevel = 40,
+        };
+
+        float spreadFloor = deepCeiling.GetEffectiveSpreadDegrees(99);
+        bool spreadOk = spread5 < spread0
+            && Mathf.IsEqualApprox(spreadFloor, rifle.BaseSpreadDegrees * 0.2f);
 
         bool rifleRangeFlat = Mathf.IsEqualApprox(rifle.GetEffectiveRange(9), rifle.BaseRange);
         bool axeRangeGrows = axe.GetEffectiveRange(9) > axe.BaseRange;
@@ -109,7 +125,9 @@ public partial class WeaponProbe : SceneTree
         bool bowFaster = bow.GetEffectiveProjectileSpeed(9) > bow.ProjectileSpeed;
         bool reloadFloor = rifle.GetEffectiveReloadTime(99) >= rifle.BaseReloadTime * 0.3f - 0.001f;
 
-        GD.Print($"spread   {spread0:F2} -> {spread5:F2} deg, floor {spreadFloor:F2} (base {rifle.BaseSpreadDegrees:F2})");
+        GD.Print($"spread   {spread0:F2} -> {spread5:F2} deg, " +
+                 $"{rifle.GetEffectiveSpreadDegrees(rifle.MaxLevel):F2} at this rifle's ceiling " +
+                 $"({rifle.MaxLevel}), floor {spreadFloor:F2} (base {rifle.BaseSpreadDegrees:F2})");
         GD.Print($"axe range {axe.BaseRange:F2} -> {axe.GetEffectiveRange(9):F2} m, " +
                  $"delay {axe.GetEffectiveAttackDelay(0):F3} -> {axe.GetEffectiveAttackDelay(9):F3} s");
         GD.Print($"rifle range flat: {rifleRangeFlat}, bow speed {bow.ProjectileSpeed:F1} -> {bow.GetEffectiveProjectileSpeed(9):F1} m/s");

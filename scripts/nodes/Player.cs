@@ -20,6 +20,15 @@ public partial class Player : CharacterBody3D
     /// death, not a second backpack.
     [Export] public int SafeBoxCapacity { get; set; } = 4;
 
+    /// Flat mitigation, subtracted from an incoming rate or amount. Never scales
+    /// it: armour is the answer to a crowd of weak contacts and never the answer
+    /// to a brute, and that asymmetry is what makes it worth picking over damage.
+    public float Armour { get; private set; }
+
+    /// Multiplies how fast a container fills. One place so the loot container
+    /// does not have to know what a player upgrade is.
+    public float SearchSpeed { get; private set; } = 1.0f;
+
     public float Health { get; private set; }
     public bool IsAlive => Health > 0.0f;
     public Inventory Backpack { get; private set; } = null!;
@@ -67,9 +76,51 @@ public partial class Player : CharacterBody3D
         return item.Value;
     }
 
+    /// Applies the gear the player walked in with. Called before the run starts,
+    /// while the inventories are still empty — they are rebuilt here because a
+    /// backpack's size is something gear decides, not the scene.
+    public void ApplyGear(float health, float armour, float speed, int carry, int safeBox)
+    {
+        MaxHealth += health;
+        Armour += armour;
+        MoveSpeed += speed;
+        CarryCapacity += carry;
+        SafeBoxCapacity += safeBox;
+
+        Health = MaxHealth;
+        Backpack = new Inventory(CarryCapacity);
+        SafeBox = new Inventory(SafeBoxCapacity);
+    }
+
+    /// In-run upgrades. Health is granted as current as well as maximum: a pick
+    /// that only raises the ceiling is worth nothing at the moment it is offered,
+    /// which is exactly when the player is deciding whether it saves them.
+    public void AddMaxHealth(float amount)
+    {
+        MaxHealth += amount;
+        Health = Mathf.Min(MaxHealth, Health + amount);
+    }
+
+    public void AddArmour(float amount) => Armour += amount;
+    public void AddMoveSpeedFraction(float fraction) => MoveSpeed *= 1.0f + fraction;
+    public void AddSearchSpeedFraction(float fraction) => SearchSpeed += fraction;
+
     /// Damage is ignored once dead, so a horde landing several hits in the same
     /// tick cannot emit Died more than once.
-    public void TakeDamage(float amount)
+    public void TakeDamage(float amount) => ApplyDamage(Mitigate(amount));
+
+    /// Contact arrives as a rate, so armour is subtracted from the rate rather
+    /// than from each tick's slice — otherwise mitigation would depend on the
+    /// physics tick rate, which is not a thing the player can see or choose.
+    public void TakeContactDamage(float damagePerSecond, float delta) =>
+        ApplyDamage(Mitigate(damagePerSecond) * delta);
+
+    /// Twenty percent always gets through. Armour that can reach zero turns the
+    /// weakest variant into scenery, and a horde you can stand in is not a horde.
+    private float Mitigate(float amount) =>
+        amount <= 0.0f ? 0.0f : Mathf.Max(amount - Armour, amount * 0.2f);
+
+    private void ApplyDamage(float amount)
     {
         if (!IsAlive || amount <= 0.0f)
             return;

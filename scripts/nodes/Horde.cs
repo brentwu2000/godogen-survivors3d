@@ -323,7 +323,7 @@ public partial class Horde : Node3D
         // worth more than three walkers, and the smooth accumulation is what
         // makes being surrounded scale with who actually reached you.
         if (contactDamage > 0.0f && _player is Player player)
-            player.TakeDamage(contactDamage * step);
+            player.TakeContactDamage(contactDamage, step);
 
         StepEnemyShots(step);
 

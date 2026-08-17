@@ -81,7 +81,7 @@ public partial class LootContainer : Node3D
             return;
         }
 
-        Progress += (float)delta / Mathf.Max(0.01f, SearchSeconds);
+        Progress += (float)delta * _player.SearchSpeed / Mathf.Max(0.01f, SearchSeconds);
         if (Progress < 1.0f)
             return;
 

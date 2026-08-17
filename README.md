@@ -18,7 +18,7 @@ godot                                # play
 ```
 
 WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
-reloads, `[F]` secures the top item into the safe box. Actions are read through `IInputSource`, so the
+reloads, `[F]` secures the top item into the safe box, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
 touch implementation drives the same code with two virtual sticks.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
@@ -30,6 +30,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, and every proficiency curve |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
+| `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
@@ -43,7 +44,7 @@ driver — the null driver has nothing to capture and no draw calls to count.
 
 Scenes are not hand-written. `scenes/Build*.cs` emit `.tscn` at build time
 (`godot --headless --script scenes/BuildMain.cs`), and
-`scripts/tools/Build{InputMap,Weapons,Items,EnemyTypes,EnemySprites}.cs` emit the input map, the
+`scripts/tools/Build{InputMap,Weapons,Items,Gear,EnemyTypes,EnemySprites}.cs` emit the input map, the
 `.tres` data and the placeholder variant sprites the same way.
 
 ### Capture
@@ -68,8 +69,14 @@ movie frame renders before `_Process` and `CameraRig`'s lerp has not run yet.
 
 ## The loop
 
-A run is 300 s. The horde spawns at 2/s and ramps to 12/s while its speed scales to 1.6x. The
+A run is 300 s. The horde spawns at 2/s and ramps to 8/s while its speed scales to 1.6x. The
 extraction pad opens at 15% of the clock and needs a 5 s hold, cancelled by stepping out.
+
+The top of that ramp used to be 12/s. A maxed weapon clears roughly three a second against the late
+roster, so the field is already growing without bound at six — every rate above it only changed how
+fast the number climbed, and the whole second half of the escalation curve was escalation the player
+could not read. Eight keeps the curve visible at four times the opening while leaving the last
+stretch somewhere skill still moves the outcome.
 
 Escalation is also a change of composition, not only of rate. Five variants share one table
 (`resources/enemies/*.tres`), each gated behind a point on the run clock:
@@ -81,6 +88,36 @@ Escalation is also a change of composition, not only of rate. Five variants shar
 | spitter | 8 | 2.0 | — | 1.0 | 30% | holds at 8 m and shoots, so kiting is the wrong answer |
 | brute | 60 | 1.4 | 14/s | 1.5 | 45% | takes knockback at 0.2x, which makes knockback a choice |
 | bloater | 25 | 1.8 | 6/s | 1.2 | 60% | 25 damage in 3 m on death — clearing a pile face-first costs something |
+
+## Growth
+
+Three axes, and they do not overlap. A run's weapon sits at one number:
+
+```
+level = clamp(start + run upgrades, 0, ceiling)
+start = min(practice, ceiling / 2) + gear tier
+```
+
+| Axis | Earned by | Lives for | Moves |
+| :--- | :--- | :--- | :--- |
+| Practice | using the category | forever; a death cannot take it | the **starting point** |
+| Gear | credits | until you die wearing it | the starting point **and the ceiling** |
+| Run upgrades | kills, this run | **reset on extraction** | the climb between them |
+
+Practice counts for at most half the ceiling, which is what guarantees a veteran still has a climb
+left — the point at which in-run growth stops being worth offering is the point at which it stops
+being a game. Practice above the half is not wasted, it is unspent: a weapon with a longer curve lets
+more of the same practice count, which is most of what buying one gets you.
+
+Kills buy levels and levels deal three cards. The weapon card is one option among character stats, and
+**it stops being dealt once the weapon is at its ceiling** — the deck visibly runs out, which is how a
+ceiling becomes something the player plans around instead of a number in a formula. Nothing pauses
+while they choose: the cost of a decision is the seconds it takes while the horde keeps walking, the
+same design as the search timer.
+
+Armour subtracts a flat amount from an incoming rate or amount and never scales it, so it is the
+answer to a crowd of walkers and never the answer to a brute. A fifth always gets through, because
+armour that can reach zero turns the weakest variant into scenery.
 
 The backpack holds **20 bulk, not 20 slots** — dumping bulky scrap to fit a small vial is the trade,
 and a full bag still takes what fits rather than refusing the crate. Banking pays
@@ -152,6 +189,17 @@ stage by its zero damage.
 **Damping is exponential**, never a fixed per-tick multiplier — the latter silently changes feel if
 `physics_ticks_per_second` ever moves off 60.
 
+**Practice is banked once at the end of a run, not levelled as it lands.** It used to rise a point at
+a time as hits connected, which put two growth curves on screen at once — indistinguishable to the
+player and impossible to balance separately. It was also unbounded: every enemy caught by a swing
+counted, so the widest melee arc learned fastest and had the most to gain from learning, and a single
+long axe run banked more levels than a dozen careful ones. A run now teaches at most three points,
+and what they buy is a starting point, capped at half the weapon's ceiling.
+
+**Capture and play-test tools never touch the save.** They run a scene, and a scene that ends a run
+banks it — so taking a screenshot was spending credits and practice into the real profile. Every tool
+that instantiates the game for measurement now marks the meta layer ephemeral.
+
 **Saves are JSON, written to a temp file and renamed.** A corrupted or hand-edited file fails with a
 parse error that can be reported, instead of deserialising into an object with one quietly wrong
 field. A version mismatch rejects the whole file; nothing is partially applied. Until the rename
@@ -202,28 +250,31 @@ the route's crates were emptied in 11.4 s. The enrage curve could never be reach
 Three changes followed: the time-scaled extraction multiplier, the run clock cut 600 → 300 s (the bot
 died at 246 s, so 600 was fiction), and a HUD line showing what extracting *right now* pays.
 
-| Loiter | Extract at | Banked | Low HP | Peak enemies | Before variants |
-| ---: | ---: | ---: | ---: | ---: | :--- |
-| 0 s | 18.8 s | 299 | 100 | 26 | unchanged |
-| 60 s | 70.0 s | 390 | 100 | 38 | unchanged |
-| 120 s | 129.8 s | 496 | 57 | 63 | low HP was 94 |
-| 180 s | died at 134 s | 36 | — | 70 | died at 187 s |
+| Loiter | Extract at | Banked | Weapon level | Peak enemies |
+| ---: | ---: | ---: | :--- | ---: |
+| 0 s | 18.8 s | 299 | 1/8 | 33 |
+| 60 s | 70.0 s | 390 | 3/8 | 43 |
+| 120 s | 129.8 s | 496 | 6/8 | 55 |
+| 180 s | died at 178 s | 36 | 7/8 | 108 |
 
-**The shape survived, the slope did not.** Staying still pays more until it kills you, which is the
-property the multiplier exists to create — variants did not bring back the flat curve. But the lethal
-point moved in by 53 seconds, and the bot now dies at 134 s of a 300 s run.
+Staying pays more until it kills you, which is the property the multiplier exists to create. The
+weapon climbs about a level every 15 s and would reach its ceiling near 195 s — around 65% of the
+run, close to the 60% the curve is aimed at, so the last stretch is the horde growing alone.
 
-Some of that is the bot being the worst possible case for a spitter: it circles at a fixed radius and
-never breaks line of sight, so every shot from the one variant designed to punish standing in the
-open lands for free. A human has cover and can close. The rest is real — brutes and bloaters are
-threat added without anything taken away.
-
-**Not re-tuned, deliberately.** The player has no in-run power ramp yet; the next phase adds one.
-Re-balancing the spawn curve against half the equation would mean tuning it twice against a moving
-target. The entry condition for that phase is this table, re-measured.
+**These are measured on a fresh profile, and the earlier ones were not.** The table recorded when
+variants landed was taken against a save with 37 points of firearm practice on it, which under the
+old uncapped system meant a rifle already past every floor it had — a maxed weapon, by accident. The
+play-test had been writing to the real profile for weeks of runs, so it was quietly measuring a
+veteran and reporting it as a baseline. It is ephemeral now: a play-test does not spend the player's
+save, and a balance number measured against whatever practice happens to be on disk is not a balance
+number, because practice moves the starting point. The rows above start from nothing.
 
 **A bot's numbers, not a person's.** It circles at a fixed radius, never using obstacles or backing
-off. A human should last longer, so the 300 s clock is still unvalidated at human skill.
+off, and it is the worst possible case for a spitter — it never breaks line of sight, so every shot
+from the one variant built to punish standing in the open lands for free. It does now take survival
+upgrades when it drops below 60% health, because a bot that always takes damage measures a player who
+never notices they are dying. A human should still last longer, so the 300 s clock remains
+unvalidated at human skill.
 
 ## Assets
 
@@ -260,14 +311,14 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The loop is complete and the horde now has five variants; the rest of the content is still thin.
-Every run is the same 120×120 field and the same five blocks, the six lootables are pure numbers with
-no use, only one weapon can be carried and its ammo is infinite, the player has no in-run growth at
-all — and **banked credits buy nothing**. That last one is the in-run "no reason to stay" problem one
-level up: the run-level trade was fixed, the meta-level one wasn't, so a second run changes nothing
-about a third. Planned in order: in-run growth with gear setting the starting point and the ceiling,
-item effects and finite ammo, generated levels with several extraction pads, then the shop that gives
-credits somewhere to go.
+The horde has five variants and a run now climbs a growth curve; the rest of the content is still
+thin. Every run is the same 120×120 field and the same five blocks, the six lootables are pure
+numbers with no use, only one weapon can be carried and its ammo is infinite, gear is a fixed set
+nobody chose — and **banked credits still buy nothing**. That last one is the in-run "no reason to
+stay" problem one level up: the run-level trade was fixed, the meta-level one wasn't, so a second run
+changes nothing about a third. It is also what the growth model is now waiting on, since gear is the
+half of it that has to be bought. Planned in order: item effects and finite ammo, generated levels
+with several extraction pads, then the shop.
 
 Engineering gaps, separately:
 

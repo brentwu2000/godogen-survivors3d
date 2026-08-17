@@ -21,7 +21,14 @@ public partial class RunDirector : Node3D
     [Export] public float RunSeconds { get; set; } = 300.0f;
 
     [Export] public float StartSpawnRate { get; set; } = 2.0f;
-    [Export] public float EndSpawnRate { get; set; } = 12.0f;
+
+    /// A maxed weapon clears roughly three a second against the late roster, so
+    /// anything past about twice that is escalation the player cannot read: the
+    /// field is already growing without bound at six, and every rate above it
+    /// only changes how fast the number climbs. Eight keeps the curve visible —
+    /// four times the opening — while leaving the last stretch somewhere skill
+    /// still moves the outcome.
+    [Export] public float EndSpawnRate { get; set; } = 8.0f;
 
     [Export] public float EndSpeedScale { get; set; } = 1.6f;
 

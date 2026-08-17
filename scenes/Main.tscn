@@ -1,57 +1,52 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_lhr70"]
-[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2_wp0k4"]
-[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="3_bjd11"]
-[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="4_qmy6f"]
-[ext_resource type="Script" path="res://scripts/nodes/LootContainer.cs" id="5_mwfav"]
-[ext_resource type="Script" path="res://scripts/nodes/ExtractionZone.cs" id="6_3p2gp"]
-[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="7_cvmbd"]
-[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="8_ft6cd"]
-[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="9_bb450"]
-[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="10_nfivy"]
+[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_wp0k4"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2_bjd11"]
+[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="3_qmy6f"]
+[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="4_mwfav"]
+[ext_resource type="Script" path="res://scripts/nodes/LootContainer.cs" id="5_3p2gp"]
+[ext_resource type="Script" path="res://scripts/nodes/ExtractionZone.cs" id="6_cvmbd"]
+[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="7_ft6cd"]
+[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="8_bb450"]
+[ext_resource type="Script" path="res://scripts/nodes/RunGrowth.cs" id="9_nfivy"]
+[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="10_1nqs0"]
+[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="11_1iba3"]
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_1nqs0"]
+[sub_resource type="PlaneMesh" id="PlaneMesh_yxlcp"]
 size = Vector2(120, 120)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_1iba3"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_ebg2g"]
 size = Vector3(120, 1, 120)
 
-[sub_resource type="BoxMesh" id="BoxMesh_yxlcp"]
-size = Vector3(6, 3, 2)
-
-[sub_resource type="BoxShape3D" id="BoxShape3D_ebg2g"]
-size = Vector3(6, 3, 2)
-
 [sub_resource type="BoxMesh" id="BoxMesh_2ofn6"]
-size = Vector3(2, 3, 9)
+size = Vector3(6, 3, 2)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_xa025"]
-size = Vector3(2, 3, 9)
+size = Vector3(6, 3, 2)
 
 [sub_resource type="BoxMesh" id="BoxMesh_36rkl"]
-size = Vector3(12, 3, 2)
+size = Vector3(2, 3, 9)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_fs0b5"]
-size = Vector3(12, 3, 2)
+size = Vector3(2, 3, 9)
 
 [sub_resource type="BoxMesh" id="BoxMesh_ma7h6"]
-size = Vector3(2, 3, 7)
+size = Vector3(12, 3, 2)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_e2s0e"]
-size = Vector3(2, 3, 7)
+size = Vector3(12, 3, 2)
 
 [sub_resource type="BoxMesh" id="BoxMesh_gsxep"]
-size = Vector3(5, 3, 5)
+size = Vector3(2, 3, 7)
 
 [sub_resource type="BoxShape3D" id="BoxShape3D_v0vrg"]
-size = Vector3(5, 3, 5)
+size = Vector3(2, 3, 7)
 
 [sub_resource type="BoxMesh" id="BoxMesh_dg70y"]
-size = Vector3(1, 0.8, 1)
+size = Vector3(5, 3, 5)
 
-[sub_resource type="BoxMesh" id="BoxMesh_pnhog"]
-size = Vector3(1, 0.8, 1)
+[sub_resource type="BoxShape3D" id="BoxShape3D_pnhog"]
+size = Vector3(5, 3, 5)
 
 [sub_resource type="BoxMesh" id="BoxMesh_2c4at"]
 size = Vector3(1, 0.8, 1)
@@ -65,177 +60,186 @@ size = Vector3(1, 0.8, 1)
 [sub_resource type="BoxMesh" id="BoxMesh_kxyth"]
 size = Vector3(1, 0.8, 1)
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cobve"]
+[sub_resource type="BoxMesh" id="BoxMesh_cobve"]
+size = Vector3(1, 0.8, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_cmqll"]
+size = Vector3(1, 0.8, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_8cp6k"]
 transparency = 1
 depth_draw_mode = 2
 shading_mode = 0
 albedo_color = Color(0.2, 0.85, 0.4, 0.55)
 
-[sub_resource type="CylinderMesh" id="CylinderMesh_cmqll"]
+[sub_resource type="CylinderMesh" id="CylinderMesh_8b871"]
 top_radius = 3.0
 bottom_radius = 3.0
 height = 0.05
 
-[node name="Main" type="Node3D" unique_id=91358921]
-script = ExtResource("1_lhr70")
+[node name="Main" type="Node3D" unique_id=70703380]
+script = ExtResource("1_wp0k4")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1353459858]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1057715164]
 transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81915206, 0.57357645, -0.6710101, 0.46984634, 0, 0, 0)
 shadow_enabled = true
 
-[node name="Ground" type="StaticBody3D" parent="." unique_id=741583965]
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1693134306]
 
-[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=376853608]
-mesh = SubResource("PlaneMesh_1nqs0")
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=1284134990]
+mesh = SubResource("PlaneMesh_yxlcp")
 
-[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=241564154]
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=1922895925]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-shape = SubResource("BoxShape3D_1iba3")
-
-[node name="Player" type="CharacterBody3D" parent="." unique_id=80809806 instance=ExtResource("2_wp0k4")]
-script = ExtResource("3_bjd11")
-
-[node name="Obstacles" type="Node3D" parent="." unique_id=838889799]
-
-[node name="Block0" type="StaticBody3D" parent="Obstacles" unique_id=254993102]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.5, -4)
-
-[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block0" unique_id=502500199]
-mesh = SubResource("BoxMesh_yxlcp")
-
-[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block0" unique_id=2094767645]
 shape = SubResource("BoxShape3D_ebg2g")
 
-[node name="Block1" type="StaticBody3D" parent="Obstacles" unique_id=1255226877]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 1.5, -6)
+[node name="Player" type="CharacterBody3D" parent="." unique_id=80809806 instance=ExtResource("2_bjd11")]
+script = ExtResource("3_qmy6f")
 
-[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block1" unique_id=2146880796]
+[node name="Obstacles" type="Node3D" parent="." unique_id=523608033]
+
+[node name="Block0" type="StaticBody3D" parent="Obstacles" unique_id=871128955]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -9, 1.5, -4)
+
+[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block0" unique_id=862596079]
 mesh = SubResource("BoxMesh_2ofn6")
 
-[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block1" unique_id=1139105036]
+[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block0" unique_id=39300317]
 shape = SubResource("BoxShape3D_xa025")
 
-[node name="Block2" type="StaticBody3D" parent="Obstacles" unique_id=1456849788]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 11)
+[node name="Block1" type="StaticBody3D" parent="Obstacles" unique_id=1632579103]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 9, 1.5, -6)
 
-[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block2" unique_id=1398364526]
+[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block1" unique_id=1380051401]
 mesh = SubResource("BoxMesh_36rkl")
 
-[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block2" unique_id=307148810]
+[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block1" unique_id=1829601400]
 shape = SubResource("BoxShape3D_fs0b5")
 
-[node name="Block3" type="StaticBody3D" parent="Obstacles" unique_id=1257881219]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1.5, 8)
+[node name="Block2" type="StaticBody3D" parent="Obstacles" unique_id=1345220028]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 11)
 
-[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block3" unique_id=1807395356]
+[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block2" unique_id=2114975239]
 mesh = SubResource("BoxMesh_ma7h6")
 
-[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block3" unique_id=1185257154]
+[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block2" unique_id=752316377]
 shape = SubResource("BoxShape3D_e2s0e")
 
-[node name="Block4" type="StaticBody3D" parent="Obstacles" unique_id=1328579658]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 1.5, 7)
+[node name="Block3" type="StaticBody3D" parent="Obstacles" unique_id=736151044]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -14, 1.5, 8)
 
-[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block4" unique_id=758583503]
+[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block3" unique_id=171865810]
 mesh = SubResource("BoxMesh_gsxep")
 
-[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block4" unique_id=2064528317]
+[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block3" unique_id=1171410366]
 shape = SubResource("BoxShape3D_v0vrg")
 
-[node name="CameraRig" type="Node3D" parent="." unique_id=1889539375]
-script = ExtResource("4_qmy6f")
+[node name="Block4" type="StaticBody3D" parent="Obstacles" unique_id=21298910]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 15, 1.5, 7)
+
+[node name="Mesh" type="MeshInstance3D" parent="Obstacles/Block4" unique_id=1118531971]
+mesh = SubResource("BoxMesh_dg70y")
+
+[node name="Collision" type="CollisionShape3D" parent="Obstacles/Block4" unique_id=31152998]
+shape = SubResource("BoxShape3D_pnhog")
+
+[node name="CameraRig" type="Node3D" parent="." unique_id=222948810]
+script = ExtResource("4_mwfav")
 TargetPath = NodePath("../Player")
 
-[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=187725363]
+[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=722511531]
 transform = Transform3D(1, 0, 0, 0, 0.6156615, 0.7880107, 0, -0.7880107, 0.6156615, 0, 18.912258, 14.775876)
 projection = 1
 size = 18.0
 
-[node name="LootContainers" type="Node3D" parent="." unique_id=1577811724]
+[node name="LootContainers" type="Node3D" parent="." unique_id=1748160654]
 
-[node name="Crate0" type="Node3D" parent="LootContainers" unique_id=674906243]
+[node name="Crate0" type="Node3D" parent="LootContainers" unique_id=941009047]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -12, 0, -9)
-script = ExtResource("5_mwfav")
+script = ExtResource("5_3p2gp")
 
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate0" unique_id=2054429635]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-mesh = SubResource("BoxMesh_dg70y")
-
-[node name="Crate1" type="Node3D" parent="LootContainers" unique_id=1051061074]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 0, -12)
-script = ExtResource("5_mwfav")
-
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate1" unique_id=985432525]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-mesh = SubResource("BoxMesh_pnhog")
-
-[node name="Crate2" type="Node3D" parent="LootContainers" unique_id=1783822450]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 0, 4)
-script = ExtResource("5_mwfav")
-
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate2" unique_id=729247952]
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate0" unique_id=498681738]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 mesh = SubResource("BoxMesh_2c4at")
 
-[node name="Crate3" type="Node3D" parent="LootContainers" unique_id=516436558]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 15)
-script = ExtResource("5_mwfav")
+[node name="Crate1" type="Node3D" parent="LootContainers" unique_id=1582324656]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13, 0, -12)
+script = ExtResource("5_3p2gp")
 
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate3" unique_id=1081050297]
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate1" unique_id=1071200931]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 mesh = SubResource("BoxMesh_g6wdg")
 
-[node name="Crate4" type="Node3D" parent="LootContainers" unique_id=711742123]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 0, 2)
-script = ExtResource("5_mwfav")
+[node name="Crate2" type="Node3D" parent="LootContainers" unique_id=672250125]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -17, 0, 4)
+script = ExtResource("5_3p2gp")
 
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate4" unique_id=285505518]
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate2" unique_id=2141410133]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 mesh = SubResource("BoxMesh_hq6as")
 
-[node name="Crate5" type="Node3D" parent="LootContainers" unique_id=756934190]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -18)
-script = ExtResource("5_mwfav")
+[node name="Crate3" type="Node3D" parent="LootContainers" unique_id=1581122609]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, 15)
+script = ExtResource("5_3p2gp")
 
-[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate5" unique_id=404370592]
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate3" unique_id=1303486217]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 mesh = SubResource("BoxMesh_kxyth")
 
-[node name="ExtractionZone" type="Node3D" parent="." unique_id=1842677490]
+[node name="Crate4" type="Node3D" parent="LootContainers" unique_id=1577520920]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 19, 0, 2)
+script = ExtResource("5_3p2gp")
+
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate4" unique_id=1060005553]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("BoxMesh_cobve")
+
+[node name="Crate5" type="Node3D" parent="LootContainers" unique_id=1840437773]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4, 0, -18)
+script = ExtResource("5_3p2gp")
+
+[node name="Mesh" type="MeshInstance3D" parent="LootContainers/Crate5" unique_id=495432035]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("BoxMesh_cmqll")
+
+[node name="ExtractionZone" type="Node3D" parent="." unique_id=44001534]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -22)
-script = ExtResource("6_3p2gp")
+script = ExtResource("6_cvmbd")
 
-[node name="Pad" type="MeshInstance3D" parent="ExtractionZone" unique_id=585090773]
+[node name="Pad" type="MeshInstance3D" parent="ExtractionZone" unique_id=1921624361]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
-material_override = SubResource("StandardMaterial3D_cobve")
+material_override = SubResource("StandardMaterial3D_8cp6k")
 cast_shadow = 0
-mesh = SubResource("CylinderMesh_cmqll")
+mesh = SubResource("CylinderMesh_8b871")
 
-[node name="Horde" type="Node3D" parent="." unique_id=1670450351]
-script = ExtResource("7_cvmbd")
+[node name="Horde" type="Node3D" parent="." unique_id=1843008849]
+script = ExtResource("7_ft6cd")
 InitialSpawn = 24
 
-[node name="RunDirector" type="Node3D" parent="." unique_id=231342409]
-script = ExtResource("8_ft6cd")
+[node name="RunDirector" type="Node3D" parent="." unique_id=1474744049]
+script = ExtResource("8_bb450")
 
-[node name="MetaManager" type="Node" parent="." unique_id=219300339]
-script = ExtResource("9_bb450")
+[node name="RunGrowth" type="Node" parent="." unique_id=2143425418]
+script = ExtResource("9_nfivy")
 
-[node name="Hud" type="CanvasLayer" parent="." unique_id=838906799]
-script = ExtResource("10_nfivy")
+[node name="MetaManager" type="Node" parent="." unique_id=1039126568]
+script = ExtResource("10_1nqs0")
 
-[node name="Status" type="Label" parent="Hud" unique_id=1255715334]
+[node name="Hud" type="CanvasLayer" parent="." unique_id=748941289]
+script = ExtResource("11_1iba3")
+
+[node name="Status" type="Label" parent="Hud" unique_id=524333928]
 offset_left = 24.0
 offset_top = 18.0
 offset_right = 704.0
 offset_bottom = 168.0
 
-[node name="Prompt" type="Label" parent="Hud" unique_id=388021332]
+[node name="Prompt" type="Label" parent="Hud" unique_id=182758677]
 offset_top = 900.0
 offset_right = 1920.0
 offset_bottom = 948.0
 
-[node name="Banner" type="Label" parent="Hud" unique_id=941390890]
+[node name="Banner" type="Label" parent="Hud" unique_id=1268730474]
 offset_top = 170.0
 offset_right = 1920.0
 offset_bottom = 370.0

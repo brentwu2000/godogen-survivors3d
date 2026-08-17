@@ -16,6 +16,8 @@ public partial class Hud : CanvasLayer
     private Horde? _horde;
     private ExtractionZone? _extraction;
     private MetaManager? _meta;
+    private RunGrowth? _growth;
+    private WeaponHandler? _weapons;
     private LootContainer[] _containers = System.Array.Empty<LootContainer>();
 
     public override void _Ready()
@@ -35,6 +37,8 @@ public partial class Hud : CanvasLayer
         _horde = root?.GetNodeOrNull<Horde>("Horde");
         _extraction = root?.GetNodeOrNull<ExtractionZone>("ExtractionZone");
         _meta = root?.GetNodeOrNull<MetaManager>("MetaManager");
+        _growth = root?.GetNodeOrNull<RunGrowth>("RunGrowth");
+        _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
         var found = new System.Collections.Generic.List<LootContainer>();
         Node? crates = root?.GetNodeOrNull("LootContainers");
@@ -90,7 +94,17 @@ public partial class Hud : CanvasLayer
         // The payout-if-you-leave-now line is the whole decision. Without it the
         // player cannot weigh another minute against what they are already
         // holding, and the escalation is just something that happens to them.
-        return $"{minutes:00}:{seconds:00}   HP {health:F0}/{maxHealth:F0}\n" +
+        // Level over ceiling, not level alone. How much climb is left is what
+        // makes a better weapon legible as a longer curve rather than a bigger
+        // number, and it is the only warning the player gets that the deck is
+        // about to stop offering weapon picks.
+        string growth = _weapons?.Weapon == null
+            ? ""
+            : $"   lv {_weapons.Level}/{_weapons.MaxLevel}" +
+              (_weapons.AtCeiling ? " MAX" : "") +
+              (_player?.Armour > 0.0f ? $"   armour {_player.Armour:F0}" : "");
+
+        return $"{minutes:00}:{seconds:00}   HP {health:F0}/{maxHealth:F0}{growth}\n" +
                $"bag {bag?.UsedBulk ?? 0}/{bag?.Capacity ?? 0}   value {bag?.TotalValue ?? 0}   " +
                $"safe {safe?.UsedBulk ?? 0}/{safe?.Capacity ?? 0}   [F] secure\n" +
                $"extract now: {Mathf.RoundToInt(carried * multiplier)}   (x{multiplier:F2})\n" +
@@ -105,6 +119,20 @@ public partial class Hud : CanvasLayer
         // on screen under an EXTRACTED banner reads as a stuck UI.
         if (_director is { State: not RunState.Running })
             return "";
+
+        // The offer outranks both hold bars. It is the only thing on screen the
+        // player has to answer, and it does not pause anything while they think.
+        if (_growth is { HasOffer: true })
+        {
+            var line = new System.Text.StringBuilder("LEVEL UP  ");
+            for (int i = 0; i < _growth.Offer.Length; i++)
+                line.Append($"[{i + 1}] {_growth.Describe(_growth.Offer[i])}   ");
+
+            if (_growth.PendingPicks > 1)
+                line.Append($"(+{_growth.PendingPicks - 1} more)");
+
+            return line.ToString();
+        }
 
         if (_extraction is { PlayerInside: true, Progress: > 0.0f })
             return $"EXTRACTING  {Bar(_extraction.Progress)}";

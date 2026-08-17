@@ -55,6 +55,11 @@ public partial class BuildMain : SceneTree
         root.AddChild(BuildHorde());
         root.AddChild(BuildRunDirector());
 
+        // After the horde, whose kill event it subscribes to, and before the meta
+        // manager, which hands it the caps the equipped gear allows.
+        var growth = new Node { Name = "RunGrowth" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(growth, "res://scripts/nodes/RunGrowth.cs"));
+
         // After the director so its RunEnded signal exists to connect to, and
         // after the player so the loadout has something to equip.
         var meta = new Node { Name = "MetaManager" };

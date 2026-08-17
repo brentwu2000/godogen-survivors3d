@@ -60,6 +60,11 @@ public partial class Presentation : SceneTree
         director.SpawnDistanceMin = 20.0f;
         director.SpawnDistanceMax = 28.0f;
 
+        // Same rule as the other capture tools: filming a run does not bank it.
+        var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
+        if (meta != null)
+            meta.Ephemeral = true;
+
         GetRoot().AddChild(scene);
     }
 

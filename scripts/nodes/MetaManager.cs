@@ -15,9 +15,20 @@ public partial class MetaManager : Node
 
     public Profile Profile { get; private set; } = new();
 
+    /// The set the player walks in with. A fixed list until there is a shop to
+    /// choose from — the profile does not carry gear yet, so nothing here can be
+    /// lost, and the death rule that will apply to it is written but not armed.
+    private static readonly string[] StartingGear =
+    {
+        "res://resources/gear/worn_jacket.tres",
+        "res://resources/gear/canvas_pack.tres",
+        "res://resources/gear/scuffed_boots.tres",
+    };
+
     private RunDirector? _director;
     private Player? _player;
     private WeaponHandler? _weapons;
+    private RunGrowth? _growth;
 
     public override void _Ready()
     {
@@ -26,6 +37,7 @@ public partial class MetaManager : Node
         _director = GetParent().GetNodeOrNull<RunDirector>("RunDirector");
         _player = GetParent().GetNodeOrNull<Player>("Player");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
+        _growth = GetParent().GetNodeOrNull<RunGrowth>("RunGrowth");
 
         ApplyLoadout();
 
@@ -35,6 +47,8 @@ public partial class MetaManager : Node
 
     private void ApplyLoadout()
     {
+        ApplyGear();
+
         if (_weapons == null)
             return;
 
@@ -46,6 +60,40 @@ public partial class MetaManager : Node
             _weapons.Equip(weapon);
         else
             GD.PushWarning($"MetaManager: loadout {Profile.LoadoutWeapon} did not load; keeping the default");
+    }
+
+    /// Sums the equipped pieces into the player's starting stats and into how
+    /// many upgrades the run may take of each kind. Both halves come from the
+    /// same rows, so a piece cannot raise a ceiling it does not also justify.
+    private void ApplyGear()
+    {
+        float health = 0.0f, armour = 0.0f, speed = 0.0f;
+        int carry = 0, safeBox = 0;
+        int healthCap = 0, armourCap = 0, speedCap = 0, searchCap = 0;
+
+        foreach (string path in StartingGear)
+        {
+            var piece = GD.Load<GearResource>(path);
+            if (piece == null)
+            {
+                GD.PushWarning($"MetaManager: gear {path} did not load — run BuildGear.cs");
+                continue;
+            }
+
+            health += piece.HealthBonus;
+            armour += piece.ArmourBonus;
+            speed += piece.MoveSpeedBonus;
+            carry += piece.CarryBonus;
+            safeBox += piece.SafeBoxBonus;
+
+            healthCap += piece.HealthUpgradeCap;
+            armourCap += piece.ArmourUpgradeCap;
+            speedCap += piece.SpeedUpgradeCap;
+            searchCap += piece.SearchUpgradeCap;
+        }
+
+        _player?.ApplyGear(health, armour, speed, carry, safeBox);
+        _growth?.SetCaps(healthCap, armourCap, speedCap, searchCap);
     }
 
     /// Called before starting a run from the base screen.
@@ -77,11 +125,21 @@ public partial class MetaManager : Node
         else
             Profile.RunsLost++;
 
-        // Practice is knowledge, not cargo — it survives a death.
+        // Practice is knowledge, not cargo — it survives a death. Banked once
+        // here rather than levelled as it is earned, so it stays a separate and
+        // much slower curve from the growth inside the run.
         if (_weapons != null)
         {
             for (int i = 0; i < Profile.Proficiency.Length; i++)
-                Profile.Proficiency[i] = _weapons.GetProficiency((WeaponCategory)i);
+            {
+                int gained = _weapons.ProficiencyGain((WeaponCategory)i);
+                if (gained <= 0)
+                    continue;
+
+                Profile.Proficiency[i] += gained;
+                GD.Print($"practice: {(WeaponCategory)i} +{gained} " +
+                         $"(now {Profile.Proficiency[i]}, {_weapons.HitsThisRun((WeaponCategory)i)} hits)");
+            }
         }
 
         Persist();

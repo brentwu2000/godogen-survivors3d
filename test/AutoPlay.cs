@@ -4,7 +4,9 @@ using Godot;
 /// waiting out the search timers, and walking to the pad.
 ///
 ///   godot --headless --script test/AutoPlay.cs
+///   godot --headless --script test/AutoPlay.cs -- linger:120
 ///   godot --script test/AutoPlay.cs -- shots      (also writes frames)
+///   godot --headless --script test/AutoPlay.cs -- profile   (uses the real save)
 ///
 /// The other probes teleport, which proves the systems work but says nothing
 /// about whether the loop is reachable at the speeds and distances the game
@@ -46,6 +48,15 @@ public partial class AutoPlay : SceneTree
     private int _peakEnemies;
     private float _lastReport;
 
+    private RunGrowth? _growth;
+    private WeaponHandler? _weapons;
+
+    /// Run time at which the weapon hit its ceiling, or -1 if it never did. The
+    /// design target is around 60% of the run: soon enough that the last stretch
+    /// is the horde growing alone, late enough that the climb was most of it.
+    private float _ceilingAt = -1.0f;
+    private int _picksTaken;
+
     public override void _Initialize()
     {
         string[] args = OS.GetCmdlineUserArgs();
@@ -62,6 +73,23 @@ public partial class AutoPlay : SceneTree
             GD.PushError("Missing res://scenes/Main.tscn");
             Quit(1);
             return;
+        }
+
+        // Ephemeral unless asked otherwise, and set before the scene enters the
+        // tree because the meta manager reads it in _Ready.
+        //
+        // Two reasons. A play-test should not spend the player's save — these
+        // runs had been banking credits into it. And a balance number measured
+        // against whatever practice happens to be on disk is not a balance
+        // number: practice moves the starting point, so the same route reads
+        // differently on a veteran's profile than on a new one.
+        if (System.Array.IndexOf(args, "profile") < 0)
+        {
+            var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
+            if (meta != null)
+                meta.Ephemeral = true;
+            else
+                GD.PushWarning("AutoPlay: no MetaManager — the run will use the profile on disk");
         }
 
         GetRoot().AddChild(scene);
@@ -83,6 +111,7 @@ public partial class AutoPlay : SceneTree
         _legTicks++;
         _lowestHealth = Mathf.Min(_lowestHealth, _player.Health);
         _peakEnemies = Mathf.Max(_peakEnemies, _horde.Pool.Count);
+        TakeGrowthPick();
 
         // A line every ten seconds of run time: enough to see the curve without
         // burying the result.
@@ -90,7 +119,8 @@ public partial class AutoPlay : SceneTree
         {
             _lastReport = _director.Elapsed;
             GD.Print($"  t={_director.Elapsed:F0}s  HP {_player.Health:F0}  enemies {_horde.Pool.Count}  " +
-                     $"speed x{_horde.SpeedScale:F2}  bag {_player.Backpack.TotalValue}");
+                     $"speed x{_horde.SpeedScale:F2}  bag {_player.Backpack.TotalValue}  " +
+                     $"lv {_weapons?.Level ?? 0}/{_weapons?.MaxLevel ?? 0}");
         }
 
         if (!_player.IsAlive)
@@ -98,6 +128,11 @@ public partial class AutoPlay : SceneTree
             Release();
             GD.Print($"AUTOPLAY FAILED — killed at leg {_leg} ({Label()}) after {_tick / 60.0f:F1}s, " +
                      $"{_horde.Pool.Count} enemies on the field");
+
+            // A death is a balance result, not just a failure. Without the growth
+            // line the interesting question — how far up the curve the player got
+            // before it stopped mattering — is the one the report leaves out.
+            GD.Print(Growth());
             Quit(1);
             return true;
         }
@@ -179,6 +214,81 @@ public partial class AutoPlay : SceneTree
         return false;
     }
 
+    /// Answers a level-up the way a player does — by pressing the key, not by
+    /// calling the method. Prefers the weapon whenever it is dealt, so what this
+    /// measures is the weapon-focused climb the ceiling target is written for.
+    ///
+    /// Press one tick, release the next: IsActionJustPressed needs an edge, and
+    /// a press that lands a frame after the offer appears is still answered,
+    /// because the offer waits.
+    private void TakeGrowthPick()
+    {
+        if (_ceilingAt < 0.0f && _weapons is { Weapon: not null, AtCeiling: true })
+            _ceilingAt = _director.Elapsed;
+
+        if (_pickHeld != null)
+        {
+            Input.ActionRelease(_pickHeld);
+            _pickHeld = null;
+            return;
+        }
+
+        if (_growth is not { HasOffer: true })
+            return;
+
+        // Weapon first while healthy, survival first when not. A bot that always
+        // takes damage measures a player who never notices they are dying, and
+        // reports the run as harder than it is.
+        bool hurt = _player.Health < _player.MaxHealth * 0.6f;
+        int index = hurt
+            ? IndexOf(GrowthOption.MaxHealth, GrowthOption.Armour, GrowthOption.WeaponLevel)
+            : IndexOf(GrowthOption.WeaponLevel, GrowthOption.Armour, GrowthOption.MaxHealth);
+
+        _pickHeld = $"pick_{index + 1}";
+        Input.ActionPress(_pickHeld);
+        _picksTaken++;
+
+        // Every pick, with what was on the table. Which cards were refused is as
+        // much of the balance picture as which were taken — a deck that keeps
+        // dealing the same three is a deck the player never really chose from.
+        GD.Print($"  pick {_picksTaken} at {_director.Elapsed:F0}s: {_growth.Offer[index]} " +
+                 $"from [{string.Join(", ", _growth.Offer)}]");
+    }
+
+    private string? _pickHeld;
+
+    /// First preference present in the offer, or 0 — something always gets
+    /// taken, because the offer does not go away on its own.
+    private int IndexOf(params GrowthOption[] preferences)
+    {
+        foreach (GrowthOption wanted in preferences)
+        {
+            for (int i = 0; i < _growth!.Offer.Length; i++)
+            {
+                if (_growth.Offer[i] == wanted)
+                    return i;
+            }
+        }
+
+        return 0;
+    }
+
+    /// The growth line of the report. The ceiling time is stated as a fraction
+    /// of the run, because the target is a shape — climb for most of it, then
+    /// hold while the horde keeps going — and not a number of seconds.
+    private string Growth()
+    {
+        float run = _director.RunSeconds;
+        string ceiling = _ceilingAt < 0.0f
+            ? "never reached"
+            : $"reached at {_ceilingAt:F0}s ({_ceilingAt / run * 100.0f:F0}% of the run, target ~60%)";
+
+        return $"  growth: level {_growth?.Level ?? 0}, {_picksTaken} picks, " +
+               $"weapon {_weapons?.Level ?? 0}/{_weapons?.MaxLevel ?? 0}, ceiling {ceiling}\n" +
+               $"  armour {_player.Armour:F0}, speed {_player.MoveSpeed:F2}, " +
+               $"search x{_player.SearchSpeed:F2}, max HP {_player.MaxHealth:F0}";
+    }
+
     private bool Bind()
     {
         Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
@@ -198,6 +308,8 @@ public partial class AutoPlay : SceneTree
         _horde = horde;
         _director = director;
         _extraction = extraction;
+        _growth = scene.GetNodeOrNull<RunGrowth>("RunGrowth");
+        _weapons = player.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
         var found = new System.Collections.Generic.List<LootContainer>();
         foreach (Node child in crateParent.GetChildren())
@@ -272,7 +384,8 @@ public partial class AutoPlay : SceneTree
 
     private static void Release()
     {
-        foreach (string action in new[] { "move_up", "move_down", "move_left", "move_right" })
+        foreach (string action in new[]
+                 { "move_up", "move_down", "move_left", "move_right", "pick_1", "pick_2", "pick_3" })
         {
             if (Input.IsActionPressed(action))
                 Input.ActionRelease(action);
@@ -286,6 +399,7 @@ public partial class AutoPlay : SceneTree
         var state = (RunState)_endedState;
         GD.Print($"run: {state} at {_tick / 60.0f:F1}s");
         GD.Print($"  banked {_endedBanked} (secured {_player.SafeBox.TotalValue}, bag {_player.Backpack.TotalValue})");
+        GD.Print(Growth());
         GD.Print($"  lowest HP {_lowestHealth:F0}/{_player.MaxHealth:F0}, " +
                  $"enemies at the end {_horde.Pool.Count}, peak {_peakEnemies}");
 

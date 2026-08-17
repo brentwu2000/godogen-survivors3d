@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_2ye07"]
+
+[resource]
+script = ExtResource("1_2ye07")
+GearName = "Scuffed Boots"
+Slot = 2
+SpeedUpgradeCap = 3

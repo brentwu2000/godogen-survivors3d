@@ -32,6 +32,13 @@ public partial class BuildInputMap : SceneTree
         Define("reload", Keys(Key.R));
         Define("secure", Keys(Key.F));
 
+        // Level-up picks. Real actions rather than raw key reads, so a play-test
+        // can press them the way a player does instead of reaching past the
+        // input layer to call the method directly.
+        Define("pick_1", Keys(Key.Key1));
+        Define("pick_2", Keys(Key.Key2));
+        Define("pick_3", Keys(Key.Key3));
+
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)
         {
