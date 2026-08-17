@@ -65,6 +65,14 @@ public partial class Presentation : SceneTree
         if (meta != null)
             meta.Ephemeral = true;
 
+        // A fixed layout, set before the scene enters the tree because the
+        // generator runs in _Ready. Without it every run of this script would
+        // face a different map, and a number that changes for reasons the test
+        // did not choose is not a measurement.
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null)
+            level.Seed = 0xC17E4A9BUL;
+
         GetRoot().AddChild(scene);
     }
 
@@ -76,7 +84,7 @@ public partial class Presentation : SceneTree
             _player = scene.GetNode<Player>("Player");
             _horde = scene.GetNode<Horde>("Horde");
             _director = scene.GetNode<RunDirector>("RunDirector");
-            _extraction = scene.GetNode<ExtractionZone>("ExtractionZone");
+            _extraction = scene.GetNode<RunDirector>("RunDirector").PrimaryPad!;
 
             // Two crates on opposite sides of the arena: the detour is what makes
             // the walk back to the pad worth filming.

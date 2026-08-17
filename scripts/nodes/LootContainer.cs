@@ -8,6 +8,11 @@ public partial class LootContainer : Node3D
     [Export] public float SearchSeconds { get; set; } = 2.5f;
     [Export] public int RollCount { get; set; } = 3;
 
+    /// Multiplies an item's draw weight once per rarity step. 1 is the flat
+    /// table; above it, the rare tail gets heavier. Set by the level from how
+    /// far out the crate sits, so walking deeper is worth the walk.
+    [Export] public float RarityBias { get; set; } = 1.0f;
+
     /// Progress resets rather than pauses when the player steps away, so a
     /// contested search cannot be done in safe nibbles.
     [Export] public bool ResetOnLeave { get; set; } = true;
@@ -63,9 +68,19 @@ public partial class LootContainer : Node3D
         }
 
         _table = loaded.ToArray();
-        foreach (ItemResource item in _table)
-            _weightTotal += item.Weight;
+
+        // Biased weights are computed once here rather than per roll: the bias
+        // never changes after the level places the crate, and PickWeighted runs
+        // three times for every search.
+        _weights = new float[_table.Length];
+        for (int i = 0; i < _table.Length; i++)
+        {
+            _weights[i] = _table[i].Weight * Mathf.Pow(RarityBias, (int)_table[i].Rarity);
+            _weightTotal += _weights[i];
+        }
     }
+
+    private float[] _weights = System.Array.Empty<float>();
 
     public override void _PhysicsProcess(double delta)
     {
@@ -112,11 +127,11 @@ public partial class LootContainer : Node3D
     private ItemResource PickWeighted()
     {
         float pick = NextFloat() * _weightTotal;
-        foreach (ItemResource item in _table)
+        for (int i = 0; i < _table.Length; i++)
         {
-            pick -= item.Weight;
+            pick -= _weights[i];
             if (pick <= 0.0f)
-                return item;
+                return _table[i];
         }
 
         return _table[^1];

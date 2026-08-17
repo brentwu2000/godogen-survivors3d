@@ -5,10 +5,14 @@ using Godot;
 ///
 ///   godot --headless --script test/FlowFieldProbe.cs
 ///
-/// One enemy is placed directly behind the long wall at z = 11 (spanning
-/// x -6..6), with the player at the origin. The straight line between them goes
-/// through the wall, so reaching the player at all proves the detour, and the
-/// peak |x| says which way it went round.
+/// One enemy is placed directly behind a long wall at z = 11 (spanning x -6..6),
+/// with the player at the origin. The straight line between them goes through
+/// the wall, so reaching the player at all proves the detour, and the peak |x|
+/// says which way it went round.
+///
+/// The wall is built here rather than found in the level. The arena is generated
+/// per run now, so a probe that points at whatever happens to be at z = 11 is
+/// testing the layout and not the field — and passes or fails on the seed.
 public partial class FlowFieldProbe : SceneTree
 {
     /// Physics ticks, not render frames: the horde only steps in _PhysicsProcess,
@@ -55,6 +59,28 @@ public partial class FlowFieldProbe : SceneTree
             // without this the shot lands before the first step and the probe
             // measures an empty arena.
             _player.GetNodeOrNull<WeaponHandler>("WeaponHandler")?.SetPhysicsProcess(false);
+
+            // A known fixture in place of the generated layout: clear the cover,
+            // build one wall, and rebake. Otherwise the straight line from the
+            // subject to the player might be blocked by something else, or by
+            // nothing at all, depending on the seed.
+            var obstacles = scene.GetNodeOrNull<Node3D>("Obstacles");
+            if (obstacles != null)
+            {
+                foreach (Node child in obstacles.GetChildren())
+                {
+                    obstacles.RemoveChild(child);
+                    child.QueueFree();
+                }
+
+                var size = new Vector3(WallHalfWidth * 2.0f, 3.0f, 2.0f);
+                var wall = new StaticBody3D { Name = "Wall", Position = new Vector3(0.0f, 1.5f, 11.0f) };
+                wall.AddChild(new MeshInstance3D { Name = "Mesh", Mesh = new BoxMesh { Size = size } });
+                wall.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
+                obstacles.AddChild(wall);
+            }
+
+            _horde.RebakeObstacles();
 
             // Clear the scene's own spawn so exactly one subject is measured.
             _horde.Pool.Clear();

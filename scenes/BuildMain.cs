@@ -45,10 +45,20 @@ public partial class BuildMain : SceneTree
         player.Name = "Player";
         root.AddChild(player);
 
-        root.AddChild(BuildObstacles());
         root.AddChild(BuildCameraRig());
-        root.AddChild(BuildLootContainers());
-        root.AddChild(BuildExtractionZone());
+
+        // Empty containers, filled at runtime. The layout is a per-run decision
+        // and cannot live in a packed scene; what the scene owes it is somewhere
+        // to put the results, in the tree, before anything goes looking.
+        root.AddChild(new Node3D { Name = "Obstacles" });
+        root.AddChild(new Node3D { Name = "LootContainers" });
+        root.AddChild(new Node3D { Name = "ExtractionZones" });
+
+        // Before the horde, whose flow field bakes obstacles once in _Ready.
+        // Generating after that bake gives enemies a map they walk straight
+        // through while the screen shows walls.
+        var level = new Node3D { Name = "Level" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(level, "res://scripts/nodes/LevelGenerator.cs"));
 
         // Added last so Player, Obstacles and the zones are already in the tree
         // when the horde and the director look for them in _Ready.
@@ -94,39 +104,6 @@ public partial class BuildMain : SceneTree
         return live;
     }
 
-    /// Blocks the horde has to route around. Without them the flow field is
-    /// indistinguishable from "walk straight at the player", and nothing about
-    /// the pathfinding is actually being exercised.
-    private static Node3D BuildObstacles()
-    {
-        (Vector3 Center, Vector3 Size)[] blocks =
-        {
-            (new Vector3(-9.0f, 0.0f, -4.0f), new Vector3(6.0f, 3.0f, 2.0f)),
-            (new Vector3(9.0f, 0.0f, -6.0f), new Vector3(2.0f, 3.0f, 9.0f)),
-            (new Vector3(0.0f, 0.0f, 11.0f), new Vector3(12.0f, 3.0f, 2.0f)),
-            (new Vector3(-14.0f, 0.0f, 8.0f), new Vector3(2.0f, 3.0f, 7.0f)),
-            (new Vector3(15.0f, 0.0f, 7.0f), new Vector3(5.0f, 3.0f, 5.0f)),
-        };
-
-        var parent = new Node3D { Name = "Obstacles" };
-
-        for (int i = 0; i < blocks.Length; i++)
-        {
-            (Vector3 center, Vector3 size) = blocks[i];
-
-            var body = new StaticBody3D
-            {
-                Name = $"Block{i}",
-                Position = new Vector3(center.X, size.Y * 0.5f, center.Z),
-            };
-            body.AddChild(new MeshInstance3D { Name = "Mesh", Mesh = new BoxMesh { Size = size } });
-            body.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
-            parent.AddChild(body);
-        }
-
-        return parent;
-    }
-
     private static Node3D BuildHorde()
     {
         var horde = new Node3D { Name = "Horde" };
@@ -142,64 +119,6 @@ public partial class BuildMain : SceneTree
     {
         var director = new Node3D { Name = "RunDirector" };
         return (RunDirector)SceneBuildUtil.AttachScriptToRoot(director, "res://scripts/nodes/RunDirector.cs");
-    }
-
-    /// Crates sit away from the extraction point on purpose: the loop only works
-    /// if looting means walking away from the way out.
-    private static Node3D BuildLootContainers()
-    {
-        Vector3[] spots =
-        {
-            new(-12.0f, 0.0f, -9.0f),
-            new(13.0f, 0.0f, -12.0f),
-            new(-17.0f, 0.0f, 4.0f),
-            new(6.0f, 0.0f, 15.0f),
-            new(19.0f, 0.0f, 2.0f),
-            new(-4.0f, 0.0f, -18.0f),
-        };
-
-        var parent = new Node3D { Name = "LootContainers" };
-
-        for (int i = 0; i < spots.Length; i++)
-        {
-            var crate = new Node3D { Name = $"Crate{i}", Position = spots[i] };
-            crate.AddChild(new MeshInstance3D
-            {
-                Name = "Mesh",
-                Mesh = new BoxMesh { Size = new Vector3(1.0f, 0.8f, 1.0f) },
-                Position = new Vector3(0.0f, 0.4f, 0.0f),
-            });
-
-            parent.AddChild(SceneBuildUtil.AttachScriptToRoot(crate, "res://scripts/nodes/LootContainer.cs"));
-        }
-
-        return parent;
-    }
-
-    private static Node3D BuildExtractionZone()
-    {
-        var zone = new Node3D { Name = "ExtractionZone", Position = new Vector3(0.0f, 0.0f, -22.0f) };
-
-        // A flat green pad, unshaded so it stays readable regardless of the sun
-        // angle. Thin enough that the horde walks over it rather than around.
-        var material = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(0.2f, 0.85f, 0.4f, 0.55f),
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-            DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
-        };
-
-        zone.AddChild(new MeshInstance3D
-        {
-            Name = "Pad",
-            Mesh = new CylinderMesh { TopRadius = 3.0f, BottomRadius = 3.0f, Height = 0.05f },
-            MaterialOverride = material,
-            Position = new Vector3(0.0f, 0.03f, 0.0f),
-            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
-        });
-
-        return (ExtractionZone)SceneBuildUtil.AttachScriptToRoot(zone, "res://scripts/nodes/ExtractionZone.cs");
     }
 
     private static CanvasLayer BuildHud()

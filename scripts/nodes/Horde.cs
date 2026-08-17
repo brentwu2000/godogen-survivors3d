@@ -202,6 +202,26 @@ public partial class Horde : Node3D
     /// so re-marking them on every rebuild would be pure waste.
     public void BlockBox(Vector2 center, Vector2 halfExtents) => _field.BlockBox(center, halfExtents);
 
+    /// Re-reads level geometry into the field. Obstacles are static within a
+    /// run, so this is not needed in play — but a level regenerated underneath a
+    /// live field leaves the field describing the previous map, which is exactly
+    /// the failure the generation order exists to prevent.
+    public void RebakeObstacles()
+    {
+        _field?.ClearBlocked();
+        BakeObstacles();
+    }
+
+    /// Points the field at somewhere other than the player. Exposed so a level
+    /// can be asked "is this reachable" using the game's own pathing rather than
+    /// a second implementation written next to the generator — the two would
+    /// agree with each other and not with the enemies.
+    public void RebuildFieldAround(Vector3 target) => _field?.Rebuild(target);
+
+    /// Direction the field would send someone standing here, or zero where it
+    /// has no route.
+    public Vector2 SampleField(Vector3 position) => _field?.Sample(position) ?? Vector2.Zero;
+
     /// Spawns the baseline variant. Probes that want a known quantity call this;
     /// the run director calls SpawnByIntensity instead.
     public bool Spawn(Vector3 position) => Spawn(position, 0);

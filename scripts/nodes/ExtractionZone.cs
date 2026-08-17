@@ -11,6 +11,11 @@ public partial class ExtractionZone : Node3D
     /// Extraction is only live once the run director opens it.
     [Export] public bool Open { get; set; } = true;
 
+    /// Whether this pad is one of the ones this run will offer. Decided by the
+    /// level, revealed by the director — the map knows the way out from the
+    /// start, and the player does not.
+    [Export] public bool WillOpen { get; set; } = true;
+
     [Signal] public delegate void ExtractedEventHandler();
     [Signal] public delegate void ProgressChangedEventHandler(float progress);
 

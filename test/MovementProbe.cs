@@ -33,6 +33,14 @@ public partial class MovementProbe : SceneTree
 
         // Only the add happens here. Nodes are not inside the tree yet during
         // _Initialize, so any global transform read now returns identity.
+        // A fixed layout, set before the scene enters the tree because the
+        // generator runs in _Ready. Without it every run of this script would
+        // face a different map, and a number that changes for reasons the test
+        // did not choose is not a measurement.
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null)
+            level.Seed = 0x51E5D0A7UL;
+
         GetRoot().AddChild(scene);
     }
 

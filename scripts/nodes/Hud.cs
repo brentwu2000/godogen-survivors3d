@@ -14,7 +14,50 @@ public partial class Hud : CanvasLayer
     private RunDirector? _director;
     private Player? _player;
     private Horde? _horde;
-    private ExtractionZone? _extraction;
+    /// The pad the player is currently standing on, if any. With several on the
+    /// map the prompt has to follow the player rather than name a node.
+    private ExtractionZone? ActivePad
+    {
+        get
+        {
+            if (_director == null)
+                return null;
+
+            foreach (ExtractionZone pad in _director.Pads)
+            {
+                if (pad is { Open: true, PlayerInside: true })
+                    return pad;
+            }
+
+            return null;
+        }
+    }
+
+    /// Nearest open pad, for the arrow. Once the exits are somewhere different
+    /// every run, a player who cannot find one is not being challenged.
+    private ExtractionZone? NearestOpenPad()
+    {
+        if (_director == null || _player == null)
+            return null;
+
+        ExtractionZone? best = null;
+        float bestDistance = float.MaxValue;
+
+        foreach (ExtractionZone pad in _director.Pads)
+        {
+            if (!pad.Open)
+                continue;
+
+            float distance = pad.GlobalPosition.DistanceTo(_player.GlobalPosition);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = pad;
+            }
+        }
+
+        return best;
+    }
     private MetaManager? _meta;
     private RunGrowth? _growth;
     private WeaponHandler? _weapons;
@@ -35,7 +78,6 @@ public partial class Hud : CanvasLayer
         _director = root?.GetNodeOrNull<RunDirector>("RunDirector");
         _player = root?.GetNodeOrNull<Player>("Player");
         _horde = root?.GetNodeOrNull<Horde>("Horde");
-        _extraction = root?.GetNodeOrNull<ExtractionZone>("ExtractionZone");
         _meta = root?.GetNodeOrNull<MetaManager>("MetaManager");
         _growth = root?.GetNodeOrNull<RunGrowth>("RunGrowth");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
@@ -84,8 +126,16 @@ public partial class Hud : CanvasLayer
         float maxHealth = _player?.MaxHealth ?? 1.0f;
         Inventory? bag = _player?.Backpack;
 
-        string extraction = _extraction == null ? "—"
-            : _extraction.Open ? "OPEN" : "closed";
+        // Where the way out is, once there is one. A bearing and a distance
+        // rather than a marker: the pad is usually off-screen, and "closed" has
+        // to read as "not yet" rather than as "there isn't one".
+        ExtractionZone? nearest = NearestOpenPad();
+        string extraction = "closed";
+        if (nearest != null && _player != null)
+        {
+            Vector3 delta = nearest.GlobalPosition - _player.GlobalPosition;
+            extraction = $"OPEN {Compass(new Vector2(delta.X, delta.Z))} {delta.Length():F0}m";
+        }
 
         Inventory? safe = _player?.SafeBox;
         float multiplier = _director?.ExtractionMultiplier ?? 1.0f;
@@ -147,8 +197,9 @@ public partial class Hud : CanvasLayer
             return line.ToString();
         }
 
-        if (_extraction is { PlayerInside: true, Progress: > 0.0f })
-            return $"EXTRACTING  {Bar(_extraction.Progress)}";
+        ExtractionZone? pad = ActivePad;
+        if (pad is { Progress: > 0.0f })
+            return $"EXTRACTING  {Bar(pad.Progress)}";
 
         foreach (LootContainer container in _containers)
         {
@@ -157,6 +208,19 @@ public partial class Hud : CanvasLayer
         }
 
         return "";
+    }
+
+    /// Eight-way arrow in screen space. World +Z is down-screen under this
+    /// camera, so north on the readout is away from the viewer.
+    private static string Compass(Vector2 direction)
+    {
+        if (direction.LengthSquared() < 0.001f)
+            return "•";
+
+        string[] arrows = { "→", "↘", "↓", "↙", "←", "↖", "↑", "↗" };
+        float angle = Mathf.Atan2(direction.Y, direction.X);
+        int index = Mathf.PosMod(Mathf.RoundToInt(angle / (Mathf.Tau / 8.0f)), 8);
+        return arrows[index];
     }
 
     private static string Bar(float progress)

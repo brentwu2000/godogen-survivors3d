@@ -68,6 +68,9 @@ public partial class AutoPlay : SceneTree
         {
             if (arg.StartsWith("linger:") && float.TryParse(arg[7..], out float seconds))
                 _lingerSeconds = seconds;
+
+            if (arg.StartsWith("seed:") && ulong.TryParse(arg[5..], out ulong seed))
+                _seed = seed;
         }
 
         var scene = GD.Load<PackedScene>("res://scenes/Main.tscn")?.Instantiate();
@@ -95,8 +98,17 @@ public partial class AutoPlay : SceneTree
                 GD.PushWarning("AutoPlay: no MetaManager — the run will use the profile on disk");
         }
 
+        // One layout by default, because a balance number that moves when the
+        // map does is not a balance number. "seed:N" walks a different map, and
+        // comparing several is how a layout that only works once gets caught.
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null)
+            level.Seed = _seed;
+
         GetRoot().AddChild(scene);
     }
+
+    private ulong _seed = 0x51E5D0A7UL;
 
     public override bool _PhysicsProcess(double delta)
     {
@@ -295,6 +307,58 @@ public partial class AutoPlay : SceneTree
         Input.ActionPress(action);
     }
 
+    /// Direction to walk toward `target`, routed around cover.
+    ///
+    /// Its own field rather than the horde's: the horde rebuilds around the
+    /// player every few ticks, so borrowing it would mean the bot and the
+    /// enemies fighting over which way the arrows point.
+    private Vector2 Navigate(Vector3 target)
+    {
+        Vector3 delta = target - _player.GlobalPosition;
+        var straight = new Vector2(delta.X, delta.Z).Normalized();
+
+        if (_navField == null)
+        {
+            _navField = new FlowField(Vector2.Zero, _horde.ArenaExtent, 1.5f);
+
+            // Inflated by roughly a body's radius, so the route it returns is one
+            // the player can physically walk rather than one that scrapes every
+            // corner and catches on the collision shape.
+            Node? obstacles = _player.GetParent()?.GetNodeOrNull("Obstacles");
+            if (obstacles != null)
+            {
+                foreach (Node child in obstacles.GetChildren())
+                {
+                    if (child is not Node3D body ||
+                        body.GetNodeOrNull<CollisionShape3D>("Collision")?.Shape is not BoxShape3D box)
+                    {
+                        continue;
+                    }
+
+                    _navField.BlockBox(
+                        new Vector2(body.Position.X, body.Position.Z),
+                        new Vector2(box.Size.X * 0.5f + 0.9f, box.Size.Z * 0.5f + 0.9f));
+                }
+            }
+        }
+
+        if (target.DistanceSquaredTo(_navTarget) > 0.01f)
+        {
+            _navTarget = target;
+            _navField.Rebuild(target);
+        }
+
+        Vector2 flow = _navField.Sample(_player.GlobalPosition);
+
+        // Zero means the field has no route from here — standing inside an
+        // inflated footprint, usually. Straight on is the honest fallback: it is
+        // what the bot did before, and it gets it back out of the margin.
+        return flow == Vector2.Zero ? straight : flow;
+    }
+
+    private FlowField? _navField;
+    private Vector3 _navTarget = new(float.MaxValue, 0.0f, float.MaxValue);
+
     /// Whether the bag holds anything that does something when used. The player
     /// can see this; the bot has to look, or it presses a dead key forever.
     private bool CarriesUsable()
@@ -367,10 +431,9 @@ public partial class AutoPlay : SceneTree
         Player? player = scene.GetNodeOrNull<Player>("Player");
         Horde? horde = scene.GetNodeOrNull<Horde>("Horde");
         RunDirector? director = scene.GetNodeOrNull<RunDirector>("RunDirector");
-        ExtractionZone? extraction = scene.GetNodeOrNull<ExtractionZone>("ExtractionZone");
         Node? crateParent = scene.GetNodeOrNull("LootContainers");
 
-        if (player == null || horde == null || director == null || extraction == null || crateParent == null)
+        if (player == null || horde == null || director == null || director.PrimaryPad == null || crateParent == null)
         {
             GD.PushError("AUTOPLAY FAILED — scene is missing a required node");
             return false;
@@ -379,7 +442,7 @@ public partial class AutoPlay : SceneTree
         _player = player;
         _horde = horde;
         _director = director;
-        _extraction = extraction;
+        _extraction = director.PrimaryPad!;
         _growth = scene.GetNodeOrNull<RunGrowth>("RunGrowth");
         _weapons = player.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
@@ -462,10 +525,16 @@ public partial class AutoPlay : SceneTree
 
     /// Presses the same digital actions a keyboard would. Anything subtler would
     /// be testing a control scheme the game does not have.
+    ///
+    /// The direction comes from a flow field of its own, baked from the same
+    /// obstacles the horde uses. Straight-line steering was enough on a hand-made
+    /// arena with five blocks in known places; on a generated one it walks into
+    /// the first wall between it and the crate and reports the route as blocked.
+    /// A player looks at the screen and goes around, and the closest thing to
+    /// that this project already owns is the field.
     private void Steer(Vector3 target)
     {
-        Vector3 delta = target - _player.GlobalPosition;
-        var direction = new Vector2(delta.X, delta.Z).Normalized();
+        Vector2 direction = Navigate(target);
 
         Set("move_right", direction.X > AxisDeadzone);
         Set("move_left", direction.X < -AxisDeadzone);

@@ -55,6 +55,10 @@ public sealed class FlowField
             _blocked[z * _width + x] = true;
     }
 
+    /// Forgets every marked obstacle. Only a level that regenerates needs this;
+    /// within a run the footprints never move.
+    public void ClearBlocked() => System.Array.Clear(_blocked, 0, _blocked.Length);
+
     public void Rebuild(Vector3 target)
     {
         int cells = _width * _depth;

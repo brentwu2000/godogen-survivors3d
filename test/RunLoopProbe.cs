@@ -34,6 +34,14 @@ public partial class RunLoopProbe : SceneTree
             return;
         }
 
+        // A fixed layout, set before the scene enters the tree because the
+        // generator runs in _Ready. Without it every run of this script would
+        // face a different map, and a number that changes for reasons the test
+        // did not choose is not a measurement.
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null)
+            level.Seed = 0x51E5D0A7UL;
+
         GetRoot().AddChild(scene);
     }
 
@@ -68,8 +76,8 @@ public partial class RunLoopProbe : SceneTree
         Player? player = scene.GetNodeOrNull<Player>("Player");
         Horde? horde = scene.GetNodeOrNull<Horde>("Horde");
         RunDirector? director = scene.GetNodeOrNull<RunDirector>("RunDirector");
-        ExtractionZone? extraction = scene.GetNodeOrNull<ExtractionZone>("ExtractionZone");
         LootContainer? crate = scene.GetNodeOrNull<LootContainer>("LootContainers/Crate0");
+        ExtractionZone? extraction = director?.PrimaryPad;
 
         if (player == null || horde == null || director == null || extraction == null || crate == null)
         {
@@ -81,7 +89,7 @@ public partial class RunLoopProbe : SceneTree
         _player = player;
         _horde = horde;
         _director = director;
-        _extraction = extraction;
+        _extraction = director.PrimaryPad!;
         _crate = crate;
 
         // The rifle would clear the arena and skew the damage stage; the loop is

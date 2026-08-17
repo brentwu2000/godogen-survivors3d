@@ -33,6 +33,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
 | `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not |
+| `test/LevelProbe.cs` | yes | A seed reproduces its arena, nothing is placed in a wall, the horde routes around what was generated, and 100 seeds produce no sealed exit |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
@@ -79,6 +80,16 @@ roster, so the field is already growing without bound at six — every rate abov
 fast the number climbed, and the whole second half of the escalation curve was escalation the player
 could not read. Eight keeps the curve visible at four times the opening while leaving the last
 stretch somewhere skill still moves the outcome.
+
+**The arena is generated per run from one seed**, printed at startup so an interesting layout can be
+walked again. A 5×5 grid of tiles — open ground, block clusters, walled corridors with a gap — around
+a cleared spawn, eight crates, and three extraction pads of which two will open. Which two is decided
+by the level and revealed by the director at 15% of the clock, so the way out is not known from the
+first second and the map is a decision rather than a corridor.
+
+Crates get better the further out they sit: rarity weight is multiplied once per rarity step, scaled
+by distance from the spawn. Depth has to pay, or everything past the first ring is risk with no
+reason.
 
 Escalation is also a change of composition, not only of rate. Five variants share one table
 (`resources/enemies/*.tres`), each gated behind a point on the run clock:
@@ -183,6 +194,21 @@ field. The distance pass is 4-directional (8 cuts corners through obstacles) and
 8-directionally for smooth headings. Obstacle footprints are dilated by the enemy radius, or the
 field steers bodies into gaps they don't fit through.
 
+**The level generates before the horde, and the reachability check is the horde's own.** The flow
+field bakes obstacles once at startup, so a level built after that bake produces walls every enemy
+walks straight through while the screen looks perfectly correct. Ordering handles that; what does not
+is writing a second reachability test next to the generator. One was written, and it agreed with
+itself and disagreed with the game — the field blocks a cell with `floor()` on one edge and `ceil()`
+on the other, so a copy that floors both is a shade more optimistic than the thing it stands in for.
+The generator now builds a real `FlowField` and asks it.
+
+**A carve that has never been needed is a guess.** When a layout does seal an objective off, every
+block on the line from spawn is removed. At shipping density that never happens — 60 seeds, zero
+carves — so the probe also sweeps 40 seeds at more than triple the block count, where 37 of them need
+it. The first version of that rescue passed its own check and still left six pads sealed: a corridor
+cleared to the width a body needs arrives at the field narrowed twice, once by the enemy-radius
+inflation and again by rounding the footprint outward to whole cells.
+
 **A death blast resolves one level deep.** A bloater's blast kills other bloaters without those
 blasting in turn. A chain whose depth is however many happened to be standing together is both a
 frame spike and a balance number nobody chose.
@@ -266,26 +292,33 @@ the route's crates were emptied in 11.4 s. The enrage curve could never be reach
 Three changes followed: the time-scaled extraction multiplier, the run clock cut 600 → 300 s (the bot
 died at 246 s, so 600 was fiction), and a HUD line showing what extracting *right now* pays.
 
-| Loiter | Extract at | Banked | Ammo |
-| ---: | ---: | ---: | :--- |
-| 0 s | 18.8 s | 315 | never below 180 |
-| 60 s | 69.9 s | 487 | down to 30, refilled by looting |
-| 120 s | died at 118 s | 36 | resupplied, still holding the rifle |
-| 120 s, refusing to loot | died at 129 s | 36 | **ran dry at 95 s**, finished on the knife |
+One seed, one route, four lengths of stay:
 
-Staying pays more until it kills you, which is the property the multiplier exists to create. The
-weapon climbs about a level every 15 s and reaches its ceiling near 195 s — around 65% of the run,
-close to the 60% the curve is aimed at, so the last stretch is the horde growing alone.
+| Loiter | Extract at | Banked | Low HP | Enemies | Ammo |
+| ---: | ---: | ---: | ---: | ---: | :--- |
+| 0 s | 35.2 s | 331 | 100 | 49 | never below 150 |
+| 60 s | 69.3 s | **827** | 100 | 84 | reserve hit 0, refilled by looting |
+| 120 s | 133.4 s | 359 | 33 | 206 | ran dry at 93 s, finished on the knife |
+| 180 s | died at 179 s | — | — | 379 | ran dry at 93 s |
 
-**The reserve is calibrated so that ammo runs out if and only if you stop looting.** That is the last
-row: a bot that opens two crates and then circles is dry at 95 s and ends the run with a knife against
-a hundred enemies, while the same bot searching as it goes never empties. Looting is not a phase that
-finishes in the first minute any more — it is the supply line.
+**The curve has a peak now instead of a slope.** Staying to 60 s more than doubles the haul, because
+the far crates are where the rarity bias puts the serum; staying to 120 s banks less than half of
+that, because by then the bag is being spent on staying alive. That is the item system and the depth
+bias arguing with each other, which is the argument they were built to have.
 
-The 120 s row now dies *earlier* than the one that refuses to loot, and that is the design rather than
-a regression: searching means standing still while the horde walks in, and the bot has no judgment
-about when a crate is worth the seconds. It fell to contact damage at 62 enemies, where circling
-survived to 125.
+**The reserve is calibrated so ammo runs out if and only if you stop looting.** A bot that opens two
+crates and then circles is dry at 95 s and ends with a knife against a hundred enemies; the same bot
+searching as it goes never empties. Looting is a supply line, not a phase that ends in the first
+minute.
+
+**Cover makes the horde accumulate.** 206 enemies alive at 120 s where the old open arena held 55: a
+crowd that has to route around fifty blocks arrives slower than it spawns. The field the player is
+kiting through is denser than the same run used to be, and the reason is the map, not the rate.
+
+The bot now paths with a flow field of its own rather than steering straight. On a hand-made arena
+with five blocks that was enough; on a generated one it walked into the first wall between it and the
+crate and reported the route as blocked. A player looks at the screen and goes around, and the
+closest thing to that this project already owns is the field.
 
 **These are measured on a fresh profile, and the earlier ones were not.** The table recorded when
 variants landed was taken against a save with 37 points of firearm practice on it, which under the
@@ -337,14 +370,18 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The horde has five variants, a run climbs a growth curve, and loot is a supply line rather than a
-score. What is left is the world and the meta. Every run is the same 120×120 field with the same five
-blocks and one extraction pad, gear is a fixed set nobody chose, and **banked credits still buy
-nothing**. That last one is the in-run "no reason to stay" problem one level up: the run-level trade
-was fixed, the meta-level one wasn't, so a second run changes nothing about a third. It is also what
-the growth model is waiting on, since gear is the half of it that has to be bought, and what the two
-weapon slots are waiting on, since nothing chooses what goes in the second. Planned in order:
-generated levels with several extraction pads, then the shop.
+The horde has five variants, a run climbs a growth curve, loot is a supply line, and the arena is
+different every time. What is left is the meta layer and the surface. Gear is a fixed set nobody
+chose, the second weapon slot always holds the same knife, there is no audio, the cover is untextured
+boxes — and **banked credits still buy nothing**. That last one is the in-run "no reason to stay"
+problem one level up: the run-level trade was fixed, the meta-level one wasn't, so a second run
+changes nothing about a third. It is also what the growth model is waiting on, since gear is the half
+of it that has to be bought, and what the second slot is waiting on, since nothing chooses what goes
+in it. Next: the shop, then audio and a real HUD.
+
+**The proof video is stale.** `Presentation.cs` still frames two crates it expects on opposite
+corners, which a generated map does not promise. It runs on a pinned seed so it is reproducible, but
+it has not been re-shot since the arena stopped being hand-placed.
 
 Engineering gaps, separately:
 

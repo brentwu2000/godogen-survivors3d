@@ -63,23 +63,103 @@ public partial class RunDirector : Node3D
 
     private Horde? _horde;
     private Player? _player;
-    private ExtractionZone? _extraction;
+    private ExtractionZone[] _extractions = System.Array.Empty<ExtractionZone>();
+    private bool _padsRevealed;
     private float _spawnCredit;
     private ulong _rng = 0x853C49E6748FEA9BUL;
+
+    /// The pads this run will offer, whether or not they are open yet. The HUD
+    /// needs them to point somewhere once they are revealed.
+    public System.Collections.Generic.IReadOnlyList<ExtractionZone> Pads => _extractions;
+
+    /// The pad this run is going to offer, known before it is revealed. Probes
+    /// and capture scripts need somewhere definite to walk to; the player finds
+    /// out when the director says so.
+    public ExtractionZone? PrimaryPad
+    {
+        get
+        {
+            foreach (ExtractionZone pad in _extractions)
+            {
+                if (pad.WillOpen)
+                    return pad;
+            }
+
+            return _extractions.Length > 0 ? _extractions[0] : null;
+        }
+    }
 
     public override void _Ready()
     {
         _horde = GetParent().GetNodeOrNull<Horde>("Horde");
         _player = GetParent().GetNodeOrNull<Player>("Player");
-        _extraction = GetParent().GetNodeOrNull<ExtractionZone>("ExtractionZone");
+        _extractions = FindPads();
 
         if (_player != null)
             _player.Died += OnPlayerDied;
 
-        if (_extraction != null)
+        foreach (ExtractionZone pad in _extractions)
+            pad.Extracted += OnExtracted;
+
+        if (ExtractionOpensAt <= 0.0f)
+            RevealPads();
+    }
+
+    /// Every pad under the container, or the single legacy node if a scene still
+    /// has one. Scanning rather than naming, because how many exits a run has is
+    /// the level's decision and not the director's.
+    private ExtractionZone[] FindPads()
+    {
+        var found = new System.Collections.Generic.List<ExtractionZone>();
+
+        Node? container = GetParent().GetNodeOrNull("ExtractionZones");
+        if (container != null)
         {
-            _extraction.Open = ExtractionOpensAt <= 0.0f;
-            _extraction.Extracted += OnExtracted;
+            foreach (Node child in container.GetChildren())
+            {
+                if (child is ExtractionZone zone)
+                    found.Add(zone);
+            }
+        }
+
+        var single = GetParent().GetNodeOrNull<ExtractionZone>("ExtractionZone");
+        if (single != null)
+            found.Add(single);
+
+        if (found.Count == 0)
+            GD.PushWarning("RunDirector: no extraction pads — the run can only end on the clock");
+
+        return found.ToArray();
+    }
+
+    /// Opens the pads the level chose and makes them visible. Until this moment
+    /// the player does not know where the run ends, which is what turns the map
+    /// into a decision rather than a corridor.
+    private void RevealPads()
+    {
+        if (_padsRevealed)
+            return;
+
+        _padsRevealed = true;
+        int opened = 0;
+
+        foreach (ExtractionZone pad in _extractions)
+        {
+            if (!pad.WillOpen)
+                continue;
+
+            pad.Open = true;
+            pad.Visible = true;
+            opened++;
+        }
+
+        // A run with no way out is a bug, not a difficulty setting. Falling back
+        // to the nearest pad beats ending every run on the clock.
+        if (opened == 0 && _extractions.Length > 0)
+        {
+            _extractions[0].Open = true;
+            _extractions[0].Visible = true;
+            GD.PushWarning("RunDirector: no pad was flagged to open; forcing the first");
         }
     }
 
@@ -91,8 +171,8 @@ public partial class RunDirector : Node3D
         float step = (float)delta;
         Elapsed += step;
 
-        if (_extraction != null && !_extraction.Open && Intensity >= ExtractionOpensAt)
-            _extraction.Open = true;
+        if (!_padsRevealed && Intensity >= ExtractionOpensAt)
+            RevealPads();
 
         if (_horde != null)
         {
