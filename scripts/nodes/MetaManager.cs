@@ -15,15 +15,9 @@ public partial class MetaManager : Node
 
     public Profile Profile { get; private set; } = new();
 
-    /// The set the player walks in with. A fixed list until there is a shop to
-    /// choose from — the profile does not carry gear yet, so nothing here can be
-    /// lost, and the death rule that will apply to it is written but not armed.
-    private static readonly string[] StartingGear =
-    {
-        "res://resources/gear/worn_jacket.tres",
-        "res://resources/gear/canvas_pack.tres",
-        "res://resources/gear/scuffed_boots.tres",
-    };
+    /// Where the run returns when it ends. Only a run that came from the base
+    /// screen goes back to it — probes and capture scripts own their own tree.
+    [Export] public float ReturnDelaySeconds { get; set; } = 3.5f;
 
     private RunDirector? _director;
     private Player? _player;
@@ -82,8 +76,17 @@ public partial class MetaManager : Node
         int carry = 0, safeBox = 0;
         int healthCap = 0, armourCap = 0, speedCap = 0, searchCap = 0;
 
-        foreach (string path in StartingGear)
+        foreach (string path in Profile.EquippedGear)
         {
+            if (string.IsNullOrEmpty(path))
+                continue;
+
+            // Only what the player actually owns. A piece lost on the last run
+            // is still named in the slot until the base screen replaces it, and
+            // wearing it anyway would make death cost nothing.
+            if (!Profile.Owns(path))
+                continue;
+
             var piece = GD.Load<GearResource>(path);
             if (piece == null)
             {
@@ -132,9 +135,14 @@ public partial class MetaManager : Node
         Profile.Credits += bankedValue;
 
         if (survived)
+        {
             Profile.RunsSurvived++;
+        }
         else
+        {
             Profile.RunsLost++;
+            LoseCarriedEquipment();
+        }
 
         // Practice is knowledge, not cargo — it survives a death. Banked once
         // here rather than levelled as it is earned, so it stays a separate and
@@ -157,12 +165,55 @@ public partial class MetaManager : Node
         GD.Print($"profile: credits {Profile.Credits} (+{bankedValue}), " +
                  $"survived {Profile.RunsSurvived} lost {Profile.RunsLost}");
         EmitSignal(SignalName.ProfileBanked, bankedValue, Profile.Credits);
+
+        // Long enough to read the banner. Only for a run that came from the base
+        // screen: a probe owns its tree, and swapping the scene underneath one
+        // mid-measurement would end the test rather than the run.
+        if (GameSession.LaunchedFromBase)
+            ReturnToBase();
+    }
+
+    /// Dying leaves the good kit on the ground. Starting kit is exempt — it is
+    /// the shirt on their back, and a player who cannot afford a backpack has to
+    /// still have one or the loop has no next run.
+    ///
+    /// This is the rule that makes the shop a decision rather than a one-time
+    /// unlock: buying the better rifle is easy, taking it out is the wager.
+    private void LoseCarriedEquipment()
+    {
+        var lost = new System.Collections.Generic.List<string>();
+
+        foreach (string path in Profile.EquippedGear)
+        {
+            if (!string.IsNullOrEmpty(path) && Profile.Revoke(path))
+                lost.Add(path);
+        }
+
+        if (Profile.Revoke(Profile.LoadoutWeapon))
+            lost.Add(Profile.LoadoutWeapon);
+
+        if (Profile.Revoke(Profile.LoadoutSecondary))
+            lost.Add(Profile.LoadoutSecondary);
+
+        if (lost.Count > 0)
+            GD.Print($"lost on death: {string.Join(", ", lost)}");
     }
 
     private void StashAll(Inventory inventory)
     {
         for (int i = 0; i < inventory.EntryCount; i++)
             Profile.AddToStash(inventory.ItemAt(i).ItemName, inventory.CountAt(i));
+    }
+
+    private async void ReturnToBase()
+    {
+        GameSession.LaunchedFromBase = false;
+        await ToSignal(GetTree().CreateTimer(ReturnDelaySeconds), SceneTreeTimer.SignalName.Timeout);
+
+        // The tree can be gone by the time the timer fires if the window was
+        // closed during the wait.
+        if (IsInsideTree())
+            GetTree().ChangeSceneToFile("res://scenes/Base.tscn");
     }
 
     private void Persist()

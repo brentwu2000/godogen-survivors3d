@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_c7q01"]
+
+[resource]
+script = ExtResource("1_c7q01")
+WeaponName = "Reaper Scythe"
+Category = 1
+BaseDamage = 22.0
+BaseAttackSpeed = 1.3
+BaseRange = 3.4
+SwingArcDegrees = 160.0
+MagazineSize = 0
+Knockback = 0.7
+Tier = 2
+Price = 1100
+MaxLevel = 16
+TierStartBonus = 1

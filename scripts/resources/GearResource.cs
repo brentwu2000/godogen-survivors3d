@@ -23,8 +23,11 @@ public partial class GearResource : Resource
     [Export] public string GearName { get; set; } = "";
     [Export] public GearSlot Slot { get; set; } = GearSlot.Armour;
 
-    /// Shown in the shop and the loadout; also what a tier is worth in credits.
+    /// Shop tier. 1 is starting kit — owned from the first run, never lost.
     [Export] public int Tier { get; set; } = 1;
+
+    /// Credits to buy one. Zero means it is not for sale.
+    [Export] public int Price { get; set; }
 
     // --- Starting point -----------------------------------------------------
 

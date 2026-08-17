@@ -59,6 +59,12 @@ public partial class WeaponResource : Resource
 
     [Export] public float Knockback { get; set; }
 
+    /// Shop tier. 1 is starting kit — owned from the first run, never lost.
+    [Export] public int Tier { get; set; } = 1;
+
+    /// Credits to buy one. Zero means it is not for sale.
+    [Export] public int Price { get; set; }
+
     /// The ceiling. Every curve below stops here, and so does in-run growth —
     /// this is what a better weapon actually buys: a longer climb, not a bigger
     /// number bolted on the end.

@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_y2s3g"]
+
+[resource]
+script = ExtResource("1_y2s3g")
+WeaponName = "Service Rifle"
+BaseDamage = 15.0
+BaseAttackSpeed = 7.0
+BaseRange = 20.0
+BaseSpreadDegrees = 6.0
+BaseReloadTime = 1.8
+MagazineSize = 40
+StartingReserve = 320
+MaxReserve = 480
+Penetration = 2
+Knockback = 0.1
+Tier = 2
+Price = 1400
+MaxLevel = 16
+TierStartBonus = 2

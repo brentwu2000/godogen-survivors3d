@@ -12,3 +12,4 @@ BaseRange = 3.0
 SwingArcDegrees = 100.0
 MagazineSize = 0
 Knockback = 0.55
+Price = 250

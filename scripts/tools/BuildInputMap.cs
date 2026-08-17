@@ -41,6 +41,12 @@ public partial class BuildInputMap : SceneTree
         Define("pick_2", Keys(Key.Key2));
         Define("pick_3", Keys(Key.Key3));
 
+        // The base screen. Moving and confirming ride Godot's own ui_up/ui_down/
+        // ui_accept, which every build already has; only the two verbs this
+        // project invented need defining.
+        Define("menu_sell", Keys(Key.S));
+        Define("menu_launch", Keys(Key.L));
+
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)
         {

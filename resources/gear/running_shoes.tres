@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_m4mfl"]
+
+[resource]
+script = ExtResource("1_m4mfl")
+GearName = "Running Shoes"
+Slot = 2
+Tier = 2
+Price = 700
+MoveSpeedBonus = 0.6
+SpeedUpgradeCap = 5

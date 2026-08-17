@@ -43,6 +43,7 @@ public partial class BuildWeapons : SceneTree
             {
                 WeaponName = "Fire Axe",
                 Category = WeaponCategory.MeleeLong,
+                Price = 250,
                 BaseDamage = 16.0f,
                 BaseAttackSpeed = 1.1f,
                 BaseRange = 3.0f,
@@ -57,6 +58,7 @@ public partial class BuildWeapons : SceneTree
             {
                 WeaponName = "Hunting Bow",
                 Category = WeaponCategory.BowCrossbow,
+                Price = 400,
                 BaseDamage = 22.0f,
                 BaseAttackSpeed = 1.0f,
                 BaseRange = 14.0f,
@@ -88,6 +90,48 @@ public partial class BuildWeapons : SceneTree
                 MaxReserve = 360,
                 Penetration = 1,
                 Knockback = 0.08f,
+            },
+
+            // Tier 2. What credits buy is not a bigger number but a longer
+            // curve: a ceiling of 16 against the scavenged rifle's 8, which also
+            // means twice as much of the player's practice finally counts.
+            new()
+            {
+                WeaponName = "Service Rifle",
+                Category = WeaponCategory.Firearm,
+                Tier = 2,
+                Price = 1400,
+                MaxLevel = 16,
+                TierStartBonus = 2,
+                BaseDamage = 15.0f,
+                BaseAttackSpeed = 7.0f,
+                BaseRange = 20.0f,
+                BaseSpreadDegrees = 6.0f,
+                BaseReloadTime = 1.8f,
+                MagazineSize = 40,
+                StartingReserve = 320,
+                MaxReserve = 480,
+                Penetration = 2,
+                Knockback = 0.1f,
+            },
+
+            // The answer to being surrounded, bought rather than found. Wider
+            // sweep than the axe and a ceiling to match, but no reach until the
+            // practice is there — a long weapon is a promise, not a gift.
+            new()
+            {
+                WeaponName = "Reaper Scythe",
+                Category = WeaponCategory.MeleeLong,
+                Tier = 2,
+                Price = 1100,
+                MaxLevel = 16,
+                TierStartBonus = 1,
+                BaseDamage = 22.0f,
+                BaseAttackSpeed = 1.3f,
+                BaseRange = 3.4f,
+                SwingArcDegrees = 160.0f,
+                MagazineSize = 0,
+                Knockback = 0.7f,
             },
         };
 

@@ -53,6 +53,44 @@ public partial class BuildGear : SceneTree
                 Tier = 1,
                 SpeedUpgradeCap = 3,
             },
+
+            // Tier 2 moves both ends: a little on arrival, and noticeably more
+            // room to climb. Priced so one good run buys one piece, which is
+            // what makes the second run different from the first.
+            new()
+            {
+                GearName = "Plate Carrier",
+                Slot = GearSlot.Armour,
+                Tier = 2,
+                Price = 900,
+                HealthBonus = 25.0f,
+                ArmourBonus = 1.0f,
+                HealthUpgradeCap = 7,
+                ArmourUpgradeCap = 5,
+            },
+
+            // The only piece that changes what comes home, and the only one that
+            // pays for itself in a single extraction.
+            new()
+            {
+                GearName = "Trekking Pack",
+                Slot = GearSlot.Backpack,
+                Tier = 2,
+                Price = 1200,
+                CarryBonus = 8,
+                SafeBoxBonus = 2,
+                SearchUpgradeCap = 4,
+            },
+
+            new()
+            {
+                GearName = "Running Shoes",
+                Slot = GearSlot.Boots,
+                Tier = 2,
+                Price = 700,
+                MoveSpeedBonus = 0.6f,
+                SpeedUpgradeCap = 5,
+            },
         };
 
         foreach (GearResource piece in gear)

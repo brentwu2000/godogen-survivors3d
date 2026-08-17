@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_88eqf"]
+
+[resource]
+script = ExtResource("1_88eqf")
+GearName = "Trekking Pack"
+Slot = 1
+Tier = 2
+Price = 1200
+CarryBonus = 8
+SafeBoxBonus = 2
+SearchUpgradeCap = 4

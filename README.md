@@ -14,7 +14,7 @@ proof video. Every probe below passes. Build gate re-verified 2026-08-17.
 dotnet build                         # 0 warnings, 0 errors
 godot --headless --import            # import the assets
 godot --headless --quit              # scene loads clean
-godot                                # play
+godot                                # play — opens at the base
 ```
 
 WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
@@ -34,6 +34,8 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
 | `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not |
 | `test/LevelProbe.cs` | yes | A seed reproduces its arena, nothing is placed in a wall, the horde routes around what was generated, and 100 seeds produce no sealed exit |
+| `test/ShopProbe.cs` | yes | A v1 save migrates, a newer one is refused, buying is all-or-nothing, and dying costs the kit but not the practice |
+| `test/BaseLoopProbe.cs` | yes | Base → launch → die → back at the base, driven from the keys |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
@@ -101,6 +103,23 @@ Escalation is also a change of composition, not only of rate. Five variants shar
 | spitter | 8 | 2.0 | — | 1.0 | 30% | holds at 8 m and shoots, so kiting is the wrong answer |
 | brute | 60 | 1.4 | 14/s | 1.5 | 45% | takes knockback at 0.2x, which makes knockback a choice |
 | bloater | 25 | 1.8 | 6/s | 1.2 | 60% | 25 damage in 3 m on death — clearing a pile face-first costs something |
+
+## Between runs
+
+The game opens at the base, not in a run. It lists what came back, what the
+stash is worth, what is on sale, and what practice you have — with "not for
+sale" written next to it, because that is the one axis credits cannot reach.
+
+Up and down move, enter buys or equips, `[S]` sells the stash at face value (the
+extraction multiplier was earned by walking out with it and is not paid twice),
+`[L]` launches. Buying and equipping share a key: a shop where they are separate
+is a shop where the player buys something and walks out without it.
+
+**Everything above starting kit is left behind if you die wearing it.** That is
+what makes the shop a decision rather than a one-time unlock — buying the better
+rifle is easy, taking it out is the wager. The starting rifle, knife, jacket,
+pack and boots can never be lost or sold; a player who cannot afford a backpack
+still has one, or the loop has no next run.
 
 ## Growth
 
@@ -238,9 +257,23 @@ counted, so the widest melee arc learned fastest and had the most to gain from l
 long axe run banked more levels than a dozen careful ones. A run now teaches at most three points,
 and what they buy is a starting point, capped at half the weapon's ceiling.
 
+**Menus poll input; they do not listen for events.** `Input.ActionPress` moves the
+poll state and never enters the event pipeline, so a screen built on
+`_UnhandledInput` is one no script can press a key on — which is how the base
+screen shipped its first version untestable, and how the loop probe found it.
+
 **Capture and play-test tools never touch the save.** They run a scene, and a scene that ends a run
 banks it — so taking a screenshot was spending credits and practice into the real profile. Every tool
 that instantiates the game for measurement now marks the meta layer ephemeral.
+
+**The save version moved for the first time, and older files are migrated rather
+than refused.** Adding an optional key never needed it — every field is read with
+a fallback, so v1 files kept loading when the sidearm slot appeared. Owned
+equipment did: a v1 file has no record of what was bought, and the safe reading
+of that is "the starting kit and nothing else", never "nothing", which would take
+away the shirt on their back. A *newer* file is still refused outright, because
+reading one with older rules is how a save gets quietly rewritten with half its
+contents gone.
 
 **Saves are JSON, written to a temp file and renamed.** A corrupted or hand-edited file fails with a
 parse error that can be reported, instead of deserialising into an object with one quietly wrong
@@ -370,18 +403,19 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The horde has five variants, a run climbs a growth curve, loot is a supply line, and the arena is
-different every time. What is left is the meta layer and the surface. Gear is a fixed set nobody
-chose, the second weapon slot always holds the same knife, there is no audio, the cover is untextured
-boxes — and **banked credits still buy nothing**. That last one is the in-run "no reason to stay"
-problem one level up: the run-level trade was fixed, the meta-level one wasn't, so a second run
-changes nothing about a third. It is also what the growth model is waiting on, since gear is the half
-of it that has to be bought, and what the second slot is waiting on, since nothing chooses what goes
-in it. Next: the shop, then audio and a real HUD.
+The loop closes now: a run pays for gear, the gear changes the next run, and dying takes it back.
+What is left is the surface. There is no audio at all, the HUD is three bare labels and a wall of
+text, the base screen is a monospace list, the cover is untextured boxes, and four of the five enemy
+sprites are tinted placeholders. None of that is a system — it is the part a player would notice
+first and the part that has been deferred longest.
+
+Also open: mobile is still unmeasured, the 300 s clock is unvalidated at human skill, and
+`physics_ticks_per_second` is not pinned in `project.godot`.
 
 **The proof video is stale.** `Presentation.cs` still frames two crates it expects on opposite
-corners, which a generated map does not promise. It runs on a pinned seed so it is reproducible, but
-it has not been re-shot since the arena stopped being hand-placed.
+corners, which a generated map does not promise, and it has not been re-shot since the arena stopped
+being hand-placed — or since anything in the last four phases landed. It runs on a pinned seed, so it
+is at least reproducible.
 
 Engineering gaps, separately:
 
