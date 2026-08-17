@@ -22,6 +22,15 @@ public sealed class EnemyPool
     /// Per-instance animation offset, so a crowd does not bob in lockstep.
     public readonly float[] Phase;
 
+    /// Index into the horde's variant table. A byte rather than a reference:
+    /// this array is walked every tick, and the whole point of the layout is
+    /// that a pass over it stays inside cache.
+    public readonly byte[] Type;
+
+    /// Seconds until a ranged variant may shoot again. Unused by chasers, which
+    /// is cheaper than a second pool for the handful that do shoot.
+    public readonly float[] AttackCooldown;
+
     public int Count { get; private set; }
 
     public EnemyPool(int capacity)
@@ -31,9 +40,11 @@ public sealed class EnemyPool
         Velocity = new Vector2[capacity];
         Health = new float[capacity];
         Phase = new float[capacity];
+        Type = new byte[capacity];
+        AttackCooldown = new float[capacity];
     }
 
-    public bool TrySpawn(Vector3 position, float health, float phase)
+    public bool TrySpawn(Vector3 position, byte type, float health, float phase)
     {
         if (Count >= Capacity)
             return false;
@@ -43,6 +54,8 @@ public sealed class EnemyPool
         Velocity[i] = Vector2.Zero;
         Health[i] = health;
         Phase[i] = phase;
+        Type[i] = type;
+        AttackCooldown[i] = 0.0f;
         return true;
     }
 
@@ -57,6 +70,8 @@ public sealed class EnemyPool
             Velocity[index] = Velocity[last];
             Health[index] = Health[last];
             Phase[index] = Phase[last];
+            Type[index] = Type[last];
+            AttackCooldown[index] = AttackCooldown[last];
         }
     }
 

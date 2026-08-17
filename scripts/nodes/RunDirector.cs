@@ -91,13 +91,18 @@ public partial class RunDirector : Node3D
         {
             _horde.SpeedScale = Mathf.Lerp(1.0f, EndSpeedScale, Intensity);
 
+            // The horde picks its own composition; it only needs to be told how
+            // far into the run it is. Escalation is then one curve driving both
+            // how many arrive and which ones.
+            _horde.SpawnIntensity = Intensity;
+
             // Fractional credit, so a rate below one per second still spawns
             // instead of rounding to nothing every tick.
             _spawnCredit += Mathf.Lerp(StartSpawnRate, EndSpawnRate, Intensity) * step;
             while (_spawnCredit >= 1.0f)
             {
                 _spawnCredit -= 1.0f;
-                if (!_horde.Spawn(SpawnPoint()))
+                if (!_horde.SpawnByIntensity(SpawnPoint()))
                     break;   // pool full; drop the credit rather than spinning
             }
         }

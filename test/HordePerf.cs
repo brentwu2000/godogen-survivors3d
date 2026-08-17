@@ -4,9 +4,14 @@ using Godot;
 /// the player moving so the flow field actually rebuilds.
 ///
 ///   godot --script test/HordePerf.cs -- 200
+///   godot --script test/HordePerf.cs -- 500 mixed
 ///
 /// Not headless — draw calls and frame time are the point. VSync is disabled, or
 /// every result would read exactly 60 FPS regardless of headroom.
+///
+/// "mixed" fills the field from the late-run roster instead of walkers only. The
+/// draw call count is the number that matters there: variants are layers of one
+/// array, so a mixed horde has to cost the same one call a uniform one does.
 public partial class HordePerf : SceneTree
 {
     private const int WarmupFrames = 60;
@@ -25,12 +30,16 @@ public partial class HordePerf : SceneTree
     private int _gc0, _gc1, _gc2;
 
     private int _targetCount = 200;
+    private bool _mixed;
 
     public override void _Initialize()
     {
         string[] args = OS.GetCmdlineUserArgs();
         if (args.Length > 0 && int.TryParse(args[0], out int requested))
             _targetCount = requested;
+
+        foreach (string arg in args)
+            _mixed |= arg == "mixed";
 
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
 
@@ -61,11 +70,24 @@ public partial class HordePerf : SceneTree
             }
 
             // Top up past whatever the scene spawned on its own.
+            _horde.SpawnIntensity = _mixed ? 1.0f : 0.0f;
             int added = 0;
-            while (_horde.Pool.Count < _targetCount && _horde.Spawn(RingPosition(added)))
+            while (_horde.Pool.Count < _targetCount &&
+                   (_mixed ? _horde.SpawnByIntensity(RingPosition(added)) : _horde.Spawn(RingPosition(added))))
+            {
                 added++;
+            }
 
-            GD.Print($"enemies: {_horde.Pool.Count} (requested {_targetCount})");
+            GD.Print($"enemies: {_horde.Pool.Count} (requested {_targetCount}, " +
+                     $"{(_mixed ? "mixed roster" : "walkers only")})");
+
+            if (_mixed)
+            {
+                var byType = new int[_horde.Types.Length];
+                for (int i = 0; i < _horde.Pool.Count; i++)
+                    byType[_horde.Pool.Type[i]]++;
+                GD.Print($"composition: {string.Join('/', byType)}");
+            }
             Input.ActionPress("move_right");
             _gc0 = System.GC.CollectionCount(0);
             _gc1 = System.GC.CollectionCount(1);

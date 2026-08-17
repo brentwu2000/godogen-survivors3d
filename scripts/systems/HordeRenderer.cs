@@ -22,8 +22,15 @@ public sealed class HordeRenderer
     /// the feet are. False for projectiles, which are centred on their position
     /// so the shader's in-plane spin rotates about the middle of the sprite.
     /// </param>
-    public HordeRenderer(Texture2D texture, Shader shader, float heightMeters, int capacity,
-                         float arenaExtent, bool groundAnchored = true, float bobAmplitude = 0.06f)
+    /// <param name="maxScale">
+    /// Largest per-instance scale that will be written. Only affects the custom
+    /// AABB — set it too low and the biggest variants vanish at the screen edge
+    /// while the rest keep drawing, which reads as a culling glitch rather than
+    /// a wrong number.
+    /// </param>
+    public HordeRenderer(Texture2DArray texture, Shader shader, float heightMeters, int capacity,
+                         float arenaExtent, bool groundAnchored = true, float bobAmplitude = 0.06f,
+                         float maxScale = 1.0f)
     {
         float aspect = (float)texture.GetWidth() / texture.GetHeight();
 
@@ -62,17 +69,74 @@ public sealed class HordeRenderer
             // moment the origin leaves the frustum.
             CustomAabb = new Aabb(
                 new Vector3(-arenaExtent, -1.0f, -arenaExtent),
-                new Vector3(arenaExtent * 2.0f, heightMeters + 2.0f, arenaExtent * 2.0f)),
+                new Vector3(arenaExtent * 2.0f, heightMeters * maxScale + 2.0f, arenaExtent * 2.0f)),
         };
+    }
+
+    /// Stacks sprites into the array the shader samples. Returns null and reports
+    /// why on any failure — a half-built array would draw the wrong variant for
+    /// every layer after the missing one, which looks like a data bug three
+    /// systems away from the actual cause.
+    public static Texture2DArray? LoadArray(string[] paths)
+    {
+        var images = new Godot.Collections.Array<Image>();
+        int width = 0, height = 0;
+
+        foreach (string path in paths)
+        {
+            var texture = GD.Load<Texture2D>(path);
+            Image? image = texture?.GetImage();
+            if (image == null)
+            {
+                GD.PushError($"HordeRenderer: cannot read {path}");
+                return null;
+            }
+
+            // A VRAM-compressed import yields a block format the array will not
+            // stack. Decompressing here keeps the code independent of an import
+            // setting that nothing else in the project pins down.
+            if (image.IsCompressed())
+                image.Decompress();
+            image.Convert(Image.Format.Rgba8);
+
+            if (width == 0)
+            {
+                width = image.GetWidth();
+                height = image.GetHeight();
+            }
+            else if (image.GetWidth() != width || image.GetHeight() != height)
+            {
+                GD.PushError(
+                    $"HordeRenderer: {path} is {image.GetWidth()}x{image.GetHeight()}, " +
+                    $"expected {width}x{height} — every layer of a Texture2DArray must match");
+                return null;
+            }
+
+            images.Add(image);
+        }
+
+        var array = new Texture2DArray();
+        Error err = array.CreateFromImages(images);
+        if (err != Error.Ok)
+        {
+            GD.PushError($"HordeRenderer: Texture2DArray creation failed: {err}");
+            return null;
+        }
+
+        return array;
     }
 
     /// Uploads the whole instance buffer in one assignment. Per-instance setter
     /// calls cost a marshalled call each, which is what turns the render sync
     /// into the frame's hot spot once the count climbs.
-    public void Sync(EnemyPool pool)
+    public void Sync(EnemyPool pool, EnemyTypeResource[] types)
     {
         for (int i = 0; i < pool.Count; i++)
-            Write(i, pool.Position[i], pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f);
+        {
+            EnemyTypeResource type = types[pool.Type[i]];
+            Write(i, pool.Position[i], type.SpriteScale,
+                  pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer);
+        }
 
         Upload(pool.Count);
     }
@@ -91,27 +155,28 @@ public sealed class HordeRenderer
             float spin = Mathf.Atan2(-velocity.Y, velocity.X);
 
             Vector3 p = pool.Position[i];
-            Write(i, new Vector3(p.X, p.Y + height * 0.5f, p.Z), 0.0f, 0.0f, spin);
+            Write(i, new Vector3(p.X, p.Y + height * 0.5f, p.Z), 1.0f, 0.0f, 0.0f, spin, 0);
         }
 
         Upload(pool.Count);
     }
 
-    private void Write(int index, Vector3 position, float flip, float phase, float spin)
+    private void Write(int index, Vector3 position, float scale, float flip, float phase, float spin, int layer)
     {
         int b = index * FloatsPerInstance;
 
-        // Identity basis: the shader rebuilds orientation from the camera, so
-        // only the translation column carries information here. Scale stays at 1
-        // and the shader picks it up from column 0 if it ever varies.
-        _buffer[b + 0] = 1.0f; _buffer[b + 1] = 0.0f; _buffer[b + 2] = 0.0f; _buffer[b + 3] = position.X;
-        _buffer[b + 4] = 0.0f; _buffer[b + 5] = 1.0f; _buffer[b + 6] = 0.0f; _buffer[b + 7] = position.Y;
-        _buffer[b + 8] = 0.0f; _buffer[b + 9] = 0.0f; _buffer[b + 10] = 1.0f; _buffer[b + 11] = position.Z;
+        // Scaled identity basis: the shader rebuilds orientation from the camera
+        // and reads the scale back off column 0, so the basis carries size and
+        // nothing else. The quad's CenterOffset scales with it, which is what
+        // keeps a 1.5x variant standing on the ground rather than sunk into it.
+        _buffer[b + 0] = scale; _buffer[b + 1] = 0.0f; _buffer[b + 2] = 0.0f; _buffer[b + 3] = position.X;
+        _buffer[b + 4] = 0.0f; _buffer[b + 5] = scale; _buffer[b + 6] = 0.0f; _buffer[b + 7] = position.Y;
+        _buffer[b + 8] = 0.0f; _buffer[b + 9] = 0.0f; _buffer[b + 10] = scale; _buffer[b + 11] = position.Z;
 
         _buffer[b + 12] = flip;
         _buffer[b + 13] = phase;
         _buffer[b + 14] = spin;
-        _buffer[b + 15] = 0.0f;
+        _buffer[b + 15] = layer;
     }
 
     private void Upload(int count)

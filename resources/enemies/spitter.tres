@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_dn47a"]
+
+[resource]
+script = ExtResource("1_dn47a")
+TypeName = "spitter"
+MaxHealth = 8.0
+MoveSpeed = 2.0
+ContactDamagePerSecond = 0.0
+SpriteLayer = 4
+Behavior = 1
+SpawnWeight = 0.5
+UnlockIntensity = 0.3
+ExperienceValue = 2.0

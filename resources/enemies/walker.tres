@@ -1,0 +1,7 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_jm7tj"]
+
+[resource]
+script = ExtResource("1_jm7tj")
+TypeName = "walker"

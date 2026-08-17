@@ -18,12 +18,13 @@ public partial class ScaleProbe : SceneTree
 
     public override void _Initialize()
     {
-        var zombie = GD.Load<Texture2D>("res://assets/sprites/zombie.png");
+        Texture2DArray? zombie = HordeRenderer.LoadArray(new[] { "res://assets/sprites/enemies/walker.png" });
+        var walker = GD.Load<EnemyTypeResource>("res://resources/enemies/walker.tres");
         var player = GD.Load<Texture2D>("res://assets/sprites/player.png");
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
-        if (zombie == null || player == null || shader == null)
+        if (zombie == null || walker == null || player == null || shader == null)
         {
-            GD.PushError("ScaleProbe: missing textures or shader");
+            GD.PushError("ScaleProbe: missing textures, variant table or shader");
             Quit(1);
             return;
         }
@@ -56,8 +57,8 @@ public partial class ScaleProbe : SceneTree
         var horde = new HordeRenderer(zombie, shader, 2.0f, 1, 20.0f);
         root.AddChild(horde.Node);
         var pool = new EnemyPool(1);
-        pool.TrySpawn(new Vector3(-2.6f, 0.0f, 0.0f), 1.0f, 0.0f);
-        horde.Sync(pool);
+        pool.TrySpawn(new Vector3(-2.6f, 0.0f, 0.0f), 0, 1.0f, 0.0f);
+        horde.Sync(pool, new[] { walker });
 
         root.AddChild(new Sprite3D
         {

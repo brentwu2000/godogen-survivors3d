@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_ijif0"]
+
+[resource]
+script = ExtResource("1_ijif0")
+TypeName = "brute"
+MaxHealth = 60.0
+MoveSpeed = 1.4
+ContactDamagePerSecond = 14.0
+SpriteScale = 1.5
+SpriteLayer = 2
+KnockbackScale = 0.2
+SpawnWeight = 0.35
+UnlockIntensity = 0.45
+ExperienceValue = 4.0

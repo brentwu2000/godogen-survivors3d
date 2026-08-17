@@ -4,8 +4,13 @@ using Godot;
 /// visual confirmation rather than a passing build.
 ///
 ///   godot --script test/Screenshot.cs
+///   godot --script test/Screenshot.cs -- 0 0 mixed
 ///
 /// Not headless — the null rendering driver has nothing to capture.
+///
+/// "mixed" fills the field from the late-run roster. At the start of a run the
+/// horde is walkers only by design, so a default shot cannot show whether the
+/// variants render at all — and no exit-code probe will ever tell you they don't.
 public partial class Screenshot : SceneTree
 {
     private const string ScenePath = "res://scenes/Main.tscn";
@@ -17,6 +22,7 @@ public partial class Screenshot : SceneTree
 
     private int _frame;
     private Vector3? _teleport;
+    private bool _mixed;
     private Node? _scene;
 
     public override void _Initialize()
@@ -41,17 +47,34 @@ public partial class Screenshot : SceneTree
         {
             _teleport = new Vector3(x, 0.0f, z);
         }
+
+        foreach (string arg in args)
+            _mixed |= arg == "mixed";
     }
 
     public override bool _Process(double delta)
     {
         // Not in _Initialize: nodes are not inside the tree yet, so setting a
         // global transform there silently does nothing.
-        if (_frame == 0 && _teleport.HasValue && _scene != null)
+        if (_frame == 0 && _scene != null)
         {
             var player = _scene.GetNodeOrNull<Node3D>("Player");
-            if (player != null)
+            if (_teleport.HasValue && player != null)
                 player.GlobalPosition = _teleport.Value;
+
+            var horde = _scene.GetNodeOrNull<Horde>("Horde");
+            if (_mixed && horde != null && player != null)
+            {
+                horde.Pool.Clear();
+                horde.SpawnIntensity = 1.0f;
+                for (int i = 0; i < 60; i++)
+                {
+                    float angle = i * 0.61f;
+                    float radius = 4.0f + (i % 7);
+                    horde.SpawnByIntensity(player.GlobalPosition + new Vector3(
+                        Mathf.Cos(angle) * radius, 0.0f, Mathf.Sin(angle) * radius));
+                }
+            }
         }
 
         if (++_frame < WarmupFrames)

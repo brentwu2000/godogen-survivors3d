@@ -52,7 +52,9 @@ public partial class WeaponHandler : Node3D
         _horde = GetParent().GetNodeOrNull<Horde>("Horde") ?? GetParent().GetParent()?.GetNodeOrNull<Horde>("Horde");
         _player = GetParent() as Player ?? GetParent().GetNodeOrNull<Player>("Player");
 
-        var texture = GD.Load<Texture2D>("res://assets/sprites/bolt.png");
+        // One layer, because the shader samples an array either way — a single
+        // sprite is the degenerate case, not a separate code path.
+        Texture2DArray? texture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
         if (texture != null && shader != null)
         {

@@ -9,7 +9,8 @@ public partial class Horde : Node3D
 {
     [Export] public int Capacity { get; set; } = 512;
     [Export] public float ArenaExtent { get; set; } = 60.0f;
-    [Export] public float MoveSpeed { get; set; } = 2.4f;
+
+    /// World height of a variant at scale 1. Each variant multiplies it.
     [Export] public float SpriteHeight { get; set; } = 2.0f;
 
     /// Enemies closer than this to the player get separation and a full-rate
@@ -24,13 +25,18 @@ public partial class Horde : Node3D
     /// rather than "this cell is blocked".
     [Export] public float FieldFallbackRadius { get; set; } = 3.0f;
 
-    /// Damage each touching enemy deals per second. Applied continuously rather
-    /// than as discrete bites so being surrounded scales smoothly with how many
-    /// actually reached you.
-    [Export] public float ContactDamagePerSecond { get; set; } = 6.0f;
-
     /// Global speed multiplier, raised by the run director as the horde enrages.
     [Export] public float SpeedScale { get; set; } = 1.0f;
+
+    /// Run progress, 0 to 1, pushed in by the run director. Gates which variants
+    /// may spawn, so escalation changes what arrives and not only how much.
+    [Export] public float SpawnIntensity { get; set; }
+
+    [Export] public int EnemyProjectileCapacity { get; set; } = 128;
+    [Export] public float EnemyProjectileHeight { get; set; } = 0.3f;
+
+    /// How close a spitter's shot has to pass to count as a hit.
+    [Export] public float EnemyProjectileRadius { get; set; } = 0.6f;
 
     [Export] public float SeparationRadius { get; set; } = 0.75f;
     [Export] public float SeparationStrength { get; set; } = 8.0f;
@@ -45,14 +51,28 @@ public partial class Horde : Node3D
     [Export] public float SpawnRingMin { get; set; } = 12.0f;
     [Export] public float SpawnRingMax { get; set; } = 40.0f;
 
-    /// Far enemies are updated on one tick in this many, spread by index.
-    private const int FarStride = 4;
+    /// Variant order. Drives three things at once — the .tres to load, the sprite
+    /// stacked at that layer, and the byte stored per instance — so they cannot
+    /// drift apart the way three separate lists would.
+    private static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter" };
+
+    /// A kill, for anything that wants to count them. A plain C# event rather
+    /// than a Godot signal: both ends are C#, and EmitSignal marshals a Variant
+    /// array per call — at a few dozen kills a second that is allocation this
+    /// architecture spent five phases avoiding.
+    public event System.Action<int, Vector3>? EnemyKilled;
 
     public EnemyPool Pool { get; private set; } = null!;
+    public EnemyTypeResource[] Types { get; private set; } = System.Array.Empty<EnemyTypeResource>();
+
+    /// Spitter shots in flight. Damage to the player, so they live here rather
+    /// than in the weapon handler's pool, which only ever hurts enemies.
+    public ProjectilePool EnemyShots { get; private set; } = null!;
 
     private SpatialGrid _grid = null!;
     private FlowField _field = null!;
     private HordeRenderer _renderer = null!;
+    private HordeRenderer? _shotRenderer;
     private Node3D? _player;
     private int[] _neighbours = null!;
     private int _tick;
@@ -60,22 +80,47 @@ public partial class Horde : Node3D
 
     public override void _Ready()
     {
-        var texture = GD.Load<Texture2D>("res://assets/sprites/zombie.png");
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
-        if (texture == null || shader == null)
+        if (shader == null || !LoadTypes())
         {
-            GD.PushError("Horde: missing zombie texture or billboard shader");
+            GD.PushError("Horde: missing billboard shader or variant table");
+            SetPhysicsProcess(false);
+            return;
+        }
+
+        var sprites = new string[TypeNames.Length];
+        for (int i = 0; i < TypeNames.Length; i++)
+            sprites[i] = $"res://assets/sprites/enemies/{TypeNames[i]}.png";
+
+        Texture2DArray? texture = HordeRenderer.LoadArray(sprites);
+        if (texture == null)
+        {
             SetPhysicsProcess(false);
             return;
         }
 
         Pool = new EnemyPool(Capacity);
+        EnemyShots = new ProjectilePool(EnemyProjectileCapacity);
         _grid = new SpatialGrid(Vector2.Zero, ArenaExtent, SeparationRadius * 2.0f, Capacity);
         _field = new FlowField(Vector2.Zero, ArenaExtent, 1.5f);
         _neighbours = new int[Capacity];
 
-        _renderer = new HordeRenderer(texture, shader, SpriteHeight, Capacity, ArenaExtent);
+        float maxScale = 1.0f;
+        foreach (EnemyTypeResource type in Types)
+            maxScale = Mathf.Max(maxScale, type.SpriteScale);
+
+        _renderer = new HordeRenderer(texture, shader, SpriteHeight, Capacity, ArenaExtent,
+                                      maxScale: maxScale);
         AddChild(_renderer.Node);
+
+        Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
+        if (shotTexture != null)
+        {
+            _shotRenderer = new HordeRenderer(
+                shotTexture, shader, EnemyProjectileHeight, EnemyProjectileCapacity, ArenaExtent,
+                groundAnchored: false, bobAmplitude: 0.0f);
+            AddChild(_shotRenderer.Node);
+        }
 
         _player = GetParent().GetNodeOrNull<Node3D>("Player");
         if (_player == null)
@@ -85,6 +130,37 @@ public partial class Horde : Node3D
 
         for (int i = 0; i < InitialSpawn; i++)
             Spawn(RandomRingPosition(SpawnRingMin, SpawnRingMax));
+    }
+
+    /// Loads the variant table in TypeNames order and checks each row agrees
+    /// about which layer it draws from. A silently mismatched SpriteLayer shows
+    /// up as brutes wearing the runner's sprite — a data bug that reads as a
+    /// rendering one.
+    private bool LoadTypes()
+    {
+        var types = new EnemyTypeResource[TypeNames.Length];
+
+        for (int i = 0; i < TypeNames.Length; i++)
+        {
+            string path = $"res://resources/enemies/{TypeNames[i]}.tres";
+            var type = GD.Load<EnemyTypeResource>(path);
+            if (type == null)
+            {
+                GD.PushError($"Horde: missing {path} — run scripts/tools/BuildEnemyTypes.cs");
+                return false;
+            }
+
+            if (type.SpriteLayer != i)
+            {
+                GD.PushError($"Horde: {path} declares layer {type.SpriteLayer} but is stacked at {i}");
+                return false;
+            }
+
+            types[i] = type;
+        }
+
+        Types = types;
+        return true;
     }
 
     /// Reads static level geometry into the flow field. Done here rather than in
@@ -126,14 +202,56 @@ public partial class Horde : Node3D
     /// so re-marking them on every rebuild would be pure waste.
     public void BlockBox(Vector2 center, Vector2 halfExtents) => _field.BlockBox(center, halfExtents);
 
-    public bool Spawn(Vector3 position) =>
-        Pool.TrySpawn(position, 10.0f, NextFloat() * Mathf.Tau);
+    /// Spawns the baseline variant. Probes that want a known quantity call this;
+    /// the run director calls SpawnByIntensity instead.
+    public bool Spawn(Vector3 position) => Spawn(position, 0);
+
+    public bool Spawn(Vector3 position, int type)
+    {
+        if (type < 0 || type >= Types.Length)
+            return false;
+
+        return Pool.TrySpawn(position, (byte)type, Types[type].MaxHealth, NextFloat() * Mathf.Tau);
+    }
+
+    /// Picks a variant by weight among those the run has unlocked. Late in a run
+    /// the composition is what changed, not just the rate — the same 300 seconds
+    /// asks a different question at the end than at the start.
+    public bool SpawnByIntensity(Vector3 position)
+    {
+        float total = 0.0f;
+        for (int i = 0; i < Types.Length; i++)
+        {
+            if (SpawnIntensity >= Types[i].UnlockIntensity)
+                total += Types[i].SpawnWeight;
+        }
+
+        if (total <= 0.0f)
+            return Spawn(position, 0);
+
+        float roll = NextFloat() * total;
+        for (int i = 0; i < Types.Length; i++)
+        {
+            if (SpawnIntensity < Types[i].UnlockIntensity)
+                continue;
+
+            roll -= Types[i].SpawnWeight;
+            if (roll <= 0.0f)
+                return Spawn(position, i);
+        }
+
+        // Only reachable on floating-point slack at the very end of the range.
+        return Spawn(position, 0);
+    }
 
     public override void _PhysicsProcess(double delta)
     {
+        float step = (float)delta;
+
         if (_player == null || Pool.Count == 0)
         {
-            _renderer.Sync(Pool);
+            StepEnemyShots(step);
+            _renderer.Sync(Pool, Types);
             return;
         }
 
@@ -144,25 +262,28 @@ public partial class Horde : Node3D
 
         _grid.Rebuild(Pool.Position, Pool.Count);
 
-        float step = (float)delta;
         float activeSqr = ActiveRadius * ActiveRadius;
         var playerFlat = new Vector2(playerPosition.X, playerPosition.Z);
-        int touching = 0;
+        float contactDamage = 0.0f;
 
         for (int i = 0; i < Pool.Count; i++)
         {
+            EnemyTypeResource type = Types[Pool.Type[i]];
             Vector3 position = Pool.Position[i];
             var flat = new Vector2(position.X, position.Z);
             float toPlayerSqr = flat.DistanceSquaredTo(playerFlat);
             bool near = toPlayerSqr < activeSqr;
 
-            // Far enemies run at a quarter rate with a quadruple step. Spreading
-            // them by index keeps the per-tick cost flat instead of spiking every
-            // fourth tick.
-            if (!near && (i & (FarStride - 1)) != (_tick & (FarStride - 1)))
+            // Far enemies run at a reduced rate with a proportionally longer
+            // step, spread by index so the per-tick cost stays flat rather than
+            // spiking every nth tick. The stride comes from the variant, because
+            // a fast one stepped at quarter rate covers its distance in visible
+            // jumps — the saving is real but it is not free at any speed.
+            int stride = near ? 1 : type.FarStride;
+            if (stride > 1 && (i & (stride - 1)) != (_tick & (stride - 1)))
                 continue;
 
-            float scaledStep = near ? step : step * FarStride;
+            float scaledStep = step * stride;
 
             Vector2 desired = _field.Sample(position);
             if (desired == Vector2.Zero)
@@ -175,13 +296,18 @@ public partial class Horde : Node3D
                     : Pool.Velocity[i].Normalized();
             }
 
-            if (toPlayerSqr < ContactRadius * ContactRadius)
+            if (type.Behavior == EnemyBehavior.Ranged)
+            {
+                if (StepRanged(i, type, position, playerFlat, flat, toPlayerSqr, scaledStep))
+                    desired = Vector2.Zero;
+            }
+            else if (toPlayerSqr < ContactRadius * ContactRadius)
             {
                 desired = Vector2.Zero;
-                touching++;
+                contactDamage += type.ContactDamagePerSecond;
             }
 
-            Vector2 velocity = desired * MoveSpeed * SpeedScale;
+            Vector2 velocity = desired * type.MoveSpeed * SpeedScale;
 
             if (near)
                 velocity += Separation(i, position) * SeparationStrength;
@@ -193,13 +319,85 @@ public partial class Horde : Node3D
                 position.Z + velocity.Y * scaledStep);
         }
 
-        // Only enemies inside ActiveRadius are stepped every tick, and contact
-        // requires being much closer than that, so the count is never stale.
-        if (touching > 0 && _player is Player player)
-            player.TakeDamage(touching * ContactDamagePerSecond * step);
+        // Summed per variant rather than counted: a brute leaning on you is
+        // worth more than three walkers, and the smooth accumulation is what
+        // makes being surrounded scale with who actually reached you.
+        if (contactDamage > 0.0f && _player is Player player)
+            player.TakeDamage(contactDamage * step);
+
+        StepEnemyShots(step);
 
         _tick++;
-        _renderer.Sync(Pool);
+        _renderer.Sync(Pool, Types);
+    }
+
+    /// Ranged behaviour: hold at standoff and shoot. Returns true when the
+    /// enemy should stop closing.
+    ///
+    /// The cooldown ticks by the enemy's own scaled step, not the frame's, or a
+    /// strided spitter would fire at a quarter rate purely because it is far
+    /// away — a distance the standoff already decided it is happy with.
+    private bool StepRanged(int index, EnemyTypeResource type, Vector3 position,
+                            Vector2 playerFlat, Vector2 flat, float toPlayerSqr, float scaledStep)
+    {
+        if (toPlayerSqr > type.StandoffDistance * type.StandoffDistance)
+            return false;
+
+        Pool.AttackCooldown[index] -= scaledStep;
+        if (Pool.AttackCooldown[index] > 0.0f)
+            return true;
+
+        Pool.AttackCooldown[index] = type.AttackInterval;
+
+        Vector2 aim = playerFlat - flat;
+        if (aim.LengthSquared() > 0.0001f)
+        {
+            EnemyShots.TrySpawn(
+                new Vector3(position.X, 0.0f, position.Z),
+                aim.Normalized() * type.ProjectileSpeed,
+                type.ProjectileDamage,
+                0.0f,
+                type.StandoffDistance * 1.5f / type.ProjectileSpeed,
+                1);
+        }
+
+        return true;
+    }
+
+    /// Moves spitter shots and resolves them against the player. Enemy shots
+    /// ignore each other and the horde — friendly fire between variants would
+    /// make a crowd of spitters kill itself, which is funny once.
+    private void StepEnemyShots(float delta)
+    {
+        var player = _player as Player;
+
+        for (int i = EnemyShots.Count - 1; i >= 0; i--)
+        {
+            EnemyShots.Life[i] -= delta;
+            if (EnemyShots.Life[i] <= 0.0f)
+            {
+                EnemyShots.DespawnAt(i);
+                continue;
+            }
+
+            Vector2 velocity = EnemyShots.Velocity[i];
+            Vector3 position = EnemyShots.Position[i];
+            position = new Vector3(position.X + velocity.X * delta, 0.0f, position.Z + velocity.Y * delta);
+            EnemyShots.Position[i] = position;
+
+            if (player == null || !player.IsAlive)
+                continue;
+
+            Vector3 toPlayer = player.GlobalPosition - position;
+            float flatSqr = toPlayer.X * toPlayer.X + toPlayer.Z * toPlayer.Z;
+            if (flatSqr > EnemyProjectileRadius * EnemyProjectileRadius)
+                continue;
+
+            player.TakeDamage(EnemyShots.Damage[i]);
+            EnemyShots.DespawnAt(i);
+        }
+
+        _shotRenderer?.Sync(EnemyShots, EnemyProjectileHeight);
     }
 
     // --- Weapon queries -----------------------------------------------------
@@ -286,18 +484,57 @@ public partial class Horde : Node3D
     /// Returns true when the hit killed the enemy. The index is invalidated by a
     /// kill (the pool swap-removes), so callers iterating a hit list must walk it
     /// backwards or re-query.
-    public bool Damage(int index, float amount, Vector2 knockback)
+    public bool Damage(int index, float amount, Vector2 knockback) =>
+        Damage(index, amount, knockback, allowBlast: true);
+
+    private bool Damage(int index, float amount, Vector2 knockback, bool allowBlast)
     {
+        EnemyTypeResource type = Types[Pool.Type[index]];
+
         Pool.Health[index] -= amount;
         if (Pool.Health[index] > 0.0f)
         {
+            // Resistance is a multiplier on displacement, not a threshold: a
+            // knockback weapon should always do something to a brute, just far
+            // less than it does to a walker.
             Vector3 p = Pool.Position[index];
-            Pool.Position[index] = new Vector3(p.X + knockback.X, 0.0f, p.Z + knockback.Y);
+            Pool.Position[index] = new Vector3(
+                p.X + knockback.X * type.KnockbackScale,
+                0.0f,
+                p.Z + knockback.Y * type.KnockbackScale);
             return false;
         }
 
+        Vector3 deathPosition = Pool.Position[index];
         Pool.DespawnAt(index);
+
+        if (allowBlast && type.DeathBlastRadius > 0.0f)
+            Blast(deathPosition, type.DeathBlastRadius, type.DeathBlastDamage);
+
+        EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
+    }
+
+    /// A death blast, resolved one level deep — blast kills cannot blast in turn.
+    /// A pile of bloaters is otherwise a chain reaction whose depth is however
+    /// many happened to be standing together, which is both a frame spike and a
+    /// balance number nobody chose.
+    private void Blast(Vector3 center, float radius, float damage)
+    {
+        if (_player is Player player)
+        {
+            float toPlayerSqr = FlatDistanceSquared(player.GlobalPosition, center);
+            if (toPlayerSqr < radius * radius)
+                player.TakeDamage(damage);
+        }
+
+        // Backwards: a kill swap-removes the last entry into the current slot,
+        // which a forward walk would then skip.
+        for (int i = Pool.Count - 1; i >= 0; i--)
+        {
+            if (FlatDistanceSquared(Pool.Position[i], center) < radius * radius)
+                Damage(i, damage, Vector2.Zero, allowBlast: false);
+        }
     }
 
     private void SortByDistanceAlong(int[] indices, int count, Vector3 origin, Vector2 direction)

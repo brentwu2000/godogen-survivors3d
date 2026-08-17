@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_cq475"]
+
+[resource]
+script = ExtResource("1_cq475")
+TypeName = "runner"
+MaxHealth = 4.0
+MoveSpeed = 4.6
+ContactDamagePerSecond = 4.0
+SpriteScale = 0.9
+SpriteLayer = 1
+SpawnWeight = 0.8
+UnlockIntensity = 0.2

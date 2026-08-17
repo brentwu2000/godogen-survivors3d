@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_gfn10"]
+
+[resource]
+script = ExtResource("1_gfn10")
+TypeName = "bloater"
+MaxHealth = 25.0
+MoveSpeed = 1.8
+SpriteScale = 1.2
+SpriteLayer = 3
+DeathBlastRadius = 3.0
+DeathBlastDamage = 25.0
+SpawnWeight = 0.4
+UnlockIntensity = 0.6
+ExperienceValue = 3.0
