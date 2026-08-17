@@ -197,6 +197,17 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
+The loop is complete; the content in it is thin. Every threat in the game is one zombie stat block,
+every run is the same 120×120 field and the same five blocks, the six lootables are pure numbers with
+no use, only one weapon can be carried and its ammo is infinite — and **banked credits buy nothing**.
+That last one is the in-run "no reason to stay" problem one level up: the run-level trade was fixed,
+the meta-level one wasn't, so a second run changes nothing about a third. Planned in order: enemy
+variants (one free `INSTANCE_CUSTOM` float and a `Texture2DArray` away from N types at the same one
+draw call), item effects and finite ammo, generated levels with several extraction pads, then the
+shop that gives credits somewhere to go.
+
+Engineering gaps, separately:
+
 - **Mobile is unmeasured.** 150-200 concurrent enemies is an estimate, not a measurement. If a real
   device falls short, cut the distance-tiering thresholds before cutting enemy count.
 - **The 300 s clock is unvalidated by a human.** See Balance.
