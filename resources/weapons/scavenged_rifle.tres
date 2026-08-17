@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_vp4tj"]
+
+[resource]
+script = ExtResource("1_vp4tj")
+WeaponName = "Scavenged Rifle"
+BaseDamage = 12.0
+BaseAttackSpeed = 6.0
+BaseRange = 18.0
+BaseSpreadDegrees = 9.0
+BaseReloadTime = 2.2
+Knockback = 0.08

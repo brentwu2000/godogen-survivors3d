@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_cawff"]
+
+[resource]
+script = ExtResource("1_cawff")
+WeaponName = "Fire Axe"
+Category = 1
+BaseDamage = 16.0
+BaseAttackSpeed = 1.1
+BaseRange = 3.0
+SwingArcDegrees = 100.0
+MagazineSize = 0
+Knockback = 0.55

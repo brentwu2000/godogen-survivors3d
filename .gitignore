@@ -1,0 +1,17 @@
+# Rendered by godogen publish.sh — not source
+.claude/
+CLAUDE.md
+.agents/
+AGENTS.md
+.codex/
+godot.md
+
+# Godot import cache and .NET build output
+.godot/
+bin/
+obj/
+
+# Capture output — 700 frames + mp4, regenerate with test/Presentation.cs.
+# The .gdignore stays tracked: without it the importer swallows every frame.
+screenshots/*
+!screenshots/.gdignore

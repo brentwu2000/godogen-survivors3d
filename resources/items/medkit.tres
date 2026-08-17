@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_aln6e"]
+
+[resource]
+script = ExtResource("1_aln6e")
+ItemName = "Medkit"
+Rarity = 1
+Value = 80
+Bulk = 2
+Weight = 1.6

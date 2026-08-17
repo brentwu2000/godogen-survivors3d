@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_ktodx"]
+
+[resource]
+script = ExtResource("1_ktodx")
+WeaponName = "Combat Knife"
+Category = 0
+BaseDamage = 6.0
+BaseAttackSpeed = 3.2
+BaseRange = 1.6
+SwingArcDegrees = 45.0
+MagazineSize = 0
+Knockback = 0.05

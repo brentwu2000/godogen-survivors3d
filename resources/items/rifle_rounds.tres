@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_8wf1u"]
+
+[resource]
+script = ExtResource("1_8wf1u")
+ItemName = "Rifle Rounds"
+Value = 18
+Weight = 3.5
+MinStack = 2
+MaxStack = 6
