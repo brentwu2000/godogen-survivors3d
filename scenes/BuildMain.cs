@@ -115,6 +115,13 @@ public partial class BuildMain : SceneTree
         var sound = new Node { Name = "Sound" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(sound, "res://scripts/nodes/SoundDirector.cs"));
 
+        // Its own node with its own players, beside the sound director rather
+        // than inside it. The SFX pool is a fixed ring that the oldest voice
+        // recycles out of, so a music layer borrowed from it would be cut off by
+        // a busy second of explosions.
+        var music = new Node { Name = "Music" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(music, "res://scripts/nodes/MusicDirector.cs"));
+
         var effects = new Node3D { Name = "Effects" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(effects, "res://scripts/nodes/EffectDirector.cs"));
 

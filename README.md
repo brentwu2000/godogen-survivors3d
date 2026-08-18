@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/MusicProbe.cs` | yes | Four layers of one length all playing from the first frame, layers arriving with intensity and crowd and the boss, a threshold that does not chatter, silence when the run ends, and every layer audibly what it claims to be |
 | `test/DailyProbe.cs` | yes | One date derives one run every time, consecutive days differ, the second attempt does not count, dying spends it too, a streak is consecutive days, and the score is mostly about the shared card |
 | `test/BiomeProbe.cs` | yes | Every biome loads, one has cover everywhere and the other has sight lines, the emptier one pays better for the walk, and both the crowd and a 0.35 m body can cross the dense one |
 | `test/LoadoutProbe.cs` | yes | No slot has a piece that beats its neighbour everywhere, a piece's rule is live before the first level-up, two sets permit two different decks, and the starting kit grants exactly nothing |
@@ -543,6 +544,27 @@ it still reads as "lots" while staying a sound. The horde itself is a single loo
 how many enemies are within 26 m, not N copies of one voice; a crowd does not sound like N of
 anything, it sounds like a low mass that swells.
 
+**The music is four loops, not a playlist.** A run has a shape — opening, the horde forming, the boss,
+the walk out — and the ambience layer swelling with the crowd is a volume knob, not that shape. Bed,
+pulse, tension and boss are all 48 seconds at 80 BPM, all playing from the first frame and never
+stopped, each faded independently. A cut between two pieces of music is heard as a glitch and a
+crossfade between two that do not share a tempo is heard as a worse one; layers written to sit on top
+of each other can be added or dropped at any moment and it still sounds deliberate. They stay
+*playing* while silent because starting one late would put it seconds out of phase for the rest of the
+run with no way back.
+
+Texture, not melody. A synthesised tune is both unpleasant and finite — the player hears it forty times
+an hour — while a drone, a pulse and a noise bed are things a run can be underneath for five minutes.
+The bed is two low sines a third of a hertz apart, so it beats slowly and never resolves into a tone
+the ear gets tired of; the boss layer is a semitone against that root, the one interval nobody hears
+as music by accident.
+
+Every threshold has hysteresis. `Intensity` is smooth but the crowd count is not, and a single
+threshold with a value hovering on it turns a four-second fade into a layer breathing in and out once
+a second — which reads as the mix being broken rather than as a number being borderline. Its own
+`AudioStreamPlayer`s, never the SFX pool: that pool is a fixed ring the oldest voice recycles out of,
+so a busy second of explosions would take the music with it.
+
 **Sound is synthesised, not sourced.** Same reason the scenes are generated: a recipe in code can be
 re-tuned and re-run, and it carries no licence to track. `BuildAudio.cs` writes `AudioStreamWav`
 resources as `.tres` rather than `.wav` — a `.wav` goes through the importer, whose loop flag lives
@@ -734,6 +756,21 @@ file rather than in any probe, because the probe's fixtures all had an all-zero 
 stage that was supposed to catch cross-firing had a written-in exemption saying the bow was allowed to
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
+
+**A probe cannot hear, so it checks the things that fail inaudibly.** Whether the mix sounds good was
+settled by listening, which is the only way. `MusicProbe` exists so a change three phases from now
+does not silently undo it: that the four loops are the same length (unequal lengths drift apart and
+the layers stop agreeing about where the bar is — obvious after a minute, never reported as "the loops
+are different lengths"), that they all start together, that layers follow the run's state rather than
+a flag a probe set, that a value parked on a threshold produces one answer forty times running, and —
+last, because everything above it would pass unchanged against four arrays of zeros — that each layer
+is audible and the pulse layer's energy actually rises and falls where the bed's does not.
+
+**Three of that probe's stages failed on their first run and none of them was the game's fault.** Two
+read a layer's target immediately after moving the clock, which returns the previous frame's decision;
+the third re-ran its own setup every tick, so "before the boss arrived" was captured four ticks after
+it had. A probe that drives a system from outside its update loop has to ask for the update, and one
+whose setup is not guarded to the first tick is measuring its own last iteration.
 
 **Every menu in this game has been double-spaced since the first one was built.**
 `StringBuilder.AppendLine` writes `Environment.NewLine`, which on Windows is `\r\n`, and Godot's Label

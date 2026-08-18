@@ -345,6 +345,19 @@ public partial class RunDirector : Node3D
         End(RunState.Extracted, Mathf.RoundToInt(carried * ExtractionMultiplier));
     }
 
+    /// Moves the clock without running the run.
+    ///
+    /// For probes measuring something that reads `Intensity` — the music mix, a
+    /// spawn table, a payout curve. The alternative is stepping physics until the
+    /// clock arrives, which for a point at 85% of a five-minute run means four
+    /// minutes of simulation to check one number, and brings along every spawn
+    /// and death in between as noise.
+    public void SetElapsedForTesting(float seconds) => Elapsed = seconds;
+
+    /// Ends the run from a probe. Same path the game uses, so a probe cannot
+    /// leave the director in a state a real run could never reach.
+    public void EndForTesting(RunState state) => End(state, 0);
+
     private void End(RunState state, int banked)
     {
         if (State != RunState.Running)

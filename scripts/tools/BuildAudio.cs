@@ -49,6 +49,22 @@ public partial class BuildAudio : SceneTree
             ("extracted", Extracted(), false),
             ("dry", DryClick(), false),
             ("horde", HordeAmbience(), true),
+
+            // The music bed. Four loops of identical length at one tempo, mixed
+            // by fading each in and out rather than by switching tracks — a cut
+            // between two pieces of music is heard as a glitch, and a crossfade
+            // between two pieces that do not share a tempo is heard as a worse
+            // one. Layers that were written to sit on top of each other can be
+            // added and removed at any bar and it still sounds deliberate.
+            //
+            // Texture, not melody. A synthesised tune is both unpleasant and
+            // finite — the player hears it forty times an hour — while a drone,
+            // a pulse and a noise bed are things a run can be underneath for
+            // five minutes without anyone deciding to mute the game.
+            ("music_bed", MusicBed(), true),
+            ("music_pulse", MusicPulse(), true),
+            ("music_tension", MusicTension(), true),
+            ("music_boss", MusicBoss(), true),
         };
 
         foreach ((string name, float[] samples, bool loop) in clips)
@@ -328,6 +344,157 @@ public partial class BuildAudio : SceneTree
     }
 
     // ---- synthesis helpers ---------------------------------------------------
+
+    // ---- the music bed -------------------------------------------------------
+    //
+    // One tempo and one length for all four layers, so any subset can be playing
+    // and they stay in phase forever. 80 BPM, 16 bars of 4/4 — 48 seconds, which
+    // is long enough not to be recognisable as a loop inside a 300-second run and
+    // short enough that four of them are under a megabyte at this sample rate.
+
+    private const float MusicBpm = 80.0f;
+    private const float MusicBeat = 60.0f / MusicBpm;
+    private const float MusicSeconds = MusicBeat * 4.0f * 16.0f;
+
+    /// Always on: two detuned low sines a fifth apart, breathing.
+    ///
+    /// Detuning is the whole trick. Two oscillators at exactly the same pitch are
+    /// one louder oscillator; a couple of cents apart they beat against each
+    /// other slowly, and a drone that moves is one the ear stops resolving into a
+    /// tone it can get tired of.
+    private static float[] MusicBed()
+    {
+        float[] b = Buffer(MusicSeconds);
+        float a = 0.0f, c = 0.0f, d = 0.0f;
+
+        for (int i = 0; i < b.Length; i++)
+        {
+            float t = i / (float)Rate;
+
+            // A slow swell across the loop, so the bed has a shape rather than
+            // being a held pad. Sine over the whole length means the seam is at
+            // the quietest point, where a discontinuity would be inaudible even
+            // if the loop were not sample-exact.
+            float breath = 0.55f + 0.45f * Mathf.Sin(Mathf.Tau * t / MusicSeconds);
+
+            a += Mathf.Tau * 55.0f / Rate;
+            c += Mathf.Tau * 55.35f / Rate;
+            d += Mathf.Tau * 82.5f / Rate;
+
+            b[i] = (Mathf.Sin(a) * 0.5f + Mathf.Sin(c) * 0.45f + Mathf.Sin(d) * 0.18f) * breath;
+        }
+
+        Normalise(b, 0.55f);
+        return b;
+    }
+
+    /// A heartbeat on the beat: a short low thud every crotchet.
+    ///
+    /// The layer that turns the bed into time passing. It is deliberately not a
+    /// drum kit — a kick and snare pattern is a genre, and this has to sit under
+    /// gunfire without competing with it for the same band.
+    private static float[] MusicPulse()
+    {
+        float[] b = Buffer(MusicSeconds);
+        int beats = (int)(MusicSeconds / MusicBeat);
+
+        for (int beat = 0; beat < beats; beat++)
+        {
+            int start = (int)(beat * MusicBeat * Rate);
+            float phase = 0.0f;
+
+            // Every fourth beat lands harder, which is what makes four beats read
+            // as a bar rather than as four beats.
+            float weight = beat % 4 == 0 ? 1.0f : 0.55f;
+
+            for (int i = 0; i < (int)(0.28f * Rate) && start + i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                phase += Mathf.Tau * Sweep(t, 92.0f, 44.0f, 30.0f) / Rate;
+                b[start + i] += Mathf.Sin(phase) * Mathf.Exp(-11.0f * t) * weight;
+            }
+        }
+
+        Normalise(b, 0.6f);
+        return b;
+    }
+
+    /// Filtered noise that swells on the half-bar, and a high shimmer.
+    ///
+    /// This is the layer that says the run has stopped being comfortable. Noise
+    /// rather than a note, because a rising tone is an alarm and an alarm cannot
+    /// stay on for two minutes.
+    private static float[] MusicTension()
+    {
+        float[] b = Buffer(MusicSeconds);
+        var rng = new Rng(0x2545F4914F6CDD1DUL);
+        float low = 0.0f, high = 0.0f, shimmer = 0.0f;
+
+        float bar = MusicBeat * 4.0f;
+
+        for (int i = 0; i < b.Length; i++)
+        {
+            float t = i / (float)Rate;
+
+            // Position inside the half-bar, so the swell resets twice a bar and
+            // the layer has a pulse of its own that agrees with the drum's.
+            float phase = Mathf.PosMod(t, bar * 0.5f) / (bar * 0.5f);
+            float swell = phase * phase;
+
+            // One-pole low-pass, then a one-pole high-pass over the top: a band
+            // around a few hundred hertz, which is where the ear hears unease and
+            // where nothing else in this mix is sitting.
+            float noise = rng.Bipolar();
+            low += (noise - low) * 0.06f;
+            high += (low - high) * 0.006f;
+
+            shimmer += Mathf.Tau * 1320.0f / Rate;
+
+            b[i] = (low - high) * swell * 1.2f
+                 + Mathf.Sin(shimmer) * swell * 0.05f;
+        }
+
+        Normalise(b, 0.5f);
+        return b;
+    }
+
+    /// The boss layer: a low half-time thud on the bar, and a dissonant tone.
+    ///
+    /// A minor second against the bed's root. It is the one interval nobody hears
+    /// as music by accident, so the layer is unmistakably an arrival rather than
+    /// the same music louder.
+    private static float[] MusicBoss()
+    {
+        float[] b = Buffer(MusicSeconds);
+        int bars = (int)(MusicSeconds / (MusicBeat * 4.0f));
+        float grind = 0.0f;
+
+        for (int i = 0; i < b.Length; i++)
+        {
+            float t = i / (float)Rate;
+
+            // 58.3 Hz against the bed's 55: a semitone up, beating hard.
+            grind += Mathf.Tau * 58.3f / Rate;
+            b[i] = Mathf.Sin(grind) * 0.35f * (0.6f + 0.4f * Mathf.Sin(Mathf.Tau * t / 7.0f));
+        }
+
+        for (int bar = 0; bar < bars; bar++)
+        {
+            int start = (int)(bar * MusicBeat * 4.0f * Rate);
+            float phase = 0.0f;
+
+            for (int i = 0; i < (int)(0.9f * Rate) && start + i < b.Length; i++)
+            {
+                float t = i / (float)Rate;
+                phase += Mathf.Tau * Sweep(t, 70.0f, 28.0f, 9.0f) / Rate;
+                b[start + i] += Mathf.Sin(phase) * Mathf.Exp(-3.4f * t) * 0.9f;
+            }
+        }
+
+        SoftClip(b, 1.3f);
+        Normalise(b, 0.7f);
+        return b;
+    }
 
     private static float[] Buffer(float seconds) => new float[(int)(seconds * Rate)];
 
