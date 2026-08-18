@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/UnlockProbe.cs` | yes | A fresh profile is offered less, every condition fires on its own run and nothing else's, opening one moves exactly one card, a locked row is listed and explains itself, and a save from before unlocks keeps what it proved |
 | `test/EliteProbe.cs` | yes | A mark is a different fight — armour soaks, swift outruns, volatile bursts — it survives the swap-remove, and the boss arrives once, announced, and pays |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
@@ -215,6 +216,34 @@ settlement. A record changes no number in the next run. It is only a target, and
 a target is what was missing. The exception with teeth is the survival streak: a
 single death takes it back to zero, which stacks another layer onto "do I take
 the good rifle out" without inventing a mechanic to do it.
+
+**Unlocks are the only progress that is not money.** Credits already buy every number in this game, so
+a second currency-shaped track would be the same axis wearing a hat — the point of an unlock is that it
+cannot be bought, only done. Eight of them, each gating one weapon or one growth option:
+
+| Opens | By |
+| :--- | :--- |
+| Hunting Bow | Extract without firing a gun |
+| Service Rifle | Extract three runs in a row |
+| Reaper Scythe | Kill the boss and walk out |
+| Ignite | Kill 60 in a single run |
+| Detonate | Kill 8 with one thrown item |
+| Thorns | Survive a run that took you below 15 health |
+| Lifesteal | Search 6 crates in one run |
+| Fortune | Extract with a multiplier of 2.5 or better |
+
+**The condition text is the tutorial.** "Extract without firing a gun" tells a player that the bow
+exists, that a run can be finished with one weapon, and that extracting is something you can plan for —
+three things no menu was going to teach them. So locked rows are listed in the shop with the condition
+printed where the price would go, and never hidden: content the player cannot see does not make them
+want it, and content they can see and cannot have does. The debrief repeats the condition when
+something opens, because "unlocked: Thorns" teaches that Thorns exists and nothing else.
+
+**Nothing here is strictly better than what it replaces**, or the table would be a numbers curve with
+achievements painted on it, and the first two hours would be the part of the game where the player
+does not have the good weapon yet. Locked growth options are absent from the deck rather than shown
+and refused — a card that explains itself is right in the shop, where the player is browsing, and
+wrong mid-run, where the offer is three seconds long and they are being chased.
 
 **Contracts are the only thing in the game that asks you to play differently.**
 Everything else — better gear, more practice, a longer curve — asks you to play
@@ -629,6 +658,21 @@ failure mode wearing a different colour, except permanent. Multiplied instead, t
 the bloater — a much paler sprite — clipped to a glowing white-green blob. The answer was to weight the
 push by `1 - luminance`, spending strength where the sprite has headroom and backing off where it has
 none, so one constant is right for a dark creature and a pale one. Every probe passed at every stage.
+
+**"Extract without firing a gun" was checked against practice, and practice is not what it means.**
+Practice is banked at 250 hits per point, so a run with 249 firearm hits and a run that never drew a
+gun both record zero — and the bow opened on a seventeen-second extraction. The tell was in the save
+file rather than in any probe, because the probe's fixtures all had an all-zero hit array and the
+stage that was supposed to catch cross-firing had a written-in exemption saying the bow was allowed to
+come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
+fixture fires a gun by default, and the exemption is gone.
+
+**Four of six weapons locked left a new profile with nothing to buy.** Two of the remaining four are
+starting kit, so the shop's weapon section was entirely "owned" or "unbuyable" — a dead screen on day
+one and no sink at all for what the first run pays. The fire axe went back on the shelf and its
+condition kept its card, granting a growth option instead. The probe found this by printing the size
+of the opening deck rather than by failing: a first stage that just asserts the locked set is
+non-empty would have been perfectly happy.
 
 **Where the boss walks in was decided by the sweep, not by the design.** 62% of the clock was the
 written answer: late enough for a build, early enough not to collide with the timer. The sweep said

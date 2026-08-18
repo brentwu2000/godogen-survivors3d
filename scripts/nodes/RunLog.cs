@@ -24,6 +24,8 @@ public partial class RunLog : Node
     private int _lootValue;
     private int _itemsUsed;
     private int _itemsThrown;
+    private int _bestThrowKills;
+    private int _bossesKilled;
     private float _lowestHealth = float.MaxValue;
 
     public override void _Ready()
@@ -38,6 +40,12 @@ public partial class RunLog : Node
 
         if (_horde != null)
             _horde.EnemyKilled += OnEnemyKilled;
+
+        // Asked of the director rather than counted off the kill feed, because
+        // "was that the boss" is a question about which enemy the director chose
+        // to place, and only the director knows the answer.
+        if (_director != null)
+            _director.BossKilled += OnBossKilled;
 
         if (_player != null)
         {
@@ -100,13 +108,23 @@ public partial class RunLog : Node
     /// need help staying alive", the other is "did you use the bag as a weapon".
     private void OnItemUsed(string itemName) => _itemsUsed++;
 
-    private void OnItemThrown(string itemName) => _itemsThrown++;
+    /// The best single throw, not the sum. Eight at once is the thing worth
+    /// doing; a total would also be satisfied by eight molotovs at one walker
+    /// each, which is the opposite of it.
+    private void OnItemThrown(string itemName, int killed)
+    {
+        _itemsThrown++;
+        _bestThrowKills = Mathf.Max(_bestThrowKills, killed);
+    }
+
+    private void OnBossKilled() => _bossesKilled++;
 
     /// Assembles the record. Everything the log could not see — what the meta
     /// layer decided to bank, what practice it granted, what death took — is
     /// passed in, because those are decisions made after the run ended and the
     /// log has no business guessing at them.
-    public RunRecord Freeze(RunState outcome, int banked, int[] proficiencyGained, string[] lostEquipment)
+    public RunRecord Freeze(RunState outcome, int banked, int[] proficiencyGained, int[] hitsByCategory,
+                            string[] lostEquipment)
     {
         var kills = new int[_killsByType.Length];
         System.Array.Copy(_killsByType, kills, kills.Length);
@@ -129,7 +147,10 @@ public partial class RunLog : Node
             MaxHealth = _player?.MaxHealth ?? 0.0f,
             ItemsUsed = _itemsUsed,
             ItemsThrown = _itemsThrown,
+            BestThrowKills = _bestThrowKills,
+            BossesKilled = _bossesKilled,
             ProficiencyGained = proficiencyGained,
+            HitsByCategory = hitsByCategory,
             LostEquipment = lostEquipment,
         };
     }

@@ -114,6 +114,8 @@ public partial class RunGrowth : Node
         foreach (GrowthOption option in System.Enum.GetValues<GrowthOption>())
             _caps[(int)option] = DefaultCap(option);
 
+        _meta = GetParent()?.GetNodeOrNull<MetaManager>("MetaManager");
+
         if (_horde != null)
             _horde.KillDetail += OnEnemyKilled;
         else
@@ -254,9 +256,29 @@ public partial class RunGrowth : Node
     /// An option is available until its ceiling is reached, and then it stops
     /// being offered. That is the point: a ceiling the player watches empty out
     /// of the deck is one they can plan around, unlike a number in a formula.
-    public bool IsAvailable(GrowthOption option) => option == GrowthOption.WeaponLevel
-        ? _weapons is { Weapon: not null } && !_weapons.AtCeiling
-        : _taken[(int)option] < _caps[(int)option];
+    public bool IsAvailable(GrowthOption option)
+    {
+        // Locked options are not in the deck at all rather than being offered and
+        // refused. A card the player can see and cannot take teaches them the
+        // condition, which is right in the shop where they are browsing — and
+        // wrong mid-run, where the offer is three seconds long and they are being
+        // chased.
+        if (!Unlocked(option))
+            return false;
+
+        return option == GrowthOption.WeaponLevel
+            ? _weapons is { Weapon: not null } && !_weapons.AtCeiling
+            : _taken[(int)option] < _caps[(int)option];
+    }
+
+    /// The profile, when there is one. A probe that builds a RunGrowth without a
+    /// MetaManager gets the whole deck, which is the right default: the thing
+    /// being tested there is the deck, and half of it silently missing would look
+    /// exactly like a broken draw.
+    private bool Unlocked(GrowthOption option) =>
+        _meta == null || UnlockBook.GrowthAllows(_meta.Profile, option);
+
+    private MetaManager? _meta;
 
     public int TakenCount(GrowthOption option) => _taken[(int)option];
 

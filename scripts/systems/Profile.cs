@@ -72,6 +72,30 @@ public sealed class Profile
 
     public bool HasContract => ContractIndex >= 0;
 
+    /// Unlock ids the player has opened. Ids rather than resource paths, because
+    /// an unlock is allowed to grant something that is not a file — a growth
+    /// option is an enum case — and one list that can hold both is one list.
+    public Array<string> Unlocked { get; } = new();
+
+    /// Bosses killed across every run. Not a personal best and not a record: it
+    /// is the only fact an unlock condition needs that no run in progress can
+    /// re-derive, since a profile written before the boss existed cannot say
+    /// whether one was ever fought.
+    public int BossesKilled { get; set; }
+
+    public bool HasUnlocked(string id) => Unlocked.Contains(id);
+
+    /// Returns whether this actually opened something. The caller announces on
+    /// true, so a second call for an unlock already held has to be silent.
+    public bool Open(string id)
+    {
+        if (HasUnlocked(id))
+            return false;
+
+        Unlocked.Add(id);
+        return true;
+    }
+
     /// The kit a profile starts with and never loses. Everything else in the
     /// shop is a wager: it comes back only if the player does.
     public static readonly string[] StartingKit =
@@ -140,6 +164,25 @@ public sealed class Profile
         Streak++;
         BestStreak = Mathf.Max(BestStreak, Streak);
         return beaten;
+    }
+
+    /// Opens whatever this profile's existing records already prove, for a save
+    /// that predates unlocks. Only the conditions a stored best can answer — the
+    /// rest stay shut, because inventing a "yes" for a condition nothing was ever
+    /// measuring is worse than leaving one thing to go and earn.
+    public void GrantEarnedUnlocks()
+    {
+        if (BestKills >= 60)
+            Open("ignite");
+
+        if (BestStreak >= 3)
+            Open("service_rifle");
+
+        if (BestMultiplier >= 2.5f)
+            Open("fortune");
+
+        if (BossesKilled > 0)
+            Open("scythe");
     }
 
     /// The jobs currently on the board.
@@ -225,6 +268,8 @@ public sealed class Profile
             { "best_streak", BestStreak },
             { "contract_seed", ContractSeed },
             { "contract_index", ContractIndex },
+            { "unlocked", Unlocked },
+            { "bosses_killed", BossesKilled },
         };
 
         return Json.Stringify(root, "  ");
@@ -331,6 +376,29 @@ public sealed class Profile
 
         if (root.TryGetValue("contract_index", out Variant contractIndex))
             profile.ContractIndex = contractIndex.AsInt32();
+
+        if (root.TryGetValue("bosses_killed", out Variant bosses))
+            profile.BossesKilled = bosses.AsInt32();
+
+        if (root.TryGetValue("unlocked", out Variant unlocked) && unlocked.VariantType == Variant.Type.Array)
+        {
+            foreach (Variant entry in unlocked.AsGodotArray())
+                profile.Open(entry.AsString());
+        }
+        else
+        {
+            // No key at all means a file written before unlocks existed, and the
+            // difference between that and "unlocked nothing yet" matters: a
+            // veteran profile loading into a game that has just taken four
+            // weapons off its shop shelf would read as the save being corrupted.
+            //
+            // The records the profile already keeps are enough to hand back
+            // whatever it has demonstrably earned. It is deliberately generous —
+            // a player who has beaten a condition and cannot prove it should get
+            // the benefit, because the alternative punishes them for having
+            // played before the feature shipped.
+            profile.GrantEarnedUnlocks();
+        }
 
         return profile;
     }

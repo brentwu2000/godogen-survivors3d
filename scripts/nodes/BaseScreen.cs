@@ -80,6 +80,15 @@ public partial class BaseScreen : Control
 
         if (!_profile.Owns(entry.Path))
         {
+            // Checked before the price, because a locked entry is not expensive,
+            // it is unavailable — and "you cannot afford it" would send the
+            // player off to earn credits that will not help.
+            if (UnlockBook.ShopLockReason(_profile, entry.Path) is { } reason)
+            {
+                _message = $"{entry.Name} is locked — {reason.ToLower()}";
+                return;
+            }
+
             if (entry.Price <= 0)
             {
                 _message = $"{entry.Name} is not for sale";
@@ -208,14 +217,23 @@ public partial class BaseScreen : Control
             bool owned = _profile.Owns(entry.Path);
             bool equipped = IsEquipped(entry);
 
-            string state = equipped ? "[equipped]"
+            // Listed, never hidden. Content the player cannot see does not make
+            // them want it; content they can see and cannot have does — and the
+            // condition printed where the price would go is the only place the
+            // game ever explains how to get it.
+            string? locked = owned ? null : UnlockBook.ShopLockReason(_profile, entry.Path);
+
+            string state = locked != null ? "[locked]"
+                : equipped ? "[equipped]"
                 : owned ? "[owned]"
                 : entry.Price > 0 ? $"{entry.Price} cr"
                 : "—";
 
-            string risk = !Profile.IsStartingKit(entry.Path) && owned ? "  (lost if you die)" : "";
+            string note = locked != null ? $"  {locked.ToLower()}"
+                : !Profile.IsStartingKit(entry.Path) && owned ? "  (lost if you die)"
+                : "";
 
-            text.AppendLine($"{(i == _cursor ? " >" : "  ")} {entry.Name,-18} {state,-12}{risk}");
+            text.AppendLine($"{(i == _cursor ? " >" : "  ")} {entry.Name,-18} {state,-12}{note}");
         }
 
         _screen.Text = text.ToString();

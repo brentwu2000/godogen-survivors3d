@@ -77,6 +77,11 @@ public partial class RunDirector : Node3D
     /// about is a decision — leave now with what you have, or stay and take it.
     [Signal] public delegate void BossArrivedEventHandler();
 
+    /// It went down. Separate from the horde's kill feed because the fact worth
+    /// recording is "the thing the director placed is dead", and the kill feed
+    /// only knows that a variant with sprite layer 5 died.
+    [Signal] public delegate void BossKilledEventHandler();
+
     /// Fraction of the run at which it walks in.
     ///
     /// 0.62 was the design answer and the sweep threw it out: runs end between 83
@@ -285,6 +290,8 @@ public partial class RunDirector : Node3D
         BossAlive = false;
         if (_horde != null)
             _horde.EnemyKilled -= OnEnemyKilled;
+
+        EmitSignal(SignalName.BossKilled);
 
         Node? crates = GetParent().GetNodeOrNull("LootContainers");
         if (crates == null)

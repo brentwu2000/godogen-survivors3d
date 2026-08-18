@@ -150,6 +150,13 @@ public partial class DebriefScreen : CanvasLayer
         if (records.Length > 0)
             text.AppendLine(records);
 
+        // Last, and repeating the condition that opened it. A player who reads
+        // "unlocked: Thorns" learns that Thorns exists; one who reads what they
+        // did to get it learns what this game rewards, which is the only part
+        // that changes what they do next.
+        foreach (Unlock unlock in meta.NewUnlocks)
+            text.AppendLine($"unlocked {unlock.Name} — {unlock.Condition.ToLower()}");
+
         return text.ToString();
     }
 

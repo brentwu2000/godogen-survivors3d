@@ -21,6 +21,11 @@ public partial class MetaManager : Node
 
     public Profile.RecordsBeaten LastRecordsBeaten { get; private set; }
 
+    /// What the last run opened. Held rather than only printed, because the
+    /// moment an unlock matters is the moment the player is deciding what to do
+    /// next — and that is the debrief and the base screen, not the log.
+    public System.Collections.Generic.List<Unlock> NewUnlocks { get; private set; } = new();
+
     /// Whether the contract taken into this run was met, and what it paid.
     public bool ContractMet { get; private set; }
     public Contract? ContractTaken { get; private set; }
@@ -157,10 +162,13 @@ public partial class MetaManager : Node
         // here rather than levelled as it is earned, so it stays a separate and
         // much slower curve from the growth inside the run.
         var practice = new int[Profile.Proficiency.Length];
+        var hits = new int[Profile.Proficiency.Length];
         if (_weapons != null)
         {
             for (int i = 0; i < Profile.Proficiency.Length; i++)
             {
+                hits[i] = _weapons.HitsThisRun((WeaponCategory)i);
+
                 int gained = _weapons.ProficiencyGain((WeaponCategory)i);
                 if (gained <= 0)
                     continue;
@@ -175,11 +183,24 @@ public partial class MetaManager : Node
         // numbers, three consumers — a contract that counted kills its own way
         // would disagree with the screen reporting them, and the player would be
         // right to trust neither.
-        LastRun = _log?.Freeze(runState, bankedValue, practice, lost)
+        LastRun = _log?.Freeze(runState, bankedValue, practice, hits, lost)
                   ?? new RunRecord { Outcome = runState, Banked = bankedValue };
 
         LastRecordsBeaten = Profile.ApplyRecords(LastRun);
         SettleContract(LastRun);
+
+        // After ApplyRecords, not before. Two conditions ask about a career
+        // rather than an evening — a streak of three is only three once this run
+        // has been counted — and asking first would delay those unlocks by
+        // exactly one run, which looks from the outside like a condition that
+        // does not work.
+        Profile.BossesKilled += LastRun.BossesKilled;
+        NewUnlocks = UnlockBook.NewlyMet(LastRun, Profile);
+        foreach (Unlock unlock in NewUnlocks)
+        {
+            Profile.Open(unlock.Id);
+            GD.Print($"unlocked: {unlock.Name} ({unlock.Condition})");
+        }
 
         Persist();
         GD.Print($"profile: credits {Profile.Credits} (+{bankedValue}), " +

@@ -24,7 +24,12 @@ public partial class Player : CharacterBody3D
     /// Carries the item name rather than the resource: the only readers are a log
     /// and a readout, and a name is what both of them want.
     public event System.Action<string>? ItemUsed;
-    public event System.Action<string>? ItemThrown;
+
+    /// The item's name and how many the throw killed outright. The count rides
+    /// along because the alternative is the log counting deaths in a window after
+    /// a throw, which would credit the grenade with whatever the rifle did during
+    /// the same second.
+    public event System.Action<string, int>? ItemThrown;
 
     /// Bulk the safe box holds. Deliberately tiny: it is a hedge against a bad
     /// death, not a second backpack.
@@ -152,14 +157,20 @@ public partial class Player : CharacterBody3D
         Vector3 landing = GlobalPosition + new Vector3(aim.X, 0.0f, aim.Y) * ThrowRange;
         landing.Y = 0.0f;
 
+        int killed = 0;
+
         switch (chosen.Effect)
         {
             case ItemEffect.Explosive:
-                int killed = _horde.Detonate(landing, chosen.EffectRadius * Mods.AreaScale, chosen.EffectAmount);
+                killed = _horde.Detonate(landing, chosen.EffectRadius * Mods.AreaScale, chosen.EffectAmount);
                 GD.Print($"threw {chosen.ItemName}: {killed} killed");
                 break;
 
             case ItemEffect.Incendiary:
+                // Zero, and honestly so. Burning ground kills over seven seconds
+                // and the horde walks through it the whole time, so any number
+                // attributed here would be "kills that happened afterwards"
+                // wearing the throw's name.
                 _horde.Hazards.Add(landing, chosen.EffectRadius * Mods.AreaScale,
                                    chosen.EffectAmount, chosen.EffectDuration);
                 break;
@@ -169,7 +180,7 @@ public partial class Player : CharacterBody3D
         }
 
         Backpack.RemoveOne(best);
-        ItemThrown?.Invoke(chosen.ItemName);
+        ItemThrown?.Invoke(chosen.ItemName, killed);
         return chosen.Value;
     }
 

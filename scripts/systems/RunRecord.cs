@@ -51,8 +51,29 @@ public sealed class RunRecord
     public int ItemsUsed { get; init; }
     public int ItemsThrown { get; init; }
 
+    /// Bosses put down. At most one per run today, and an int rather than a bool
+    /// because the record's job is to say what happened, not to encode what the
+    /// director currently allows.
+    public int BossesKilled { get; init; }
+
+    /// The most kills a single thrown item took. Not a total: the interesting
+    /// claim is "eight at once", and a total would be satisfied by throwing
+    /// eight molotovs at one walker each, which is the opposite of the thing
+    /// worth doing.
+    public int BestThrowKills { get; init; }
+
     /// Practice banked by this run, indexed by WeaponCategory.
     public int[] ProficiencyGained { get; init; } = new int[4];
+
+    /// Hits landed, indexed by WeaponCategory.
+    ///
+    /// Separate from the practice above even though practice is derived from it,
+    /// because the derivation throws away everything an unlock condition needs:
+    /// 250 hits buy one point, so a run with 249 firearm hits and a run that
+    /// never drew a gun both bank zero. The first version of "extract without
+    /// firing a gun" read the practice and opened the bow on a seventeen-second
+    /// extraction — a condition wired to a fact that resembled the right one.
+    public int[] HitsByCategory { get; init; } = new int[4];
 
     /// Resource paths death took. Empty on an extraction, by the rule that only
     /// dying costs the kit.
