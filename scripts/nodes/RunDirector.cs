@@ -222,6 +222,8 @@ public partial class RunDirector : Node3D
         if (!BossSpawned && Intensity >= BossAt)
             SendTheBoss();
 
+        CheckSupplyDrops();
+
         if (_horde != null)
         {
             _horde.SpeedScale = Mathf.Lerp(1.0f, EndSpeedScale, Intensity);
@@ -293,28 +295,99 @@ public partial class RunDirector : Node3D
 
         EmitSignal(SignalName.BossKilled);
 
+        if (DropCache("BossCache", position, bias: 3.2f, rolls: 5, seconds: 1.6f))
+            GD.Print($"boss down at {Elapsed:F0}s — cache dropped");
+    }
+
+    /// A crate that was not on the map when the run started.
+    ///
+    /// Shared by the boss reward and the supply drops, because they are the same
+    /// object with different numbers and two copies of it would drift the first
+    /// time one of them changed.
+    private bool DropCache(string name, Vector3 at, float bias, int rolls, float seconds)
+    {
         Node? crates = GetParent().GetNodeOrNull("LootContainers");
         if (crates == null)
-            return;
+            return false;
 
-        var reward = new LootContainer
+        var cache = new LootContainer
         {
-            Name = "BossCache",
-            Position = new Vector3(position.X, 0.0f, position.Z),
-            RarityBias = 3.2f,
-            RollCount = 5,
-            SearchSeconds = 1.6f,
+            Name = name,
+            Position = new Vector3(at.X, 0.0f, at.Z),
+            RarityBias = bias,
+            RollCount = rolls,
+            SearchSeconds = seconds,
         };
 
-        reward.AddChild(new MeshInstance3D
+        cache.AddChild(new MeshInstance3D
         {
             Name = "Mesh",
             Mesh = new BoxMesh { Size = new Vector3(1.4f, 1.1f, 1.4f) },
             Position = new Vector3(0.0f, 0.55f, 0.0f),
         });
 
-        crates.AddChild(reward);
-        GD.Print($"boss down at {Elapsed:F0}s — cache dropped");
+        crates.AddChild(cache);
+        return true;
+    }
+
+    /// Fractions of the run at which a supply cache lands.
+    ///
+    /// The second minute of a run currently costs more than it earns. That is
+    /// measured, not felt: the backpack holds 528 at 60 s and 40 at 120 s,
+    /// because every valuable thing in it is also the thing that keeps you alive,
+    /// and a 1.56 extraction multiplier cannot buy back ninety percent of a bag.
+    /// Loot is fuel, and the horde's growth outruns what the map was stocked with.
+    ///
+    /// The answer is supply, not arithmetic. Raising the multiplier to cover a
+    /// spent bag would need it somewhere past 3x, which makes leaving late simply
+    /// correct and deletes the decision it exists to create. A cache that lands
+    /// while the run is going gives the second half something to be *for*, and it
+    /// is the same object the boss already drops.
+    /// 0.25 and 0.58 — 75 s and 174 s of a 300 s run.
+    ///
+    /// Placed against the measurement rather than spaced evenly. The bag is full
+    /// at 60 s and empty at 120 s, so the first drop lands inside the window where
+    /// the initial haul is being spent, not after it. The first values were 0.46
+    /// and 0.72, which is tidy and arrives at 138 s — comfortably after the
+    /// problem it was written to solve, and a run that ends at 130 s never saw one
+    /// at all.
+    [Export] public float[] SupplyDropsAt { get; set; } = { 0.25f, 0.58f };
+
+    /// How far out they land. Well outside the ring the player is likely to be
+    /// standing in: a cache underfoot is a reward for waiting, and the point is
+    /// to make the second half a journey rather than a longer wait.
+    [Export] public float SupplyDropRange { get; set; } = 26.0f;
+
+    [Signal] public delegate void SupplyDroppedEventHandler(Vector3 at);
+
+    private int _suppliesDropped;
+
+    private void CheckSupplyDrops()
+    {
+        if (SupplyDropsAt == null || _suppliesDropped >= SupplyDropsAt.Length)
+            return;
+
+        if (Intensity < SupplyDropsAt[_suppliesDropped])
+            return;
+
+        _suppliesDropped++;
+
+        Vector3 around = _player?.GlobalPosition ?? Vector3.Zero;
+        float angle = NextFloat() * Mathf.Tau;
+        var at = new Vector3(
+            Mathf.Clamp(around.X + Mathf.Cos(angle) * SupplyDropRange, -ArenaExtent, ArenaExtent),
+            0.0f,
+            Mathf.Clamp(around.Z + Mathf.Sin(angle) * SupplyDropRange, -ArenaExtent, ArenaExtent));
+
+        // Rich, and rich in the things the second half is short of. The bias is
+        // below the boss cache's on purpose — this arrives for turning up, and
+        // that one is paid for.
+        if (!DropCache($"Supply{_suppliesDropped}", at, bias: 2.4f, rolls: 4, seconds: 2.0f))
+            return;
+
+        GD.Print($"supply drop {_suppliesDropped} at {Elapsed:F0}s, " +
+                 $"{around.DistanceTo(at):F0}m out");
+        EmitSignal(SignalName.SupplyDropped, at);
     }
 
     private Vector3 SpawnPoint()
@@ -353,6 +426,24 @@ public partial class RunDirector : Node3D
     /// minutes of simulation to check one number, and brings along every spawn
     /// and death in between as noise.
     public void SetElapsedForTesting(float seconds) => Elapsed = seconds;
+
+    /// Runs one director decision without stepping physics.
+    ///
+    /// For probes checking something the director does *on a schedule* — the
+    /// boss, the supply drops, the pads opening. Calling the spawn directly would
+    /// test the spawn and pass just as happily against a director that never
+    /// looks at the clock, which is the one way a scheduled event fails while
+    /// looking whole.
+    public void TickForTesting()
+    {
+        if (!_padsRevealed && Intensity >= ExtractionOpensAt)
+            RevealPads();
+
+        if (!BossSpawned && Intensity >= BossAt)
+            SendTheBoss();
+
+        CheckSupplyDrops();
+    }
 
     /// Ends the run from a probe. Same path the game uses, so a probe cannot
     /// leave the director in a state a real run could never reach.

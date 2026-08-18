@@ -149,8 +149,27 @@ public partial class Hud : CanvasLayer
         _growth = root?.GetNodeOrNull<RunGrowth>("RunGrowth");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
+        RefreshContainers();
+
+        if (_director != null)
+        {
+            _director.RunEnded += OnRunEnded;
+            _director.BossArrived += OnBossArrived;
+            _director.SupplyDropped += OnSupplyDropped;
+        }
+    }
+
+    private void OnBossArrived() => Announce("SOMETHING BIG IS COMING", 4.0f);
+
+    private void OnSupplyDropped(Vector3 at) => Announce("SUPPLY DROP", 4.0f);
+
+    /// Re-taken whenever a crate arrives, because the compass points at the ones
+    /// it knows about — and the two that appear mid-run are the two most worth
+    /// pointing at.
+    private void RefreshContainers()
+    {
         var found = new System.Collections.Generic.List<LootContainer>();
-        Node? crates = root?.GetNodeOrNull("LootContainers");
+        Node? crates = GetParent()?.GetNodeOrNull("LootContainers");
         if (crates != null)
         {
             foreach (Node child in crates.GetChildren())
@@ -158,17 +177,18 @@ public partial class Hud : CanvasLayer
                 if (child is LootContainer container)
                     found.Add(container);
             }
-        }
-        _containers = found.ToArray();
 
-        if (_director != null)
-        {
-            _director.RunEnded += OnRunEnded;
-            _director.BossArrived += OnBossArrived;
+            if (!_watchingCrates)
+            {
+                _watchingCrates = true;
+                crates.ChildEnteredTree += _ => RefreshContainers();
+            }
         }
+
+        _containers = found.ToArray();
     }
 
-    private void OnBossArrived() => Announce("SOMETHING BIG IS COMING", 4.0f);
+    private bool _watchingCrates;
 
     /// A line that says itself and then gets out of the way. Anything permanent
     /// in the upper third competes with the thing it is warning about.

@@ -627,11 +627,19 @@ public partial class AutoPlay : SceneTree
     /// </param>
     private LootContainer[] BestCrates(Vector3 from, int count, bool announce = true)
     {
+        // Re-read the node rather than the list captured at bind time. Two supply
+        // caches and the boss's reward are added to the tree mid-run, and they are
+        // the three richest crates on the map — a bot working from the opening
+        // census walks past all of them and measures a game without them in it.
         var open = new System.Collections.Generic.List<LootContainer>();
-        foreach (LootContainer crate in _allCrates)
+        Node? crates = _player.GetParent()?.GetNodeOrNull("LootContainers");
+        if (crates != null)
         {
-            if (!crate.Looted)
-                open.Add(crate);
+            foreach (Node child in crates.GetChildren())
+            {
+                if (child is LootContainer { Looted: false } crate)
+                    open.Add(crate);
+            }
         }
 
         open.Sort((a, b) => Worth(from, b).CompareTo(Worth(from, a)));

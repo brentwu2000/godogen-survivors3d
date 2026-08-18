@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
 | `test/FirstRunProbe.cs` | yes | A fresh profile has not seen the base, an older save has, and opening the game on a new profile lands in a run without a keypress |
 | `test/MusicProbe.cs` | yes | Four layers of one length all playing from the first frame, layers arriving with intensity and crowd and the boss, a threshold that does not chatter, silence when the run ends, and every layer audibly what it claims to be |
 | `test/DailyProbe.cs` | yes | One date derives one run every time, consecutive days differ, the second attempt does not count, dying spends it too, a streak is consecutive days, and the score is mostly about the shared card |
@@ -758,6 +759,13 @@ stage that was supposed to catch cross-firing had a written-in exemption saying 
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
 
+**The boss cache's loot has never been counted, since Phase 20.** Everything that cares about crates
+took its list once in `_Ready`: the log's census, the sound director's subscriptions, the HUD compass,
+and the play-test bot. All four are correct for a map that does not change, and a crate that arrives
+mid-run raised nobody's `CratesLooted`, satisfied no "empty N crates" contract, and set no record. It
+survived six phases because a run in which the player did not open it looks identical. Found while
+adding a second thing that arrives mid-run; all four now watch `ChildEnteredTree` instead.
+
 **A new player's first ninety seconds was a shop.** Fifteen rows, three terrains, a contract board and
 eight unlock conditions, every one of them an answer to a question they had not been asked. The first
 launch now goes straight into a run and the base is what they come back to, with a result in hand.
@@ -943,12 +951,38 @@ it used to walk out at 187 s: going deep in a dense biome means being far from t
 wrong. It takes more risk for more value, which is what a player does, and a driver that never took a
 risk was measuring a game nobody plays.
 
-**What is left is the 60-second spike, and it has a mechanism now.** The bag holds 528 at 60 s and 40
-at 120 s — not capped, *spent*. Every valuable thing in the backpack is also the thing that keeps you
-alive, so surviving the second minute means converting the payout into survival, and the extraction
-multiplier's 1.0 → 1.56 cannot buy back ninety percent of a bag. Loot is fuel and the horde's growth
-outruns the map's supply. That is one design decision arguing with another, which is the argument they
-were built to have — but at present one of them wins outright.
+### The second minute
+
+The payout used to peak at 60 s and collapse. The mechanism was measurable: the bag holds 528 at 60 s
+and 40 at 120 s — not capped, *spent*. Every valuable thing in the backpack is also what keeps you
+alive, so surviving the second minute converts the payout into survival, and the extraction
+multiplier's 1.0 → 1.56 cannot buy back ninety percent of a bag. Loot is fuel, and the horde's growth
+outruns what the map was stocked with.
+
+**Arithmetic could not fix that.** Covering a spent bag with the multiplier would need it somewhere
+past 3x, which makes leaving late simply correct and deletes the decision the multiplier exists to
+create. The answer had to be supply. Two caches land during the run — at 25% and 58% of the clock, 26 m
+out, announced — using the same object the boss already drops.
+
+Four seeds, four loiter tiers, banked credits, before and after:
+
+| Seed | 0 s | 60 s | 120 s | 180 s |
+| :--- | ---: | ---: | ---: | ---: |
+| `1374015655` | 421 | 987 | 392 → **1214** | 479 → **1498** |
+| `3246279323` | 518 | 896 | 832 → **1324** | 853 → **1735** |
+| `2654435769` | 335 | 1911 | died | died |
+| `625341585` | 481 | 1023 | died | died |
+
+**Where the run survives, the curve is now monotonic — which is the shape the whole loop is built
+around.** Where it does not, nothing changed: both of those seeds were already dying in the second
+half before the caches existed. Fixing the payout did not fix survival, and saying so is the point of
+recording both. That is the next lever, and it is a different one.
+
+**The first schedule was 46% and 72% and it was wrong for a reason worth writing down.** Evenly spaced
+is tidy; 46% of a 300 s run is 138 s, comfortably after the window the drop was written to fix, and a
+run that ends at 130 s never saw one at all. Placed against the measurement instead — the bag is full
+at 60 s and empty at 120 s, so the first cache lands at 75 s, inside the window where the opening haul
+is being spent.
 
 The bot now paths with a flow field of its own rather than steering straight. On a hand-made arena
 with five blocks that was enough; on a generated one it walked into the first wall between it and the
@@ -1046,8 +1080,9 @@ person**, not things that need code.
 - **The clock is unvalidated by a human.** The bot picks crates by worth, breaks contact when it is
   losing, and knows not to do that on the way to the exit — but it still does not use cover, does not
   kite, and never decides to leave early because a run is going badly. See Balance.
-- **The payout still peaks at 60 s.** Measured, diagnosed, not yet fixed: loot is fuel, so the second
-  minute is spent rather than earned. See Balance.
+- **Half the seeds die in the second half.** Two of four measured runs never reach 180 s at all, and
+  the supply caches did not change that — they fixed what a surviving run is worth, not whether it
+  survives. See Balance.
 - **The proof video is three phases stale.** `test/Presentation.cs` films a game without elites, a
   boss, biomes, or music.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips

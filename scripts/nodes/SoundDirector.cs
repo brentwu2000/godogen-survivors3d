@@ -180,15 +180,23 @@ public partial class SoundDirector : Node
             _director.BossArrived += OnBossArrived;
         }
 
+        // On arrival, not once at _Ready — the boss cache and the supply drops
+        // are added mid-run, and a crate that made no sound when it was emptied
+        // is a crate the player is not sure they emptied.
         Node? crates = root?.GetNodeOrNull("LootContainers");
         if (crates != null)
         {
             foreach (Node child in crates.GetChildren())
-            {
-                if (child is LootContainer container)
-                    container.Emptied += OnContainerEmptied;
-            }
+                Watch(child);
+
+            crates.ChildEnteredTree += Watch;
         }
+    }
+
+    private void Watch(Node child)
+    {
+        if (child is LootContainer container)
+            container.Emptied += OnContainerEmptied;
     }
 
     /// Unsubscribing matters here because the horde and the weapon hold plain C#

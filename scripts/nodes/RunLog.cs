@@ -53,15 +53,28 @@ public partial class RunLog : Node
             _player.ItemThrown += OnItemThrown;
         }
 
+        // Subscribed on arrival rather than once at _Ready.
+        //
+        // The boss cache has been dropping into this node since Phase 20 and its
+        // contents were never counted — a crate that appears after the log has
+        // taken its census is invisible to `CratesLooted`, to `LootValue`, to the
+        // "empty N crates" contract, and to the record book. Nothing reports it,
+        // because everything downstream is consistent with a run in which the
+        // player simply did not open it.
         Node? crates = root?.GetNodeOrNull("LootContainers");
         if (crates != null)
         {
             foreach (Node child in crates.GetChildren())
-            {
-                if (child is LootContainer container)
-                    container.Emptied += OnCrateEmptied;
-            }
+                Watch(child);
+
+            crates.ChildEnteredTree += Watch;
         }
+    }
+
+    private void Watch(Node child)
+    {
+        if (child is LootContainer container)
+            container.Emptied += OnCrateEmptied;
     }
 
     /// The horde's and the player's events are plain C# delegates, which hold a
