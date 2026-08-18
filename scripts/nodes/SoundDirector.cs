@@ -340,14 +340,14 @@ public partial class SoundDirector : Node
         _hazardCount = count;
     }
 
-    private void OnFired(WeaponCategory category) => Play(category switch
+    private void OnFired(WeaponCategory category, Vector3 origin, Vector2 direction) => Play(category switch
     {
         WeaponCategory.MeleeShort or WeaponCategory.MeleeLong => Sfx.MeleeSwing,
         WeaponCategory.BowCrossbow => Sfx.BowShot,
         _ => Sfx.RifleShot,
     }, -3.0f);
 
-    private void OnHit() => Play(Sfx.Impact, -4.0f);
+    private void OnHit(Vector3 where) => Play(Sfx.Impact, -4.0f);
 
     private void OnEnemyKilled(int type, Vector3 position) => Play(Sfx.EnemyDeath, -5.0f);
 

@@ -4,7 +4,8 @@ A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Braw
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
-Status: both loops close, the surface is on, the run reports itself, and the arena is a place. A run is fight, loot, grow,
+Status: both loops close, the surface is on, the run reports itself, the arena is a place, and things
+happen when you shoot. A run is fight, loot, grow,
 extract on an arena generated fresh each time; it ends on a debrief rather than a timer; between runs
 a base screen turns what came back into gear that changes the next one, offers three contracts and
 keeps your records, and dying in that gear loses it. Five enemy variants with their own art, finite
@@ -49,7 +50,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
-| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` lights alternate instances to check the hit-flash channel) |
+| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills and a detonation just before the shutter) |
 | `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
 
@@ -296,6 +297,29 @@ exactly this. One catch, which bit: a MultiMesh with `use_colors` **off** still 
 an opaque white `COLOR`, so the same shader drew every projectile at full flash, permanently white. A
 `flash_enabled` uniform turns the channel off explicitly. The bug appeared only on the renderer that
 opted out, while the horde it was written for was correct throughout.
+
+**The scene had no `WorldEnvironment` at all, and that was most of "it looks plain".** Without one Godot
+does no tone mapping and lights everything from a flat default ambient: every surface is lit by exactly
+one number, highlights clip to white instead of rolling off, and no colour anywhere comes from anything
+but the artist. The arena can be textured, the cover can be modelled and the sprites can be good, and it
+still reads as a viewport. A warm sun against a cool ambient, filmic tone mapping with the white point
+above 1, and a little contrast is the whole fix. The renderer is `mobile`, so SSAO and SSIL were never
+options — this is the half that is free.
+
+**Effect sizes were found by overshooting in both directions and measuring.** Additive blending
+saturates, so the first pass — six-metre puffs near full alpha — was not a bright explosion but a flat
+orange disc over a quarter of the screen, which reads as a rendering fault. The correction went too far:
+counting bright pixels across the captured run found about sixty per frame out of two million, an effect
+system that technically runs. The only meaningful ruler is the character — 2.2 m of player is about
+130 px, so a metre is roughly sixty pixels and anything under half a metre is a speck.
+
+**Damage over time must not raise the hit flash.** The flash confirms that a discrete shot landed, and
+burning ground applies damage sixty times a second — so it re-lit every enemy standing in it every tick,
+and a crowd caught in a molotov rendered as a row of solid white cut-outs until the fire went out.
+`Horde.Damage` takes a `flash` flag now; the hazard path passes false, because what tells the player they
+are burning is the fire drawn over them. The flash itself is also capped at 0.72 rather than 1.0: mixing
+all the way to white erases the drawing, and a hit enemy that is a blank silhouette reads as a missing
+texture — worst exactly when a blast lights a dozen at once.
 
 **Cover is procedural, and that is a constraint rather than a preference.** Fifty to seventy pieces of
 cover have to stay inside a draw-call budget that has been near twenty since Phase 2, which means
@@ -545,6 +569,8 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/shaders/horde_billboard.gdshader` | hand-written | — | horde + projectiles |
 | `assets/shaders/vignette.gdshader` | hand-written | — | full-screen damage tint |
 | `assets/shaders/ground.gdshader` | hand-written | — | tiled floor, tinted per grid cell |
+| `assets/shaders/effect.gdshader` | hand-written | — | additive billboard puffs |
+| `assets/shaders/ground_marker.gdshader` | hand-written | — | burning ground and the extraction ring |
 | `assets/textures/ground.png` | synthesised by `BuildGroundTexture.cs` | 512×512, seamless | 4.5 m tile |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
 

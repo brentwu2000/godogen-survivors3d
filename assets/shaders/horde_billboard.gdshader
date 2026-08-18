@@ -91,5 +91,10 @@ void fragment() {
 
     // Toward white rather than multiplied by it: a hit has to read on a sprite
     // that is already dark, and multiplying leaves a black brute black.
-    ALBEDO = mix(texel.rgb, vec3(1.0), v_flash);
+    //
+    // Never all the way, though. At full strength the mix erases the drawing
+    // entirely and a hit enemy is a solid white cut-out — which reads as a
+    // missing texture rather than as an impact, and is worst exactly when it
+    // matters most, with a dozen of them lit at once by a blast.
+    ALBEDO = mix(texel.rgb, vec3(1.0), v_flash * 0.72);
 }

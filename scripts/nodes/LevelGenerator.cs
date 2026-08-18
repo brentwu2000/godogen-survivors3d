@@ -530,19 +530,43 @@ public partial class LevelGenerator : Node3D
                 WillOpen = (i - firstOpen + PadCount) % PadCount < opening,
             };
 
-            var material = new StandardMaterial3D
+            // A slowly breathing ring rather than a filled disc. Filled, it hid
+            // the ground the player is standing on and read as a flat sticker;
+            // a ring is something to step inside, which is what it is for. The
+            // same shader draws the burning ground — the difference between the
+            // two is a colour and a speed, which is as it should be.
+            var shader = GD.Load<Shader>("res://assets/shaders/ground_marker.gdshader");
+            Material material;
+
+            if (shader != null)
             {
-                AlbedoColor = new Color(0.2f, 0.85f, 0.4f, 0.55f),
-                ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-                Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-                DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
-            };
+                var live = new ShaderMaterial { Shader = shader };
+                live.SetShaderParameter("inner_colour", new Color(0.55f, 1.0f, 0.68f));
+                live.SetShaderParameter("outer_colour", new Color(0.12f, 0.62f, 0.30f));
+                live.SetShaderParameter("strength", 0.6f);
+                live.SetShaderParameter("churn", 0.7f);
+                live.SetShaderParameter("flicker", 0.12f);
+                live.SetShaderParameter("hollow", 0.62f);
+                live.SetShaderParameter("seed", i * 1.31f);
+                material = live;
+            }
+            else
+            {
+                material = new StandardMaterial3D
+                {
+                    AlbedoColor = new Color(0.2f, 0.85f, 0.4f, 0.55f),
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                    DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
+                };
+            }
 
             zone.AddChild(new MeshInstance3D
             {
                 Name = "Pad",
-                Mesh = new CylinderMesh { TopRadius = 3.0f, BottomRadius = 3.0f, Height = 0.05f },
+                Mesh = new QuadMesh { Size = new Vector2(6.4f, 6.4f) },
                 MaterialOverride = material,
+                RotationDegrees = new Vector3(-90.0f, 0.0f, 0.0f),
                 Position = new Vector3(0.0f, 0.03f, 0.0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             });

@@ -43,8 +43,12 @@ public partial class WeaponHandler : Node3D
     ///
     /// Two events rather than one, because a swing that hits nothing still has to
     /// be audible while five hits from one swing must not be five times as loud.
-    public event System.Action<WeaponCategory>? Fired;
-    public event System.Action? Hit;
+    /// Both carry where they happened. Sound does not need it — the mix is not
+    /// positional — but a muzzle flash with no muzzle and a spark with no impact
+    /// point are the two effects most worth having, so the position travels with
+    /// the event rather than being re-derived by whoever wants to draw it.
+    public event System.Action<WeaponCategory, Vector3, Vector2>? Fired;
+    public event System.Action<Vector3>? Hit;
 
     public WeaponResource? Weapon => _slots[_active].Weapon;
     public int Ammo => _slots[_active].Ammo;
@@ -316,7 +320,7 @@ public partial class WeaponHandler : Node3D
         float range = weapon.GetEffectiveRange(level);
         float damage = weapon.GetEffectiveDamage(level);
 
-        Fired?.Invoke(weapon.Category);
+        Fired?.Invoke(weapon.Category, origin, direction);
 
         if (weapon.IsMelee)
         {
@@ -327,8 +331,13 @@ public partial class WeaponHandler : Node3D
             // slot, which would silently skip an enemy on a forward walk.
             for (int i = count - 1; i >= 0; i--)
             {
-                _horde.Damage(_hitList[i], damage, direction * weapon.Knockback);
-                RecordHit(weapon.Category);
+                int index = _hitList[i];
+                if (index >= _horde.Pool.Count)
+                    continue;
+
+                Vector3 where = _horde.Pool.Position[index];
+                _horde.Damage(index, damage, direction * weapon.Knockback);
+                RecordHit(weapon.Category, where);
             }
             return;
         }
@@ -366,8 +375,9 @@ public partial class WeaponHandler : Node3D
             if (index >= _horde.Pool.Count)
                 continue;
 
+            Vector3 where = _horde.Pool.Position[index];
             _horde.Damage(index, damage, shot * weapon.Knockback);
-            RecordHit(weapon.Category);
+            RecordHit(weapon.Category, where);
             remaining--;
         }
     }
@@ -412,7 +422,7 @@ public partial class WeaponHandler : Node3D
                 continue;
 
             _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
-            RecordHit(WeaponCategory.BowCrossbow);
+            RecordHit(WeaponCategory.BowCrossbow, position);
 
             if (--Projectiles.Pierce[i] <= 0)
                 Projectiles.DespawnAt(i);
@@ -421,10 +431,10 @@ public partial class WeaponHandler : Node3D
         _projectileRenderer?.Sync(Projectiles, ProjectileHeight);
     }
 
-    private void RecordHit(WeaponCategory category)
+    private void RecordHit(WeaponCategory category, Vector3 where)
     {
         _hits[(int)category]++;
-        Hit?.Invoke();
+        Hit?.Invoke(where);
     }
 
     /// Rotates the shot by a uniform angle inside the cone. Deterministic and

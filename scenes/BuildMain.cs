@@ -38,11 +38,26 @@ public partial class BuildMain : SceneTree
     {
         var root = new Node3D { Name = "Main" };
 
+        root.AddChild(BuildEnvironment());
+
+        // Warm sun against the cool ambient the environment supplies. A single
+        // white light and a grey ambient is the default look, and the default
+        // look is what "it renders correctly and feels like a prototype" is made
+        // of — the lit and unlit sides of a container differ in brightness and in
+        // nothing else, so nothing on screen has a time of day.
         root.AddChild(new DirectionalLight3D
         {
             Name = "Sun",
             RotationDegrees = new Vector3(-55.0f, -35.0f, 0.0f),
+            LightColor = new Color(1.0f, 0.94f, 0.83f),
+            LightEnergy = 1.25f,
             ShadowEnabled = true,
+
+            // Long, soft shadows across a flat plane read as late afternoon and
+            // give every prop a second silhouette on the ground — which is most
+            // of what tells the player a box has volume under this camera.
+            ShadowBlur = 1.4f,
+            DirectionalShadowMaxDistance = 90.0f,
         });
 
         root.AddChild(BuildGround(GroundSize));
@@ -95,15 +110,64 @@ public partial class BuildMain : SceneTree
 
         root.AddChild(BuildHud());
 
-        // Last, because it subscribes to everything above it — including the loot
-        // containers the level generator put in the tree during its own _Ready.
+        // Last, because they subscribe to everything above them — including the
+        // loot containers the level generator put in the tree during its _Ready.
         var sound = new Node { Name = "Sound" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(sound, "res://scripts/nodes/SoundDirector.cs"));
+
+        var effects = new Node3D { Name = "Effects" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(effects, "res://scripts/nodes/EffectDirector.cs"));
 
         Node scripted = SceneBuildUtil.AttachScriptToRoot(root, "res://scripts/nodes/GameRoot.cs");
         bool ok = SceneBuildUtil.PackAndSave(scripted, "res://scenes/Main.tscn");
         scripted.Free();
         return ok;
+    }
+
+    /// The scene had no environment at all, which is why it looked untouched.
+    ///
+    /// Without one Godot renders with no tone mapping and a flat default ambient:
+    /// every surface is lit by exactly one number, highlights clip rather than
+    /// roll off, and there is no colour anywhere the artist did not paint. The
+    /// arena can be textured, the props can be modelled and the sprites can be
+    /// good, and the result still reads as a viewport rather than as a place.
+    ///
+    /// The renderer is `mobile`, so screen-space effects are not on the table —
+    /// no SSAO, no SSIL. Everything here is the part that is free: how the light
+    /// is coloured, and how the final image is mapped.
+    private static WorldEnvironment BuildEnvironment()
+    {
+        var environment = new Godot.Environment
+        {
+            // A colour rather than a sky. The camera is orthographic and tilted
+            // down 52°, so the horizon is never in frame — a sky would be paying
+            // for something nobody sees. What is needed from it is the ambient
+            // term, which is set directly.
+            BackgroundMode = Godot.Environment.BGMode.Color,
+            BackgroundColor = new Color(0.09f, 0.10f, 0.12f),
+
+            AmbientLightSource = Godot.Environment.AmbientSource.Color,
+
+            // Cool, because the sun is warm. Shadowed faces picking up sky colour
+            // instead of simply being darker is the single cheapest thing that
+            // makes geometry look lit rather than shaded.
+            AmbientLightColor = new Color(0.42f, 0.50f, 0.62f),
+            AmbientLightEnergy = 0.55f,
+
+            // Filmic rather than linear: linear clips anything bright to flat
+            // white, which is what made the concrete tops read as paper. The
+            // white point above 1 is what leaves headroom for them to stay grey.
+            TonemapMode = Godot.Environment.ToneMapper.Filmic,
+            TonemapExposure = 1.05f,
+            TonemapWhite = 2.2f,
+
+            AdjustmentEnabled = true,
+            AdjustmentContrast = 1.08f,
+            AdjustmentSaturation = 1.12f,
+            AdjustmentBrightness = 1.0f,
+        };
+
+        return new WorldEnvironment { Name = "Environment", Environment = environment };
     }
 
     private static Node3D BuildCameraRig()

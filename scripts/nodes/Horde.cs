@@ -223,24 +223,46 @@ public partial class Horde : Node3D
     {
         _hazardDecals = new MeshInstance3D[HazardCapacity];
 
-        var material = new StandardMaterial3D
-        {
-            AlbedoColor = new Color(1.0f, 0.32f, 0.04f, 0.6f),
-            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
-            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
-
-            // Same reason the blob shadow does it: coplanar ground decals
-            // z-fight each other otherwise.
-            DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
-        };
+        var shader = GD.Load<Shader>("res://assets/shaders/ground_marker.gdshader");
 
         for (int i = 0; i < HazardCapacity; i++)
         {
+            Material material;
+            if (shader != null)
+            {
+                // Its own material per patch, purely so each carries a different
+                // seed. Eight fires animating in perfect unison read as one
+                // effect drawn eight times, which is exactly what they were.
+                var live = new ShaderMaterial { Shader = shader };
+                live.SetShaderParameter("inner_colour", new Color(1.0f, 0.78f, 0.28f));
+                live.SetShaderParameter("outer_colour", new Color(0.85f, 0.16f, 0.03f));
+                live.SetShaderParameter("strength", 0.7f);
+                live.SetShaderParameter("churn", 2.6f);
+                live.SetShaderParameter("flicker", 0.45f);
+                live.SetShaderParameter("seed", i * 2.399f);
+                material = live;
+            }
+            else
+            {
+                GD.PushWarning("Horde: missing ground_marker.gdshader — burning ground will be a flat disc");
+                material = new StandardMaterial3D
+                {
+                    AlbedoColor = new Color(1.0f, 0.32f, 0.04f, 0.6f),
+                    ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+                    Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+                    DepthDrawMode = BaseMaterial3D.DepthDrawModeEnum.Disabled,
+                };
+            }
+
+            // A flat quad rather than a cylinder: the sides were never visible
+            // from this camera, and a quad has the clean 0..1 UV the shader needs
+            // to know where the middle of the fire is.
             var decal = new MeshInstance3D
             {
                 Name = $"Hazard{i}",
-                Mesh = new CylinderMesh { TopRadius = 1.0f, BottomRadius = 1.0f, Height = 0.04f },
+                Mesh = new QuadMesh { Size = new Vector2(2.0f, 2.0f) },
                 MaterialOverride = material,
+                RotationDegrees = new Vector3(-90.0f, 0.0f, 0.0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Visible = false,
             };
@@ -263,8 +285,15 @@ public partial class Horde : Node3D
         for (int i = Pool.Count - 1; i >= 0; i--)
         {
             float dps = Hazards.DamageAt(Pool.Position[i]);
+
+            // No flash. The hit flash is confirmation that a discrete shot
+            // landed, and burning ground applies damage sixty times a second —
+            // so it re-lit every enemy standing in it, every tick, and a crowd
+            // caught in a molotov rendered as a group of solid white cut-outs
+            // for as long as the fire burned. What tells the player they are
+            // burning is the fire drawn over them.
             if (dps > 0.0f)
-                Damage(i, dps * delta, Vector2.Zero);
+                Damage(i, dps * delta, Vector2.Zero, allowBlast: true, flash: false);
         }
 
         for (int i = 0; i < _hazardDecals.Length; i++)
@@ -275,7 +304,11 @@ public partial class Horde : Node3D
                 continue;
 
             _hazardDecals[i].Position = Hazards.Position[i] + new Vector3(0.0f, 0.02f, 0.0f);
-            _hazardDecals[i].Scale = new Vector3(Hazards.Radius[i], 1.0f, Hazards.Radius[i]);
+            // X and Y, not X and Z. Scale is applied in local space before the
+            // rotation that lays the quad flat, and a quad's extent is in its own
+            // XY — the cylinder this replaced had its height on Y, which is why
+            // the axes moved.
+            _hazardDecals[i].Scale = new Vector3(Hazards.Radius[i], Hazards.Radius[i], 1.0f);
         }
     }
 
@@ -601,9 +634,12 @@ public partial class Horde : Node3D
     /// kill (the pool swap-removes), so callers iterating a hit list must walk it
     /// backwards or re-query.
     public bool Damage(int index, float amount, Vector2 knockback) =>
-        Damage(index, amount, knockback, allowBlast: true);
+        Damage(index, amount, knockback, allowBlast: true, flash: true);
 
-    private bool Damage(int index, float amount, Vector2 knockback, bool allowBlast)
+    private bool Damage(int index, float amount, Vector2 knockback, bool allowBlast) =>
+        Damage(index, amount, knockback, allowBlast, flash: true);
+
+    private bool Damage(int index, float amount, Vector2 knockback, bool allowBlast, bool flash)
     {
         // A stale index is not a caller error here, it is the normal consequence
         // of a death blast: one hit can remove several enemies, so every index
@@ -628,7 +664,8 @@ public partial class Horde : Node3D
             // The only confirmation a shot landed on something that lived. A
             // brute absorbing a magazine and a rifle missing it look identical
             // without this, because the brute keeps walking either way.
-            Pool.HitFlash[index] = 1.0f;
+            if (flash)
+                Pool.HitFlash[index] = 1.0f;
 
             // Resistance is a multiplier on displacement, not a threshold: a
             // knockback weapon should always do something to a brute, just far

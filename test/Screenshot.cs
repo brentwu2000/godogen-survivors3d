@@ -28,6 +28,7 @@ public partial class Screenshot : SceneTree
     private bool _mixed;
     private bool _throw;
     private bool _flash;
+    private bool _fx;
     private Node? _scene;
 
     public override void _Initialize()
@@ -65,6 +66,7 @@ public partial class Screenshot : SceneTree
             _mixed |= arg == "mixed";
             _throw |= arg == "throw";
             _flash |= arg == "flash";
+            _fx |= arg == "fx";
             if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
                 _warmup = Mathf.Max(1, frames);
         }
@@ -126,6 +128,25 @@ public partial class Screenshot : SceneTree
         {
             for (int i = 0; i < lit.Pool.Count; i++)
                 lit.Pool.HitFlash[i] = i % 2 == 0 ? 1.0f : 0.0f;
+        }
+
+        // Combat effects last between a twentieth and a second, so a still that
+        // happens to land on one is luck rather than a test. This drives the real
+        // paths — kills and a detonation — a few frames before the shutter, which
+        // is the only way to photograph them at the size they actually are.
+        if (_fx && _frame == _warmup - 4 && _scene != null)
+        {
+            var horde = _scene.GetNodeOrNull<Horde>("Horde");
+            var player = _scene.GetNodeOrNull<Player>("Player");
+
+            if (horde != null && player != null)
+            {
+                for (int i = 0; i < 10 && horde.Pool.Count > 0; i++)
+                    horde.Damage(horde.Pool.Count - 1, 9999.0f, Vector2.Zero);
+
+                horde.Detonate(player.GlobalPosition + new Vector3(5.0f, 0.0f, -3.0f), 4.5f, 55.0f);
+                horde.Hazards.Add(player.GlobalPosition + new Vector3(-6.0f, 0.0f, 2.0f), 3.5f, 22.0f, 7.0f);
+            }
         }
 
         if (++_frame < _warmup)
