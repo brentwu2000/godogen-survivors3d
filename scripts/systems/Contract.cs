@@ -105,5 +105,20 @@ public readonly struct Contract
         _ => "",
     };
 
-    private string VariantName(RunLog? log) => log?.TypeName(Subject) ?? Subject.ToString();
+    /// The log when there is one, and the horde's own list when there is not.
+    ///
+    /// The base screen has no `RunLog` — there is no run — so every job it drew
+    /// from the variant table read as "kill 20 4". Falling back to the index was
+    /// meant as a debugging aid and was only ever seen by the player. The list is
+    /// the same one the horde loads its `.tres` files from, so a name here cannot
+    /// disagree with the enemy it is asking for.
+    private string VariantName(RunLog? log)
+    {
+        if (log != null)
+            return log.TypeName(Subject);
+
+        return Subject >= 0 && Subject < Horde.TypeNames.Length
+            ? Horde.TypeNames[Subject]
+            : Subject.ToString();
+    }
 }

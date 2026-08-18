@@ -59,6 +59,28 @@ public sealed class Profile
     public int Streak { get; set; }
     public int BestStreak { get; set; }
 
+    /// The record book: things the run already measured and nothing kept.
+    ///
+    /// `RunRecord` has carried these since the debrief was built and every one of
+    /// them was read once, printed, and thrown away. A number a player can go
+    /// beat is worth more than the same number shown once — and unlike the four
+    /// above, these describe *how* a run went rather than how big it was, which
+    /// is what makes them targets for different kinds of play rather than one
+    /// leaderboard with four columns.
+    public int MostCrates { get; set; }
+    public int BestThrow { get; set; }
+    public int BestBossKills { get; set; }
+
+    /// The lowest health a survived run ever came back from. Starts at the
+    /// sentinel because zero would read as a perfect score forever.
+    public float NarrowestEscape { get; set; } = float.MaxValue;
+
+    /// The quickest extraction, which is a different skill from the longest.
+    public float FastestExtraction { get; set; } = float.MaxValue;
+
+    public bool HasNarrowEscape => NarrowestEscape < float.MaxValue;
+    public bool HasFastExtraction => FastestExtraction < float.MaxValue;
+
     /// Which three jobs are on the board. Stored as the seed they were rolled
     /// from rather than as three objects — one integer, no schema to migrate the
     /// next time a contract kind is added, and the same three cards come back
@@ -88,6 +110,72 @@ public sealed class Profile
     /// buying equipment — a choice made after the shop is a choice the loadout
     /// could not have been built for, which is the entire reason it exists.
     public int Biome { get; set; }
+
+    /// Daily results, date key to score. One entry per day, written once.
+    ///
+    /// A dictionary rather than "today's score and a best": the point of a daily
+    /// is the row of dates, and a single slot cannot say you have played eleven
+    /// days running.
+    public Dictionary<string, int> Daily { get; } = new();
+
+    /// Whether today's attempt has been spent. This is the one rule that makes a
+    /// daily a daily — without it, it is an ordinary run on a fixed seed, and a
+    /// player who does not like their result simply plays it again until they do.
+    public bool DailyDone(string dateKey) => Daily.ContainsKey(dateKey);
+
+    /// Records the attempt whether it was any good or not, including a zero for
+    /// dying. Refusing to record a bad run would make dying the way to keep the
+    /// attempt, which is the opposite of every other rule in this game.
+    public void RecordDaily(string dateKey, int score)
+    {
+        if (!Daily.ContainsKey(dateKey))
+            Daily[dateKey] = score;
+    }
+
+    /// Consecutive days played up to and including the given one. The number a
+    /// player is actually protecting once they have a few.
+    public int DailyStreak(string todayKey)
+    {
+        if (!Daily.ContainsKey(todayKey))
+            return 0;
+
+        int streak = 0;
+        string key = todayKey;
+
+        while (Daily.ContainsKey(key))
+        {
+            streak++;
+            key = PreviousDay(key);
+        }
+
+        return streak;
+    }
+
+    /// Date arithmetic on the key format, without a calendar library.
+    ///
+    /// Godot's Time helpers round-trip a Unix timestamp, which is exactly what is
+    /// wanted here: subtracting a day in seconds is correct across month ends and
+    /// leap years, and doing it by hand is not.
+    private static string PreviousDay(string key)
+    {
+        string[] parts = key.Split('-');
+        if (parts.Length != 3)
+            return "";
+
+        var dict = new Dictionary
+        {
+            { "year", parts[0].ToInt() },
+            { "month", parts[1].ToInt() },
+            { "day", parts[2].ToInt() },
+            { "hour", 12 },
+            { "minute", 0 },
+            { "second", 0 },
+        };
+
+        long stamp = Time.GetUnixTimeFromDatetimeDict(dict) - 86400;
+        Dictionary then = Time.GetDatetimeDictFromUnixTime(stamp);
+        return $"{then["year"]}-{(int)then["month"]:00}-{(int)then["day"]:00}";
+    }
 
     public bool HasUnlocked(string id) => Unlocked.Contains(id);
 
@@ -166,6 +254,15 @@ public sealed class Profile
         BestKills = Mathf.Max(BestKills, run.Kills);
         BestSeconds = Mathf.Max(BestSeconds, run.Seconds);
         BestMultiplier = Mathf.Max(BestMultiplier, run.Multiplier);
+
+        // The record book. Not reported in RecordsBeaten: five "you beat a
+        // record" lines on one debrief is five lines nobody reads, and these are
+        // targets to go and find rather than news.
+        MostCrates = Mathf.Max(MostCrates, run.CratesLooted);
+        BestThrow = Mathf.Max(BestThrow, run.BestThrowKills);
+        BestBossKills = Mathf.Max(BestBossKills, run.BossesKilled);
+        NarrowestEscape = Mathf.Min(NarrowestEscape, run.LowestHealth);
+        FastestExtraction = Mathf.Min(FastestExtraction, run.Seconds);
 
         Streak++;
         BestStreak = Mathf.Max(BestStreak, Streak);
@@ -277,6 +374,16 @@ public sealed class Profile
             { "unlocked", Unlocked },
             { "bosses_killed", BossesKilled },
             { "biome", Biome },
+            { "daily", Daily },
+            { "most_crates", MostCrates },
+            { "best_throw", BestThrow },
+            { "best_boss_kills", BestBossKills },
+
+            // The sentinels are written as-is. A profile that has never survived
+            // has no narrowest escape, and writing zero would mean it loads back
+            // as a perfect record nothing can ever beat.
+            { "narrowest_escape", NarrowestEscape },
+            { "fastest_extraction", FastestExtraction },
         };
 
         return Json.Stringify(root, "  ");
@@ -389,6 +496,27 @@ public sealed class Profile
 
         if (root.TryGetValue("biome", out Variant biome))
             profile.Biome = biome.AsInt32();
+
+        if (root.TryGetValue("daily", out Variant daily) && daily.VariantType == Variant.Type.Dictionary)
+        {
+            foreach (var pair in daily.AsGodotDictionary())
+                profile.Daily[pair.Key.AsString()] = pair.Value.AsInt32();
+        }
+
+        if (root.TryGetValue("most_crates", out Variant crates))
+            profile.MostCrates = crates.AsInt32();
+
+        if (root.TryGetValue("best_throw", out Variant throwKills))
+            profile.BestThrow = throwKills.AsInt32();
+
+        if (root.TryGetValue("best_boss_kills", out Variant bossKills))
+            profile.BestBossKills = bossKills.AsInt32();
+
+        if (root.TryGetValue("narrowest_escape", out Variant escape))
+            profile.NarrowestEscape = (float)escape.AsDouble();
+
+        if (root.TryGetValue("fastest_extraction", out Variant fastest))
+            profile.FastestExtraction = (float)fastest.AsDouble();
 
         if (root.TryGetValue("unlocked", out Variant unlocked) && unlocked.VariantType == Variant.Type.Array)
         {

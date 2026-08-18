@@ -17,4 +17,18 @@ public static class GameSession
     /// mean the answer depends on which node is ready first, which is the bug
     /// this project has now written down four times.
     public static int Biome { get; set; }
+
+    /// The date key when this run is today's challenge, or empty for a normal
+    /// run. A string rather than a bool, because what the meta layer has to do
+    /// when the run ends is write a result under a date — and a bool would mean
+    /// re-deriving which date, at a moment that could be the other side of
+    /// midnight from when the run started.
+    public static string DailyKey { get; set; } = "";
+
+    public static bool IsDaily => !string.IsNullOrEmpty(DailyKey);
+
+    /// The seed and the job, when it is a daily. Held rather than recomputed for
+    /// the same reason: one derivation, at launch.
+    public static ulong DailySeed { get; set; }
+    public static Contract DailyJob { get; set; }
 }

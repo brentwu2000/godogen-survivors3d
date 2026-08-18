@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/DailyProbe.cs` | yes | One date derives one run every time, consecutive days differ, the second attempt does not count, dying spends it too, a streak is consecutive days, and the score is mostly about the shared card |
 | `test/BiomeProbe.cs` | yes | Every biome loads, one has cover everywhere and the other has sight lines, the emptier one pays better for the walk, and both the crowd and a 0.35 m body can cross the dense one |
 | `test/LoadoutProbe.cs` | yes | No slot has a piece that beats its neighbour everywhere, a piece's rule is live before the first level-up, two sets permit two different decks, and the starting kit grants exactly nothing |
 | `test/UnlockProbe.cs` | yes | A fresh profile is offered less, every condition fires on its own run and nothing else's, opening one moves exactly one card, a locked row is listed and explains itself, and a save from before unlocks keeps what it proved |
@@ -289,6 +290,28 @@ achievements painted on it, and the first two hours would be the part of the gam
 does not have the good weapon yet. Locked growth options are absent from the deck rather than shown
 and refused — a card that explains itself is right in the shop, where the player is browsing, and
 wrong mid-run, where the offer is three seconds long and they are being chased.
+
+**Today's run is the reason to come back tomorrow**, and it works by being the same run for everyone
+and playable once. Take either half away and it is an ordinary run with a label on it: without a fixed
+derivation nobody is comparing anything, and without the single attempt a player who dislikes their
+result simply plays it again, at which point "everyone got the same one" also means "everyone got as
+many tries as they wanted".
+
+The date derives all three of the seed, the place and the job — a stable seed with a biome read from
+the profile would give every player the same layout somewhere else. It settles **nothing**: no
+credits, no stash, no practice, no personal bests, no unlocks, and no equipment lost either. The
+symmetry is the point. A daily that paid better than an ordinary run would turn the ordinary run into
+the practice mode; a daily that cost gear but paid nothing would be a mode nobody takes their good
+rifle into. What it pays is a row on the record and a streak of consecutive days.
+
+Dying spends the attempt. Every other rule here makes death expensive, and a daily that let you keep
+the day by dying would be a reroll button wearing a corpse. UTC throughout, because local time gives
+unlimited attempts for the price of changing a clock.
+
+**The record book** is the other half: `RunRecord` has always measured crates searched, the best
+single throw, bosses killed, the lowest health a run came back from and the fastest way out — and every
+one of them was read once, printed on the debrief, and thrown away. They sit next to the personal
+bests now, as targets for different kinds of play rather than one leaderboard with four columns.
 
 **Contracts are the only thing in the game that asks you to play differently.**
 Everything else — better gear, more practice, a longer curve — asks you to play
@@ -711,6 +734,20 @@ file rather than in any probe, because the probe's fixtures all had an all-zero 
 stage that was supposed to catch cross-firing had a written-in exemption saying the bow was allowed to
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
+
+**Every menu in this game has been double-spaced since the first one was built.**
+`StringBuilder.AppendLine` writes `Environment.NewLine`, which on Windows is `\r\n`, and Godot's Label
+treats the carriage return as a line break of its own. So each line drew twice as tall as it should,
+and the symptom — "the list runs off the bottom of the screen" — reads as a content problem. It was
+treated as one four separate times: the base screen was split into two columns for it, the shop list
+was given a scrolling window sized to it, and a per-item description was moved above the list because
+of it. One `Replace("\r\n", "\n")` on the way into the Label recovered half the screen; the window
+survives, sized to the screen this time, because the catalogue does only grow.
+
+**Skipping a run's settlement is not the same as skipping the run.** The daily's "settles nothing"
+rule was first written as an early `return` at the top of `OnRunEnded`, which also skipped freezing
+the record, writing the score, and showing the debrief — the mode turned itself off, including the
+part that records the result. It is a `settles` flag guarding the specific effects now.
 
 **The dense biome shipped with an exit the play-test bot could not reach.** "Could not reach
 extraction in 60 s, still 49 m away" — on a map whose own reachability check had carved nothing,

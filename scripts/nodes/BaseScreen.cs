@@ -57,6 +57,8 @@ public partial class BaseScreen : Control
             Reroll();
         else if (Input.IsActionJustPressed("menu_biome"))
             CycleBiome();
+        else if (Input.IsActionJustPressed("menu_daily"))
+            LaunchDaily();
         else
             return;
 
@@ -210,8 +212,41 @@ public partial class BaseScreen : Control
         _message = "nowhere else to go yet";
     }
 
+    /// Today's run, once.
+    ///
+    /// The refusal is the feature. Without it this is an ordinary run on a fixed
+    /// seed, and a player who does not like their result simply plays it again
+    /// until they do — at which point "everyone got the same one" stops meaning
+    /// anything, because everyone also got as many tries as they wanted.
+    private void LaunchDaily()
+    {
+        DailyRun.Setup today = DailyRun.Today();
+
+        if (_profile.DailyDone(today.DateKey))
+        {
+            _message = $"today's run is done — {_profile.Daily[today.DateKey]} points. " +
+                       $"the next one is tomorrow";
+            return;
+        }
+
+        GameSession.LaunchedFromBase = true;
+        GameSession.Biome = today.Biome;
+        GameSession.DailyKey = today.DateKey;
+        GameSession.DailySeed = today.LevelSeed;
+        GameSession.DailyJob = today.Job;
+
+        Persist();
+        GetTree().ChangeSceneToFile("res://scenes/Main.tscn");
+    }
+
     private void Launch()
     {
+        // Cleared, not merely unset elsewhere. These are statics that outlive a
+        // scene by design, so an ordinary run launched after a daily would still
+        // be one unless something says otherwise — and it would silently score
+        // itself into today's slot.
+        GameSession.DailyKey = "";
+
         GameSession.LaunchedFromBase = true;
 
         // Handed over here rather than read from the profile by the level, so
@@ -305,19 +340,34 @@ public partial class BaseScreen : Control
         if (last < _catalogue.All.Count)
             text.AppendLine($"     ... {_catalogue.All.Count - last} below");
 
-        _screen.Text = text.ToString();
-        _side.Text = SideColumn();
+        // Newlines normalised on the way into the Label.
+        //
+        // `StringBuilder.AppendLine` writes `Environment.NewLine`, which on
+        // Windows is "\r\n", and Godot's Label treats the carriage return as a
+        // line break of its own — so every line of both columns has been drawn
+        // double-spaced since the first screen was built. It reads as a design
+        // choice rather than as a bug, which is why it survived four phases of
+        // "the list runs off the bottom" being treated as a content problem.
+        _screen.Text = Unix(text.ToString());
+        _side.Text = Unix(SideColumn());
     }
+
+    private static string Unix(string text) => text.Replace("\r\n", "\n");
 
     /// The slice of the catalogue to draw, following the cursor.
     ///
-    /// Twelve rows is what fits under the header at this font size with the two
-    /// "... n more" markers accounted for. Clamped at both ends rather than
-    /// centred unconditionally, so the top of the list is not permanently half a
-    /// screen of empty space when the cursor is on the first item.
+    /// Twenty-four rows, which is what fits under the header now that the text is
+    /// not double-spaced. It was twelve, chosen when every line was drawn twice
+    /// as tall as it should have been — a window sized to a bug rather than to the
+    /// screen. Kept as a window rather than removed, because the catalogue does
+    /// only grow.
+    ///
+    /// Clamped at both ends rather than centred unconditionally, so the top of the
+    /// list is not permanently half a screen of empty space when the cursor is on
+    /// the first item.
     private (int First, int Last) Window(int count)
     {
-        const int Rows = 12;
+        const int Rows = 24;
 
         if (count <= Rows)
             return (0, count);
@@ -419,6 +469,27 @@ public partial class BaseScreen : Control
                         $"lasted {_profile.BestSeconds:F0}s");
         text.AppendLine($"  multiplier x{_profile.BestMultiplier:F2}      " +
                         $"streak {_profile.BestStreak} (now {_profile.Streak})");
+
+        // The record book: things the run has always measured and nothing kept.
+        // Sentinel values are printed as a dash rather than as a number, because
+        // "narrowest escape 3.4e+38 HP" is worse than saying it has not happened.
+        text.AppendLine($"  crates {_profile.MostCrates}      " +
+                        $"best throw {_profile.BestThrow}      " +
+                        $"bosses {_profile.BestBossKills}");
+        text.AppendLine($"  narrowest escape {(_profile.HasNarrowEscape ? $"{_profile.NarrowestEscape:F0} HP" : "—")}" +
+                        $"      fastest out {(_profile.HasFastExtraction ? $"{_profile.FastestExtraction:F0}s" : "—")}");
+        text.AppendLine();
+
+        DailyRun.Setup today = DailyRun.Today();
+        bool done = _profile.DailyDone(today.DateKey);
+        int streak = _profile.DailyStreak(today.DateKey);
+
+        text.AppendLine($"TODAY  {today.DateKey}");
+        text.AppendLine($"  {BiomeBook.Load(today.Biome).BiomeName} — {today.Job.Describe()}");
+        text.AppendLine(done
+            ? $"  done: {_profile.Daily[today.DateKey]} points" +
+              (streak > 1 ? $"      {streak} days running" : "")
+            : "  [D] play it — one attempt, no credits, no risk");
         text.AppendLine();
 
         text.AppendLine("CONTRACTS");
@@ -442,6 +513,7 @@ public partial class BaseScreen : Control
         text.AppendLine("  up/down choose          enter buy or equip");
         text.AppendLine("  [1][2][3] take a contract");
         text.AppendLine($"  [R] reroll contracts ({ContractBook.RerollCost} cr)");
+        text.AppendLine("  [B] change terrain      [D] today's run");
         text.AppendLine("  [S] sell stash          [L] launch");
 
         if (_message.Length > 0)

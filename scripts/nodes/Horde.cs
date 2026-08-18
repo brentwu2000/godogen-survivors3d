@@ -68,7 +68,7 @@ public partial class Horde : Node3D
     /// Variant order. Drives three things at once — the .tres to load, the sprite
     /// stacked at that layer, and the byte stored per instance — so they cannot
     /// drift apart the way three separate lists would.
-    private static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
+    public static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
 
     /// A kill, for anything that wants to count them. A plain C# event rather
     /// than a Godot signal: both ends are C#, and EmitSignal marshals a Variant

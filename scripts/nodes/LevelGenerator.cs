@@ -90,6 +90,13 @@ public partial class LevelGenerator : Node3D
     public override void _Ready()
     {
         Biome = BiomeBook.Load(GameSession.Biome);
+
+        // The daily pins the layout as well as the place. Everyone getting the
+        // same biome and a different map would make "the same run for everyone"
+        // a claim about the ground colour.
+        if (GameSession.IsDaily)
+            Seed = GameSession.DailySeed;
+
         Generate();
     }
 

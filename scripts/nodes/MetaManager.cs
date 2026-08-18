@@ -184,9 +184,24 @@ public partial class MetaManager : Node
         var runState = (RunState)state;
         bool survived = runState == RunState.Extracted;
 
+        // A daily settles nothing into the profile — no credits, no stash, no
+        // equipment lost, and no run counted. It is a scored attempt at a fixed
+        // puzzle, and the moment it also pays better than an ordinary run, the
+        // ordinary run becomes the practice mode.
+        //
+        // The symmetry matters as much as the rule. A daily that cost gear but
+        // paid nothing would be a mode nobody takes their good rifle into, which
+        // is a different way of not being played.
+        //
+        // Guarded rather than returned early: the record still has to be frozen,
+        // the score still has to be written, and the debrief still has to run.
+        // The first version of this returned here and switched the whole mode off
+        // — including the part that records the result.
+        bool settles = !GameSession.IsDaily;
+
         // Stash contents follow the same rule as credits: everything on an
         // extraction, only the safe box otherwise.
-        if (_player != null)
+        if (settles && _player != null)
         {
             if (survived)
                 StashAll(_player.Backpack);
@@ -194,17 +209,21 @@ public partial class MetaManager : Node
             StashAll(_player.SafeBox);
         }
 
-        Profile.Credits += bankedValue;
-
         string[] lost = System.Array.Empty<string>();
-        if (survived)
+
+        if (settles)
         {
-            Profile.RunsSurvived++;
-        }
-        else
-        {
-            Profile.RunsLost++;
-            lost = LoseCarriedEquipment();
+            Profile.Credits += bankedValue;
+
+            if (survived)
+            {
+                Profile.RunsSurvived++;
+            }
+            else
+            {
+                Profile.RunsLost++;
+                lost = LoseCarriedEquipment();
+            }
         }
 
         // Practice is knowledge, not cargo — it survives a death. Banked once
@@ -235,7 +254,12 @@ public partial class MetaManager : Node
         LastRun = _log?.Freeze(runState, bankedValue, practice, hits, lost)
                   ?? new RunRecord { Outcome = runState, Banked = bankedValue };
 
-        LastRecordsBeaten = Profile.ApplyRecords(LastRun);
+        // Records and unlocks are part of settling too. A daily that could set a
+        // personal best would let a favourable fixed seed stand in for a run the
+        // player actually had, and a daily death that broke the extraction streak
+        // would make the mode something to avoid on a good streak — which is the
+        // opposite of a reason to come back.
+        LastRecordsBeaten = settles ? Profile.ApplyRecords(LastRun) : default;
         SettleContract(LastRun);
 
         // After ApplyRecords, not before. Two conditions ask about a career
@@ -243,12 +267,17 @@ public partial class MetaManager : Node
         // has been counted — and asking first would delay those unlocks by
         // exactly one run, which looks from the outside like a condition that
         // does not work.
-        Profile.BossesKilled += LastRun.BossesKilled;
-        NewUnlocks = UnlockBook.NewlyMet(LastRun, Profile);
-        foreach (Unlock unlock in NewUnlocks)
+        NewUnlocks = new System.Collections.Generic.List<Unlock>();
+
+        if (settles)
         {
-            Profile.Open(unlock.Id);
-            GD.Print($"unlocked: {unlock.Name} ({unlock.Condition})");
+            Profile.BossesKilled += LastRun.BossesKilled;
+            NewUnlocks = UnlockBook.NewlyMet(LastRun, Profile);
+            foreach (Unlock unlock in NewUnlocks)
+            {
+                Profile.Open(unlock.Id);
+                GD.Print($"unlocked: {unlock.Name} ({unlock.Condition})");
+            }
         }
 
         Persist();
@@ -270,6 +299,26 @@ public partial class MetaManager : Node
     /// commitment made before leaving into a formality.
     private void SettleContract(RunRecord run)
     {
+        // A daily carries its own job and leaves the player's board alone.
+        //
+        // Overwriting `ContractIndex` to run the daily would spend whatever the
+        // player had committed to before they left — the board is a decision made
+        // in advance, and a side mode that silently cashes it in is a side mode
+        // that costs something it never said it would.
+        if (GameSession.IsDaily)
+        {
+            ContractTaken = GameSession.DailyJob;
+            ContractMet = GameSession.DailyJob.IsMet(run);
+
+            int score = DailyRun.Score(run, ContractMet);
+            Profile.RecordDaily(GameSession.DailyKey, score);
+
+            GD.Print($"daily {GameSession.DailyKey}: {score} " +
+                     $"({GameSession.DailyJob.Describe(_log)} — {(ContractMet ? "met" : "missed")}), " +
+                     $"streak {Profile.DailyStreak(GameSession.DailyKey)}");
+            return;
+        }
+
         ContractTaken = Profile.AcceptedContract;
         ContractMet = ContractTaken?.IsMet(run) ?? false;
 

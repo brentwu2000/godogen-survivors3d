@@ -157,7 +157,9 @@ public partial class DebriefScreen : CanvasLayer
         foreach (Unlock unlock in meta.NewUnlocks)
             text.AppendLine($"unlocked {unlock.Name} — {unlock.Condition.ToLower()}");
 
-        return text.ToString();
+        // "\r\n" from AppendLine draws as two breaks in a Godot Label. Same fix
+        // as the base screen; the debrief has been double-spaced for as long.
+        return text.ToString().Replace("\r\n", "\n");
     }
 
     private static string KillBreakdown(RunRecord run, RunLog? log)
