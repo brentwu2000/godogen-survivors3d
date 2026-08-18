@@ -129,6 +129,14 @@ public partial class LootContainer : Node3D
         EmitSignal(SignalName.Emptied, RollInto(_player.Backpack));
     }
 
+    /// Rolls this crate's table into a bag without emptying it.
+    ///
+    /// For probes asking what a crate *contains* rather than what a run happened
+    /// to pick up. A stage that read the rarity bias instead would be reading the
+    /// input to the question — which is exactly how a cache named "supply" shipped
+    /// full of jewellery.
+    public void RollIntoForTesting(Inventory bag) => RollInto(bag);
+
     /// Returns the value actually taken — a full backpack means the crate is
     /// still emptied but the loot is left behind, which is the honest outcome.
     private int RollInto(Inventory backpack)

@@ -344,6 +344,27 @@ public partial class AutoPlay : SceneTree
         // Weapon first while healthy, survival first when not. A bot that always
         // takes damage measures a player who never notices they are dying, and
         // reports the run as harder than it is.
+        // Unchanged, and that is a measured decision rather than an oversight.
+        //
+        // This list was written in Phase 8 when the deck was five options; pierce,
+        // crit, fire rate and area arrived in Phase 18 and it never learned about
+        // them. That looks like staleness, and two corrections were tried across
+        // eight seeds at a 180 s linger:
+        //
+        //   original list, random fallback   4 of 8 walk out
+        //   damage options as the fallback   3 of 8
+        //   damage options first             2 of 8
+        //
+        // Monotone in the direction of "more damage, fewer survivors", and small
+        // — four against three is one seed. Nothing beat the list that was already
+        // here, so it stayed. The mechanism is at least coherent: damage converts
+        // into survival only if you can use the range it buys, and this bot cannot
+        // dodge or kite. It walks to a point and stands there, and its max health
+        // came out at 100-124 on the damage-first runs against 136-148 here.
+        //
+        // A real player's ordering is almost certainly the opposite. That gap is
+        // the most useful thing to know about every balance number in this file,
+        // and it is worth more written down than papered over.
         bool hurt = _player.Health < _player.MaxHealth * 0.6f;
         int index = hurt
             ? IndexOf(GrowthOption.MaxHealth, GrowthOption.Armour, GrowthOption.WeaponLevel)
@@ -794,6 +815,24 @@ public partial class AutoPlay : SceneTree
     {
         if (_noLoot)
             return Circuit();
+
+        // The boss is deliberately *not* a target here, and that is a limitation
+        // rather than a decision.
+        //
+        // It guards the richest thing in the run — a cache biased at 3.2 — so the
+        // reward for staying past 40% of the clock is behind it, and this bot
+        // cannot collect it. Three versions were tried and all three were worse
+        // than ignoring it: walk to the boss (dead in twenty seconds, because it
+        // does 26 contact damage a second and the target was its exact position);
+        // hold at 13 m (dead anyway, because it arrives at the same moment the
+        // horde reaches its cap); engage only while healthy with fewer than 25
+        // things close (turned a seed that banked 1735 into a death at 114 s).
+        //
+        // Fighting it wants kiting and cover, which is real combat AI rather than
+        // a target-selection rule. So the boss cache is content no measurement in
+        // this file can reach, and the payout for staying past two minutes is
+        // *unverified* rather than verified-as-bad. Written down instead of
+        // patched until the number came out right.
 
         LootContainer[] best = BestCrates(_player.GlobalPosition, 1, announce: false);
         return best.Length > 0 ? best[0].GlobalPosition : Circuit();

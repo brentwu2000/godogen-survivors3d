@@ -973,10 +973,58 @@ Four seeds, four loiter tiers, banked credits, before and after:
 | `2654435769` | 335 | 1911 | died | died |
 | `625341585` | 481 | 1023 | died | died |
 
-**Where the run survives, the curve is now monotonic — which is the shape the whole loop is built
-around.** Where it does not, nothing changed: both of those seeds were already dying in the second
-half before the caches existed. Fixing the payout did not fix survival, and saying so is the point of
-recording both. That is the next lever, and it is a different one.
+**Those numbers were taken with the caches biased at 2.4, and that was wrong.** `RarityBias` multiplies
+an item's draw weight once per rarity step, so 2.4 makes a treasure chest: it rolls serums and circuit
+boards, the only two entries in the table with no use at all. The payout curve went up beautifully and
+did nothing for the problem — a run diagnosed at 144 s was dry since 69 s and died holding 640 credits
+of loot it could not spend on anything. Naming a thing "supply" does not make it one. They are at 1.4
+now, where rounds and canned food are the heaviest entries and medkits are reachable, and the payout
+above is correspondingly lower.
+
+**Fixing the payout did not fix survival, and the two are separate levers.** Four of eight seeds reach
+180 s. Recording both is the point.
+
+### Why the second half kills you
+
+Not the crowd. A death at 144 s, read off the ten-second trace: **dry since 69 s**, weapon at level 0
+of 8 after five picks, and a bag holding 640 credits of loot with no use — circuit boards and serums,
+the two entries in the item table you cannot spend on staying alive. The horde goes from 35 enemies at
+10 s to 160 at 100 s while the weapon's whole climb is 12 damage to 17.8, and `GrowthProbe` puts that
+climb at eleven picks. Enemy throughput grows about 4.5x; player damage grows about 1.5x, and only if
+the deck cooperates.
+
+**Three things were tried against that and two of them made it worse.** Written down because a phase
+that only records what worked is a phase that will make the same mistakes again:
+
+- **Teaching the bot to fight the boss.** It guards the richest thing in the run, so the reward for
+  staying past 40% of the clock is behind it. Walking to it died in twenty seconds (26 contact damage
+  a second, and the orbit target was its exact position); holding at 13 m died anyway, because it
+  arrives at the same moment the horde reaches its cap; engaging only while healthy with fewer than 25
+  things close turned a seed that banked 1735 into a death at 114 s. Fighting it wants kiting and
+  cover, which is combat AI and not a target-selection rule. **So the boss cache is content no
+  measurement here can reach, and the payout for staying past two minutes is _unverified_ rather than
+  verified-as-bad.**
+- **Preferring damage cards.** The bot's preference list was written in Phase 8 and never learned about
+  pierce, crit, fire rate or area, which arrived in Phase 18 — so it looked stale, and damage-first
+  looked like the obvious correction. Eight seeds, 180 s linger, same map each time:
+
+  | Ordering | Walked out of 8 |
+  | :--- | ---: |
+  | original list, random fallback | **4** |
+  | damage options as the fallback | 3 |
+  | damage options first | 2 |
+
+  Monotone in the direction of "more damage, fewer survivors", and small: four against three is one
+  seed. Not a result to build on, but nothing beat the list that was already there, so it stayed.
+  The mechanism is at least coherent — damage converts into survival only if you can use the range it
+  buys, and this bot cannot dodge or kite; it walks to a point and stands there. Its max health came
+  out at 100–124 on the damage-first runs against 136–148 on the originals. For an agent with no
+  movement skill, health and armour *are* its damage cards, and even the random fallback was picking
+  them more often than a damage-first list did.
+
+  **A real player's ordering is almost certainly the opposite**, which is the most useful thing to know
+  about every balance number in this file.
+- **Fixing the cache contents.** This one worked, and it is the change that shipped.
 
 **The first schedule was 46% and 72% and it was wrong for a reason worth writing down.** Evenly spaced
 is tidy; 46% of a 300 s run is 138 s, comfortably after the window the drop was written to fix, and a

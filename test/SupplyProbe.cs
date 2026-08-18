@@ -73,7 +73,7 @@ public partial class SupplyProbe : SceneTree
         switch (_stage)
         {
             case 0: return RunStage(StageDropsLandOnSchedule, "supplies land on the clock, once each");
-            case 1: return RunStage(StageDropsAreWorthTheWalk, "a drop is richer than the map it lands on");
+            case 1: return RunStage(StageDropsAreSupplies, "a supply drop supplies things you can spend");
             case 2: return RunStage(StageLateCrateIsCounted, "a crate that arrives mid-run is counted when it is emptied");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
@@ -142,35 +142,57 @@ public partial class SupplyProbe : SceneTree
                && afterAll == before + schedule.Length;
     }
 
-    /// A drop nobody would walk to is scenery.
+    /// The stage that would have caught the first version of this feature.
     ///
-    /// The point of the cache is that the second half of the run has somewhere to
-    /// go, and the bot decides where to go by rarity bias against distance — so a
-    /// cache biased like an ordinary crate would be ignored by the same rule that
-    /// makes the deep crates worth reaching.
-    private bool? StageDropsAreWorthTheWalk(int tick)
+    /// It originally asserted the cache was *richer* than anything the map placed
+    /// — a bias of 2.4 against the deep crates' 1.75 — and passed. The bias
+    /// multiplies an item's draw weight once per rarity step, so 2.4 makes a
+    /// treasure chest: it rolls serums and circuit boards, the only two entries in
+    /// the table with no use at all. The payout curve went up beautifully and the
+    /// bot still died at 144 s, dry since 69 s, holding 640 credits it could not
+    /// spend on anything.
+    ///
+    /// So the property is not rarity. It is that what comes out can be *used*,
+    /// and the only way to check that is to open one.
+    private bool? StageDropsAreSupplies(int tick)
     {
-        float best = 0.0f;
-        float dropBias = 0.0f;
-        float furthest = 0.0f;
-
+        LootContainer? cache = null;
         foreach (Node child in Crates())
         {
-            if (child is not LootContainer crate)
-                continue;
-
-            if (crate.Name.ToString().StartsWith("Supply"))
-                dropBias = Mathf.Max(dropBias, crate.RarityBias);
-            else
-                best = Mathf.Max(best, crate.RarityBias);
-
-            furthest = Mathf.Max(furthest, crate.Position.Length());
+            if (child is LootContainer crate && crate.Name.ToString().StartsWith("Supply"))
+                cache = crate;
         }
 
-        GD.Print($"  best placed crate is x{best:F2}, a supply drop is x{dropBias:F2} " +
-                 $"(the map runs out to {furthest:F0}m)");
+        if (cache == null)
+        {
+            GD.PushError("  no supply cache on the field");
+            return false;
+        }
 
-        return dropBias > best;
+        // Rolled into a bag of its own rather than the player's, so the stage
+        // measures the cache's table and not whatever the run has been carrying.
+        var bag = new Inventory(200);
+        cache.RollIntoForTesting(bag);
+
+        int usable = 0, inert = 0;
+        var names = new System.Collections.Generic.List<string>();
+
+        for (int i = 0; i < bag.EntryCount; i++)
+        {
+            ItemResource item = bag.ItemAt(i);
+            names.Add(item.ItemName);
+
+            if (item.IsUsable || item.IsThrowable)
+                usable++;
+            else
+                inert++;
+        }
+
+        GD.Print($"  a cache rolls {usable} spendable and {inert} inert: {string.Join(", ", names)}");
+
+        // A majority, not merely a presence. One box of rounds among six trinkets
+        // is a treasure chest with a token gesture in it.
+        return usable > inert;
     }
 
     /// The bug this probe was written for.

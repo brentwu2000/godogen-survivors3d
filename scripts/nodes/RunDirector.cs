@@ -379,10 +379,27 @@ public partial class RunDirector : Node3D
             0.0f,
             Mathf.Clamp(around.Z + Mathf.Sin(angle) * SupplyDropRange, -ArenaExtent, ArenaExtent));
 
-        // Rich, and rich in the things the second half is short of. The bias is
-        // below the boss cache's on purpose — this arrives for turning up, and
-        // that one is paid for.
-        if (!DropCache($"Supply{_suppliesDropped}", at, bias: 2.4f, rolls: 4, seconds: 2.0f))
+        // Many common rolls, not a few rare ones — and this is the correction to
+        // the version that shipped an hour ago.
+        //
+        // `RarityBias` multiplies an item's draw weight once per rarity step, so
+        // a cache at 2.4 is a treasure chest: it rolls serums and circuit boards,
+        // the two things in the table with no use at all. It raised the payout
+        // curve beautifully and did nothing whatsoever for the problem, because
+        // the run was not short of *value* — the bot died at 144 s holding 640
+        // credits of unusable loot, dry since 69 s.
+        //
+        // At 1.0 the table is its own flat weights, where rifle rounds and canned
+        // food are the heaviest entries. Seven of those is a supply drop. The
+        // boss cache keeps its 3.2, because that one is a reward and this one is
+        // a resupply, and naming a thing "supply" does not make it one.
+        // 1.4, between the two versions that were tried and each measured well on
+        // a different axis. At 1.0 the table is its own flat weights and a cache
+        // is rounds and canned food; at 2.4 it is serums and circuit boards, and
+        // the run does not need more *value*. 1.4 keeps rounds and food as the
+        // heaviest entries while lifting medkits and adrenaline — the uncommons
+        // that are also consumable — to something a second-minute run can rely on.
+        if (!DropCache($"Supply{_suppliesDropped}", at, bias: 1.4f, rolls: 7, seconds: 2.0f))
             return;
 
         GD.Print($"supply drop {_suppliesDropped} at {Elapsed:F0}s, " +
