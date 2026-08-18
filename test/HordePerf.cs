@@ -51,6 +51,19 @@ public partial class HordePerf : SceneTree
             return;
         }
 
+        // A fixed layout, set before the scene enters the tree because the
+        // generator runs in _Ready.
+        //
+        // This did not used to matter: every piece of cover was the same box with
+        // the same material, so the arena contributed a constant to the draw call
+        // count no matter what the seed did. Cover is now grouped into one
+        // MultiMesh per kind, and which kinds a seed uses is a number this test
+        // reports — so without a pinned seed the headline figure moves by a
+        // couple every run, for reasons the measurement did not choose.
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null)
+            level.Seed = 0x51E5D0A7UL;
+
         GetRoot().AddChild(scene);
     }
 

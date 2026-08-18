@@ -320,10 +320,18 @@ public partial class BuildMain : SceneTree
     {
         var body = new StaticBody3D { Name = "Ground" };
 
+        var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ground.gdshader") };
+        material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground.png"));
+
+        // MaterialOverride rather than a material on the mesh: this node is
+        // owned by the scene, so the override serialises — the case godot.md:46
+        // warns about is an override on a node *inside* an imported GLB, whose
+        // owner the packer skips.
         body.AddChild(new MeshInstance3D
         {
             Name = "Mesh",
             Mesh = new PlaneMesh { Size = new Vector2(size, size) },
+            MaterialOverride = material,
         });
 
         // A plane collider has no thickness for fast movers to miss, so the floor

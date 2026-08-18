@@ -4,7 +4,7 @@ A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Braw
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
-Status: both loops close, the surface is on, and the run reports itself. A run is fight, loot, grow,
+Status: both loops close, the surface is on, the run reports itself, and the arena is a place. A run is fight, loot, grow,
 extract on an arena generated fresh each time; it ends on a debrief rather than a timer; between runs
 a base screen turns what came back into gear that changes the next one, offers three contracts and
 keeps your records, and dying in that gear loses it. Five enemy variants with their own art, finite
@@ -77,14 +77,22 @@ it in rather than shipping a silent film of a phase that was mostly about sound.
 integer PCM** — read as 16-bit it looks like a wall of full-scale clipping, which is entirely an
 artefact of the wrong sample width and cost one wrong tuning pass to work out.
 
-`--quit-after N` writes exactly N frames, so that number *is* the edit: 800 @ 30 fps = 26.7 s. The
-extraction hold completes around frame 735, so 700 ends on a nearly-full bar and cuts the payoff the
-whole clip walks toward. `screenshots/` is not versioned; re-run the above to regenerate it.
+`--quit-after N` writes exactly N frames, so that number *is* the edit. The film ends on the debrief
+rather than on the banner — the capture sets `GameSession.LaunchedFromBase`, and since the report waits
+for a key nobody presses, the last seconds are what the run was worth. Capture 700 and encode 640 (21.3
+s): the run finishes around frame 525, which leaves the report on screen long enough to read and short
+enough not to be dead air. `screenshots/` is not versioned; re-run the above to regenerate it.
 
-`Presentation.cs` injects compressed values into `_Initialize` — 70 enemies at open, a 40 s run,
-extraction open from t=0, spawn 6→11/s, and an opening crowd drawn from mid-run intensity — and does
-not touch `RunDirector`'s own defaults. Shot at shipping numbers the first minute is an empty field:
-correct by design, and nothing to film.
+`Presentation.cs` injects compressed values into `_Initialize` — 44 enemies at open, a 40 s run,
+extraction open from t=0, spawn 6→8.5/s, and an opening crowd drawn from an intensity just under the
+brute's unlock so the brutes *arrive* — and does not touch `RunDirector`'s own defaults. Shot at
+shipping numbers the first minute is an empty field: correct by design, and nothing to film.
+
+It walked in straight lines until Phase 14 put real cover on the map, and then spent every take pressed
+against a container while the horde ate it — the run died at fifteen seconds having banked the same 98
+each time. `AutoPlay` learned this in Phase 10 and got a flow field; the capture script had not, because
+at the time the arena was five grey boxes and a straight line was fine. Routing around cover then made
+the two-crate route too long to finish inside the clip, so the film visits one crate.
 
 Three of those numbers were found by watching the result rather than by reasoning about it. A 110 s
 run only reaches intensity 0.2 inside the clip, so the brute, bloater and spitter never appeared —
@@ -288,6 +296,33 @@ exactly this. One catch, which bit: a MultiMesh with `use_colors` **off** still 
 an opaque white `COLOR`, so the same shader drew every projectile at full flash, permanently white. A
 `flash_enabled` uniform turns the channel off explicitly. The bug appeared only on the renderer that
 opted out, while the horde it was written for was correct throughout.
+
+**Cover is procedural, and that is a constraint rather than a preference.** Fifty to seventy pieces of
+cover have to stay inside a draw-call budget that has been near twenty since Phase 2, which means
+MultiMesh — and MultiMesh loses an *imported* mesh on pack/save. Boxes are the combination that is
+allowed. Grouped by kind, the cost stops depending on how many the seed placed. The measured price was
+19 → 36 draw calls, against a written target of 30 that turned out to be based on the wrong model:
+every MultiMesh costs one call in the main pass *and one per shadow split*, so seven kinds is not +7.
+Landmarks were switched to not cast (their shadows fall across play space they are not in, which reads
+as a rendering fault) and the number is what it is. 500 enemies still run at 1.72 ms median with zero
+GC.
+
+**Vertex colours are linear; texture pixels are sRGB.** Writing 0.46 in both places gives two visibly
+different greys — the props came out at roughly the square root of their intended value and read as
+polystyrene next to an asphalt floor that was correct. The first attempt at a fix was to darken the
+palette by eye, which was the wrong direction; sampling a rendered pixel showed 0.30 arriving as 0.57,
+which is the sRGB curve and nothing else. `MeshBuilder` converts once, on the way in.
+
+**Face winding is fixed, never worked around.** Wound the wrong way the boxes still draw — as their own
+interiors, lit from behind, which looks like every prop being made of black plastic rather than like a
+culling bug. Turning on `CullMode.Disabled` would have hidden it and removed the shadows with it, so
+the "safety net" is the thing that breaks the lighting.
+
+**The layout has to be readable from the floor.** The generator picks one of four tile kinds per grid
+cell and, until Phase 14, all of them looked identical from the ground — a decision the player could
+not perceive, which is the same as not making one. The ground shader tints by a 5×5 texture written
+per run, filtered, so zones blend rather than showing painted borders. One draw call; a decal quad per
+cell would have been twenty-five more.
 
 **One audio bus, fourteen voices, one ambience layer.** The rule that shaped the renderer shapes the
 mix: the cost of a crowd must not scale with the crowd. Kills are gated to one death sound per 70 ms
@@ -509,7 +544,15 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/sprites/blob_shadow.png` | generated | 128×128 | ground decal |
 | `assets/shaders/horde_billboard.gdshader` | hand-written | — | horde + projectiles |
 | `assets/shaders/vignette.gdshader` | hand-written | — | full-screen damage tint |
+| `assets/shaders/ground.gdshader` | hand-written | — | tiled floor, tinted per grid cell |
+| `assets/textures/ground.png` | synthesised by `BuildGroundTexture.cs` | 512×512, seamless | 4.5 m tile |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
+
+Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
+barriers, rubble heaps, walls, dumpsters, and two landmarks — and `PropRenderer` draws each kind as
+one MultiMesh. Nothing is imported, which is what makes that legal: MultiMesh silently loses an
+imported mesh on pack/save, and cover that was boxes to begin with already carries its own collider
+instead of needing a primitive measured off an AABB.
 
 **Every layer of the horde array must be exactly 176×256.** That is the array format's rule, not a
 preference, and it is a build-time failure rather than a visual one. `BuildEnemySprites.cs` enforces
@@ -539,16 +582,20 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-Everything the player looks at has now had a pass — creatures, the player, the readout, the sound, the
-feedback, and the report that ends a run — **except the thing they stare at for three hundred seconds**.
-The ground is one untextured plane and the cover is fifty grey boxes, and after the art landed those
-boxes became the weakest thing on screen.
+Everything the player looks at has now had a pass. What is left is **whether the numbers behind it still
+work**.
 
-That is Phase 14: textured ground, cover as real CC0 props, a visible difference between the three
-tile types the generator already places, and landmarks to navigate by now that the exits move. The
-technical question it has to answer first is draw calls — fifty individual GLB instances would triple
-the frame's budget, and MultiMesh silently loses an imported mesh on save, so the way through is to
-copy the GLB's mesh into a procedural `ArrayMesh` at build time. See the roadmap.
+The linger curve moved under Phase 14: on one pinned seed, leaving at 0 s banks 381, at 60 s banks 698,
+and at 120 s the bot dies with 296 enemies on the field. Some of that is the layout changing because the
+prop code consumes the RNG differently, and some of it is real — cover makes the horde pile up, which
+Phase 10 first noticed and which the capture script ran into head-on when the same settings that filmed
+a clean extraction started killing the bot at fifteen seconds. **A three-hundred-second deadline is only
+a deadline if someone can reach it.**
+
+That is Phase 15: measure the curve across several seeds before touching anything, then reach for a
+field cap or stronger separation before touching the spawn rate — the pile-up looks like a pathing
+problem wearing a difficulty problem's clothes. The base screen, still a monospace list next to a HUD
+made of bars, comes along with it. See the roadmap.
 
 Engineering gaps, separately:
 

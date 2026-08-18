@@ -80,11 +80,78 @@ public partial class LevelProbe : SceneTree
             case 3: return RunStage(StageReachable, "every open pad is reachable from spawn");
             case 4: return RunStage(StageWallsAreBaked, "the horde routes around the generated walls");
             case 5: return RunStage(StageSweep, "no seed produces a sealed objective");
+            case 6: return RunStage(StageGroundReadsTheLayout, "the ground says which tile you are standing on");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
                 return true;
         }
+    }
+
+    /// The floor has to agree with what is standing on it.
+    ///
+    /// The generator picks a tile per cell and two things consume that choice: the
+    /// cover pool and the ground tint. They are read in different places and
+    /// nothing ties them together, so a map that places containers on dust — or,
+    /// worse, tints every cell the same and quietly stops telling the player
+    /// anything — is a defect with no symptom other than the map feeling flat.
+    ///
+    /// Checked against the texture actually handed to the shader, not against the
+    /// array it was built from: a tint that never reached the material is exactly
+    /// the failure this is for.
+    private bool? StageGroundReadsTheLayout(int tick)
+    {
+        int[] tiles = _level!.TileMap;
+        if (tiles.Length != _level.GridSize * _level.GridSize)
+        {
+            GD.Print($"  tile map is {tiles.Length}, expected {_level.GridSize * _level.GridSize}");
+            return false;
+        }
+
+        var mesh = _level.GetParent().GetNodeOrNull<MeshInstance3D>("Ground/Mesh");
+        if (mesh?.MaterialOverride is not ShaderMaterial material)
+        {
+            GD.Print("  the ground has no shader material");
+            return false;
+        }
+
+        if (material.GetShaderParameter("zones").As<Texture2D>() is not { } zones)
+        {
+            GD.Print("  the ground shader was never given a zone texture");
+            return false;
+        }
+
+        Image image = zones.GetImage();
+        bool matches = image.GetWidth() == _level.GridSize && image.GetHeight() == _level.GridSize;
+        var seen = new System.Collections.Generic.HashSet<int>();
+
+        for (int gz = 0; gz < _level.GridSize && matches; gz++)
+        {
+            for (int gx = 0; gx < _level.GridSize; gx++)
+            {
+                int tile = tiles[gz * _level.GridSize + gx];
+                seen.Add(tile);
+
+                Color expected = LevelGenerator.TintFor(tile);
+                Color actual = image.GetPixel(gx, gz);
+
+                // Rgb8, so a channel is only accurate to about 1/255.
+                if (Mathf.Abs(expected.R - actual.R) > 0.01f
+                    || Mathf.Abs(expected.G - actual.G) > 0.01f
+                    || Mathf.Abs(expected.B - actual.B) > 0.01f)
+                {
+                    GD.Print($"  cell {gx},{gz} is tile {tile} but painted {actual}");
+                    matches = false;
+                    break;
+                }
+            }
+        }
+
+        // More than one kind, or the tint is doing nothing whatever it is set to.
+        GD.Print($"  {_level.GridSize}x{_level.GridSize} cells, {seen.Count} distinct tiles, " +
+                 $"texture {image.GetWidth()}x{image.GetHeight()}, every texel matches = {matches}");
+
+        return matches && seen.Count >= 2;
     }
 
     private bool RunStage(System.Func<int, bool?> stage, string label)
@@ -255,12 +322,32 @@ public partial class LevelProbe : SceneTree
             return false;
         }
 
-        // The widest block on the map, and a spot directly behind it.
-        (Vector2 center, Vector2 half) = blocks[0];
+        // The widest block that has open ground on both sides of it.
+        //
+        // Taking the widest block outright is taking whatever the seed happened
+        // to produce. This run it produced one packed into a corner, where the
+        // enemy spawned with nowhere to go — and "it did not cross the wall" was
+        // then satisfied by standing still, which is the assertion passing for
+        // the wrong reason. Phase 10 learned the same thing about FlowFieldProbe:
+        // a probe that leans on the layout is measuring the seed.
+        (Vector2 center, Vector2 half) = (Vector2.Zero, Vector2.Zero);
         foreach ((Vector2 c, Vector2 h) in blocks)
         {
-            if (h.X * h.Y > half.X * half.Y)
-                (center, half) = (c, h);
+            if (h.X * h.Y <= half.X * half.Y)
+                continue;
+
+            var near = new Vector2(c.X, c.Y - h.Y - 4.0f);
+            var far = new Vector2(c.X, c.Y + h.Y + 4.0f);
+            if (Inside(near, blocks, 1.5f) || Inside(far, blocks, 1.5f) || far.Length() > 52.0f)
+                continue;
+
+            (center, half) = (c, h);
+        }
+
+        if (half == Vector2.Zero)
+        {
+            GD.Print("  no generated block has open ground on both sides of it");
+            return false;
         }
 
         if (tick == 1)

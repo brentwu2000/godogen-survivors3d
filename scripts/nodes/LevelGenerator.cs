@@ -39,7 +39,48 @@ public partial class LevelGenerator : Node3D
     /// most seeds; a probe watches it to confirm the rescue is not dead code.
     public int CarvedLastRun { get; private set; }
 
+    /// The tile each grid cell drew, row-major. Exposed so a probe can check that
+    /// the ground the player is standing on agrees with the cover around them —
+    /// the tint and the cover pool are chosen in one place and consumed in two,
+    /// and a disagreement would be a map that lies about what is in it.
+    public int[] TileMap => _tiles;
+
+    /// What a tile tints its ground. Multiplied over the shared asphalt, so the
+    /// tints read as what happened to that ground rather than as three materials:
+    /// oil and shade around the containers, dust where a building came down, bare
+    /// concrete along the walls.
+    public static Color TintFor(int tile) => TileTints[Mathf.Clamp(tile, 0, TileTints.Length - 1)];
+
+    /// One piece of cover: where it is, how much ground it takes, and what it
+    /// looks like. The footprint and the prop travel together because the two
+    /// have to agree — a container drawn across a footprint it does not fill is
+    /// cover the player can see through and walk into.
+    private readonly struct Block
+    {
+        public readonly Vector2 Center;
+        public readonly Vector2 Half;
+        public readonly PropKind Kind;
+        public readonly float Yaw;
+        public readonly float HeightScale;
+
+        public Block(Vector2 center, Vector2 half, PropKind kind, float yaw, float heightScale)
+        {
+            Center = center;
+            Half = half;
+            Kind = kind;
+            Yaw = yaw;
+            HeightScale = heightScale;
+        }
+    }
+
     private ulong _rng;
+    private PropRenderer? _props;
+
+    /// The tile kind each grid cell drew, for the ground to tint by. Written by
+    /// BuildCover and read by the material — the layout the generator chose is
+    /// only a decision if the player can see it from the ground they are standing
+    /// on.
+    private int[] _tiles = System.Array.Empty<int>();
 
     public override void _Ready() => Generate();
 
@@ -61,15 +102,22 @@ public partial class LevelGenerator : Node3D
         Clear(crates);
         Clear(pads);
 
-        var blocks = new System.Collections.Generic.List<(Vector2 Center, Vector2 Half)>();
-        BuildCover(obstacles, blocks);
+        var blocks = new System.Collections.Generic.List<Block>();
+        BuildCover(blocks);
         BuildPads(pads, blocks);
         BuildCrates(crates, blocks);
 
-        CarvedLastRun = EnsureReachable(obstacles, blocks, pads, crates);
+        CarvedLastRun = EnsureReachable(blocks, pads, crates);
+
+        // Bodies and props are created only once the layout is final. Carving
+        // used to delete nodes it had already added, matching them back up by
+        // position because their names had gone stale — none of which has to
+        // exist if nothing is built until there is nothing left to remove.
+        Emit(obstacles, blocks);
 
         GD.Print($"level seed {Seed}: {blocks.Count} blocks, {crates.GetChildCount()} crates, " +
-                 $"{OpenPadCount}/{pads.GetChildCount()} pads will open, {CarvedLastRun} carved");
+                 $"{OpenPadCount}/{pads.GetChildCount()} pads will open, {CarvedLastRun} carved, " +
+                 $"{_props?.Total ?? 0} props");
     }
 
     /// Random cover can seal a corner off, and a run whose exit is behind a wall
@@ -81,9 +129,7 @@ public partial class LevelGenerator : Node3D
     /// Reachability is decided on the same grid resolution and the same obstacle
     /// inflation the flow field uses, so "the generator thinks it is reachable"
     /// and "the enemies can get there" cannot disagree.
-    private int EnsureReachable(Node3D obstacleParent,
-                                System.Collections.Generic.List<(Vector2 Center, Vector2 Half)> blocks,
-                                Node3D pads, Node3D crates)
+    private int EnsureReachable(System.Collections.Generic.List<Block> blocks, Node3D pads, Node3D crates)
     {
         var targets = new System.Collections.Generic.List<Vector2>();
         foreach (Node child in pads.GetChildren())
@@ -104,7 +150,7 @@ public partial class LevelGenerator : Node3D
         {
             while (!Reachable(blocks, target))
             {
-                int removed = CarveTowards(obstacleParent, blocks, target);
+                int removed = CarveTowards(blocks, target);
 
                 // Nothing left on the line and still no route means the corridor
                 // is not the problem. Widening it further would eat the map, so
@@ -126,15 +172,15 @@ public partial class LevelGenerator : Node3D
     /// with floor() on one edge and ceil() on the other, so a copy that floors
     /// both is a fraction more optimistic than the thing it is standing in for —
     /// enough to call a sealed corner open. One implementation, no drift.
-    private bool Reachable(System.Collections.Generic.List<(Vector2 Center, Vector2 Half)> blocks, Vector2 target)
+    private bool Reachable(System.Collections.Generic.List<Block> blocks, Vector2 target)
     {
         var horde = GetParent().GetNodeOrNull<Horde>("Horde");
         float extent = horde?.ArenaExtent ?? 60.0f;
         float inflate = horde?.SeparationRadius ?? 0.75f;
 
         var field = new FlowField(Vector2.Zero, extent, 1.5f);
-        foreach ((Vector2 center, Vector2 half) in blocks)
-            field.BlockBox(center, half + Vector2.One * inflate);
+        foreach (Block block in blocks)
+            field.BlockBox(block.Center, block.Half + Vector2.One * inflate);
 
         field.Rebuild(new Vector3(target.X, 0.0f, target.Y));
 
@@ -146,9 +192,13 @@ public partial class LevelGenerator : Node3D
 
     /// Removes every block the straight line from spawn to the target passes
     /// through. Returns how many went.
-    private int CarveTowards(Node3D parent,
-                             System.Collections.Generic.List<(Vector2 Center, Vector2 Half)> blocks,
-                             Vector2 target)
+    ///
+    /// A list operation and nothing more. It used to also delete the matching
+    /// scene nodes, matched back up by position because a compacted list makes
+    /// every name after the first carve refer to a different block — a hazard
+    /// that stopped existing once the bodies were built after the last carve
+    /// rather than before the first.
+    private int CarveTowards(System.Collections.Generic.List<Block> blocks, Vector2 target)
     {
         // Wide enough to survive being narrowed twice. The field inflates every
         // obstacle by the enemy radius and then rounds the footprint outward to
@@ -157,46 +207,23 @@ public partial class LevelGenerator : Node3D
         // rescue reports success and the pad is still sealed.
         const float corridorHalfWidth = 2.6f;
 
-        var survivors = new System.Collections.Generic.List<(Vector2, Vector2)>(blocks.Count);
-        var doomed = new System.Collections.Generic.List<Vector2>();
+        var survivors = new System.Collections.Generic.List<Block>(blocks.Count);
+        int removed = 0;
 
-        foreach ((Vector2 center, Vector2 half) in blocks)
+        foreach (Block block in blocks)
         {
-            if (SegmentHitsBox(Vector2.Zero, target, center, half + Vector2.One * corridorHalfWidth))
-                doomed.Add(center);
+            if (SegmentHitsBox(Vector2.Zero, target, block.Center, block.Half + Vector2.One * corridorHalfWidth))
+                removed++;
             else
-                survivors.Add((center, half));
+                survivors.Add(block);
         }
 
-        if (doomed.Count == 0)
+        if (removed == 0)
             return 0;
-
-        // Matched by position, not by name. Names carry the index a block had
-        // when it was created, and the list is compacted by every carve — after
-        // the first pass those two numbers are different, which would delete
-        // whatever block happened to inherit the name.
-        foreach (Vector2 center in doomed)
-        {
-            foreach (Node child in parent.GetChildren())
-            {
-                if (child is not Node3D node)
-                    continue;
-
-                if (Mathf.Abs(node.Position.X - center.X) > 0.001f ||
-                    Mathf.Abs(node.Position.Z - center.Y) > 0.001f)
-                {
-                    continue;
-                }
-
-                parent.RemoveChild(node);
-                node.QueueFree();
-                break;
-            }
-        }
 
         blocks.Clear();
         blocks.AddRange(survivors);
-        return doomed.Count;
+        return removed;
     }
 
     /// Sampled rather than solved: the segment is short and the boxes are small,
@@ -235,12 +262,27 @@ public partial class LevelGenerator : Node3D
         }
     }
 
+    /// Which tile a grid cell drew. An enum rather than a loose int so the ground
+    /// tint and the cover pool cannot disagree about what a cell is.
+    private enum Tile
+    {
+        Open,
+        Yard,       // a few big pieces: containers, tumbled slabs
+        Corridor,   // a wall with a gap in it
+        Rubble,     // many small pieces: barriers, bins, debris
+    }
+
     /// One tile per grid cell, skipping the cell the player starts in. Cover is
     /// what makes the flow field worth having and what a player retreats behind,
     /// so an empty map is not a simpler map — it is a different game.
-    private void BuildCover(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks)
+    ///
+    /// The tile is recorded per cell as well, because until now all three kinds
+    /// looked identical from the ground: the generator was making a decision the
+    /// player could not read, which is the same as not making one.
+    private void BuildCover(System.Collections.Generic.List<Block> blocks)
     {
         float cell = Extent * 2.0f / GridSize;
+        _tiles = new int[GridSize * GridSize];
 
         for (int gz = 0; gz < GridSize; gz++)
         for (int gx = 0; gx < GridSize; gx++)
@@ -250,30 +292,36 @@ public partial class LevelGenerator : Node3D
                 -Extent + cell * (gz + 0.5f));
 
             if (center.Length() < SpawnClearance + cell * 0.5f)
-                continue;
-
-            switch ((int)(NextFloat() * 4.0f))
             {
-                case 0:
+                _tiles[gz * GridSize + gx] = (int)Tile.Open;
+                continue;
+            }
+
+            var tile = (Tile)(int)(NextFloat() * 4.0f);
+            _tiles[gz * GridSize + gx] = (int)tile;
+
+            switch (tile)
+            {
+                case Tile.Open:
                     break;   // open ground; a map with no gaps has no routes
 
-                case 1:
-                    Cluster(parent, blocks, center, cell, count: 3, size: 4.0f);
+                case Tile.Yard:
+                    Cluster(blocks, center, cell, count: 3, size: 4.0f, tile);
                     break;
 
-                case 2:
-                    Corridor(parent, blocks, center, cell);
+                case Tile.Corridor:
+                    Corridor(blocks, center, cell);
                     break;
 
                 default:
-                    Cluster(parent, blocks, center, cell, count: 5, size: 2.0f);
+                    Cluster(blocks, center, cell, count: 5, size: 2.0f, tile);
                     break;
             }
         }
     }
 
-    private void Cluster(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks,
-                         Vector2 center, float cell, int count, float size)
+    private void Cluster(System.Collections.Generic.List<Block> blocks,
+                         Vector2 center, float cell, int count, float size, Tile tile)
     {
         for (int i = 0; i < count; i++)
         {
@@ -284,14 +332,14 @@ public partial class LevelGenerator : Node3D
             var half = new Vector2(size * 0.5f * (0.6f + NextFloat() * 0.8f),
                                    size * 0.5f * (0.6f + NextFloat() * 0.8f));
 
-            AddBlock(parent, blocks, center + offset, half);
+            blocks.Add(new Block(center + offset, half, PickProp(tile, half),
+                                 Yaw(half), 0.85f + NextFloat() * 0.3f));
         }
     }
 
     /// A long wall with a gap in it. The gap is the whole point — a solid wall
     /// is a boundary, and a wall with a way through is a decision.
-    private void Corridor(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks,
-                          Vector2 center, float cell)
+    private void Corridor(System.Collections.Generic.List<Block> blocks, Vector2 center, float cell)
     {
         bool horizontal = NextFloat() < 0.5f;
         float length = cell * 0.38f;
@@ -308,32 +356,154 @@ public partial class LevelGenerator : Node3D
                 ? new Vector2(length * 0.5f, thickness * 0.5f)
                 : new Vector2(thickness * 0.5f, length * 0.5f);
 
-            AddBlock(parent, blocks, center + offset, half);
+            blocks.Add(new Block(center + offset, half, PropKind.Wall, Yaw(half), 1.0f));
         }
     }
 
-    private static void AddBlock(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks,
-                                 Vector2 center, Vector2 half)
+    /// What a footprint should be drawn as. Shape first, then the tile: a long
+    /// thin footprint is a wall whatever cell it is in, because a container drawn
+    /// across it arrives stretched into something nobody recognises.
+    private PropKind PickProp(Tile tile, Vector2 half)
     {
-        const float height = 3.0f;
-        var size = new Vector3(half.X * 2.0f, height, half.Y * 2.0f);
+        float longest = Mathf.Max(half.X, half.Y);
+        float shortest = Mathf.Max(0.01f, Mathf.Min(half.X, half.Y));
 
-        var body = new StaticBody3D
+        if (longest / shortest > 2.6f)
+            return PropKind.Wall;
+
+        float roll = NextFloat();
+
+        return tile switch
         {
-            Name = $"Block{blocks.Count}",
-            Position = new Vector3(center.X, height * 0.5f, center.Y),
+            Tile.Yard => roll < 0.62f ? PropKind.Container : PropKind.Rubble,
+            Tile.Rubble => roll < 0.4f ? PropKind.Barrier
+                : roll < 0.72f ? PropKind.Rubble
+                : PropKind.Dumpster,
+            _ => roll < 0.5f ? PropKind.Rubble : PropKind.Barrier,
         };
-        body.AddChild(new MeshInstance3D { Name = "Mesh", Mesh = new BoxMesh { Size = size } });
-        body.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
+    }
 
-        parent.AddChild(body);
-        blocks.Add((center, half));
+    /// Props are drawn along their footprint, so a footprint deeper than it is
+    /// wide wants the prop turned a quarter. Anything else draws a container
+    /// across the short axis of the ground it occupies.
+    private static float Yaw(Vector2 half) => half.Y > half.X ? 90.0f : 0.0f;
+
+    /// Builds the bodies and the props, once the layout can no longer change.
+    private void Emit(Node3D obstacles, System.Collections.Generic.List<Block> blocks)
+    {
+        _props ??= CreateProps();
+        _props.Clear();
+
+        for (int i = 0; i < blocks.Count; i++)
+        {
+            Block block = blocks[i];
+            float height = PropLibrary.Height(block.Kind) * block.HeightScale;
+            var size = new Vector3(block.Half.X * 2.0f, height, block.Half.Y * 2.0f);
+
+            // Collision only. The visual is one instance in a MultiMesh, so a
+            // mesh here would be the same cover drawn twice and the draw-call
+            // budget spent for nothing.
+            var body = new StaticBody3D
+            {
+                Name = $"Block{i}",
+                Position = new Vector3(block.Center.X, height * 0.5f, block.Center.Y),
+            };
+            body.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
+            obstacles.AddChild(body);
+
+            // Footprints are half-extents and the props are authored in a unit
+            // square, so the instance scale is the full width and depth. The yaw
+            // is applied to the prop only: the collider stays axis-aligned, which
+            // is what the flow field's box test assumes.
+            Vector2 footprint = block.Yaw == 0.0f
+                ? block.Half * 2.0f
+                : new Vector2(block.Half.Y * 2.0f, block.Half.X * 2.0f);
+
+            _props.Add(block.Kind, block.Center, footprint, block.Yaw, block.HeightScale);
+        }
+
+        PlaceLandmarks();
+        _props.Commit();
+        PaintGround();
+    }
+
+    /// Hands the ground shader one texel per grid cell.
+    private static readonly Color[] TileTints =
+    {
+        new(1.00f, 0.97f, 0.90f),   // open — bare, sun-bleached
+        new(0.70f, 0.73f, 0.78f),   // yard — oil-stained, cool
+        new(0.86f, 0.85f, 0.82f),   // corridor — poured concrete
+        new(0.93f, 0.81f, 0.66f),   // rubble — masonry dust
+    };
+
+    private void PaintGround()
+    {
+        var mesh = GetParent().GetNodeOrNull<MeshInstance3D>("Ground/Mesh");
+        if (mesh?.MaterialOverride is not ShaderMaterial material)
+        {
+            GD.PushWarning("LevelGenerator: no ground shader — the layout will not be readable from the floor");
+            return;
+        }
+
+        var image = Image.CreateEmpty(GridSize, GridSize, false, Image.Format.Rgb8);
+
+        for (int gz = 0; gz < GridSize; gz++)
+        {
+            for (int gx = 0; gx < GridSize; gx++)
+            {
+                int tile = _tiles.Length > 0 ? _tiles[gz * GridSize + gx] : 0;
+                image.SetPixel(gx, gz, TileTints[Mathf.Clamp(tile, 0, TileTints.Length - 1)]);
+            }
+        }
+
+        material.SetShaderParameter("zones", ImageTexture.CreateFromImage(image));
+        material.SetShaderParameter("arena_extent", Extent);
+    }
+
+    private PropRenderer CreateProps()
+    {
+        var renderer = new PropRenderer(capacityPerKind: 128, arenaExtent: Extent + 24.0f);
+
+        // Under this node rather than beside it. Generation happens in _Ready,
+        // and the parent is still adding its own children at that point —
+        // add_child on a parent that is mid-setup fails outright, and the only
+        // symptom is an arena with no cover in it.
+        AddChild(renderer.Node);
+        return renderer;
+    }
+
+    /// A handful of tall things, well outside the play space.
+    ///
+    /// A fixed orthographic camera over a flat plane of repeating cover gives a
+    /// player crossing fifty metres nothing that says they moved. These are the
+    /// only parallax the arena has, and the only answer to "which corner am I in"
+    /// that does not involve reading the compass.
+    ///
+    /// Outside the arena rather than in it, so they never become cover, never
+    /// need a collider, and can never seal a route.
+    private void PlaceLandmarks()
+    {
+        const int count = 5;
+        float radius = Extent * 1.12f;
+        float baseAngle = NextFloat() * Mathf.Tau;
+
+        for (int i = 0; i < count; i++)
+        {
+            float angle = baseAngle + Mathf.Tau * i / count + (NextFloat() - 0.5f) * 0.3f;
+            var spot = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+
+            PropKind kind = NextFloat() < 0.5f ? PropKind.WaterTower : PropKind.Billboard;
+            float scale = 0.8f + NextFloat() * 0.5f;
+
+            _props!.Add(kind, spot, new Vector2(4.0f, 4.0f) * scale,
+                        Mathf.RadToDeg(angle) + 90.0f, scale);
+        }
     }
 
     /// Pads sit far out and in different directions, so which one opens changes
     /// where the run ends. They are hidden until the director reveals them —
     /// knowing the way out from the first second would make the map a corridor.
-    private void BuildPads(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks)
+    private void BuildPads(Node3D parent, System.Collections.Generic.List<Block> blocks)
     {
         float radius = Extent * 0.72f;
         float baseAngle = NextFloat() * Mathf.Tau;
@@ -383,7 +553,7 @@ public partial class LevelGenerator : Node3D
 
     /// Crates get better the further out they are. Bias is applied per rarity
     /// step, so the far corners are where the serum actually lives.
-    private void BuildCrates(Node3D parent, System.Collections.Generic.List<(Vector2, Vector2)> blocks)
+    private void BuildCrates(Node3D parent, System.Collections.Generic.List<Block> blocks)
     {
         for (int i = 0; i < CrateCount; i++)
         {
@@ -419,13 +589,12 @@ public partial class LevelGenerator : Node3D
         }
     }
 
-    private static bool InsideAnyBlock(Vector2 point, System.Collections.Generic.List<(Vector2 Center, Vector2 Half)> blocks,
-                                       float margin)
+    private static bool InsideAnyBlock(Vector2 point, System.Collections.Generic.List<Block> blocks, float margin)
     {
-        foreach ((Vector2 center, Vector2 half) in blocks)
+        foreach (Block block in blocks)
         {
-            if (Mathf.Abs(point.X - center.X) < half.X + margin &&
-                Mathf.Abs(point.Y - center.Y) < half.Y + margin)
+            if (Mathf.Abs(point.X - block.Center.X) < block.Half.X + margin &&
+                Mathf.Abs(point.Y - block.Center.Y) < block.Half.Y + margin)
             {
                 return true;
             }
@@ -437,19 +606,18 @@ public partial class LevelGenerator : Node3D
     /// Nudges a point clear of whatever it landed in. Rejection sampling alone
     /// can fail on a crowded map, and a crate inside a wall is unreachable
     /// rather than merely awkward.
-    private static Vector2 PushOutOfBlocks(Vector2 point, System.Collections.Generic.List<(Vector2 Center, Vector2 Half)> blocks,
-                                           float margin)
+    private static Vector2 PushOutOfBlocks(Vector2 point, System.Collections.Generic.List<Block> blocks, float margin)
     {
         for (int pass = 0; pass < 8; pass++)
         {
             bool moved = false;
 
-            foreach ((Vector2 center, Vector2 half) in blocks)
+            foreach (Block block in blocks)
             {
-                float dx = point.X - center.X;
-                float dz = point.Y - center.Y;
-                float overlapX = half.X + margin - Mathf.Abs(dx);
-                float overlapZ = half.Y + margin - Mathf.Abs(dz);
+                float dx = point.X - block.Center.X;
+                float dz = point.Y - block.Center.Y;
+                float overlapX = block.Half.X + margin - Mathf.Abs(dx);
+                float overlapZ = block.Half.Y + margin - Mathf.Abs(dz);
 
                 if (overlapX <= 0.0f || overlapZ <= 0.0f)
                     continue;

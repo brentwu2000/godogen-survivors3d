@@ -19,7 +19,7 @@ public partial class Presentation : SceneTree
     private const float AxisDeadzone = 0.25f;
 
     // Compressed pacing, for the camera only.
-    private const int OpeningHorde = 70;
+    private const int OpeningHorde = 44;
 
     /// Short enough that the roster actually changes on camera.
     ///
@@ -35,12 +35,18 @@ public partial class Presentation : SceneTree
 
     /// Run intensity the opening crowd is drawn from.
     ///
-    /// 0.65 put every variant on camera and killed the bot at 23.6 s, eight
-    /// frames before the previous cut — so the clip that looked like it was about
-    /// to extract was in fact about to end in a death. Half is past the brute's
-    /// unlock at 0.45, which is the variant worth seeing, and leaves the run
-    /// survivable long enough to finish the loop the film exists to show.
-    private const float OpeningIntensity = 0.5f;
+    /// Just under the brute's unlock at 0.45, so the opening crowd is walkers,
+    /// runners and spitters and the brutes *arrive* — the run's own escalation
+    /// crosses 0.45 around eighteen seconds in, which is better film than having
+    /// them there from the first frame anyway.
+    ///
+    /// It has been down twice. At 0.65 the bot died at 23.6 s, eight frames after
+    /// the old cut, so the take that looked like it was about to extract was
+    /// about to end in a death. At 0.5 it survived — until Phase 14 put real
+    /// cover on the map and the same settings killed it at 15 s. That is not a
+    /// camera problem: cover makes the horde pile up, which is exactly the
+    /// balance question Phase 15 opens with.
+    private const float OpeningIntensity = 0.4f;
 
     private Player _player = null!;
     private Horde _horde = null!;
@@ -76,7 +82,7 @@ public partial class Presentation : SceneTree
         director.RunSeconds = RunSeconds;
         director.ExtractionOpensAt = 0.0f;
         director.StartSpawnRate = 6.0f;
-        director.EndSpawnRate = 11.0f;
+        director.EndSpawnRate = 8.5f;
         director.SpawnDistanceMin = 20.0f;
         director.SpawnDistanceMax = 28.0f;
 
@@ -84,6 +90,13 @@ public partial class Presentation : SceneTree
         var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
         if (meta != null)
             meta.Ephemeral = true;
+
+        // End on the debrief rather than on the banner. The report is the payoff
+        // the whole run is for, and it waits for a key — which this script never
+        // presses, so it simply stays up and the last seconds of the film are
+        // what the run was worth instead of a static banner over a finished
+        // arena. The profile is ephemeral, so nothing is spent to say so.
+        GameSession.LaunchedFromBase = true;
 
         // A fixed layout, set before the scene enters the tree because the
         // generator runs in _Ready. Without it every run of this script would
@@ -107,13 +120,14 @@ public partial class Presentation : SceneTree
             _extraction = scene.GetNode<RunDirector>("RunDirector").PrimaryPad!;
             _growth = scene.GetNode<RunGrowth>("RunGrowth");
 
-            // Two crates on opposite sides of the arena: the detour is what makes
-            // the walk back to the pad worth filming.
-            _crates = new[]
-            {
-                scene.GetNode<LootContainer>("LootContainers/Crate0"),
-                scene.GetNode<LootContainer>("LootContainers/Crate2"),
-            };
+            // One crate, not two.
+            //
+            // Two was right when the bot walked in straight lines: the detour
+            // filled the middle of the clip. Routing around real cover made those
+            // same two legs long enough that the run had not reached the pad by
+            // frame 900, and a film of the loop that stops before the loop closes
+            // is not a film of the loop.
+            _crates = new[] { scene.GetNode<LootContainer>("LootContainers/Crate0") };
 
             // Repopulate the opening horde from the late roster.
             //
@@ -211,7 +225,7 @@ public partial class Presentation : SceneTree
             return true;
         }
 
-        Vector2 direction = flat.Normalized();
+        Vector2 direction = Navigate(target);
         Set("move_right", direction.X > AxisDeadzone);
         Set("move_left", direction.X < -AxisDeadzone);
         Set("move_down", direction.Y > AxisDeadzone);
@@ -231,6 +245,61 @@ public partial class Presentation : SceneTree
             Input.ActionRelease(action);
         }
     }
+
+    /// Direction to walk toward `target`, routed around cover.
+    ///
+    /// This walked in a straight line until Phase 14 put real cover on the map,
+    /// and then the bot spent the film pressed against a container while the
+    /// horde ate it — the run died at fifteen seconds having banked the same 98
+    /// every take. AutoPlay learned exactly this in Phase 10 and got a flow
+    /// field; the capture script did not, because at the time the arena was
+    /// five grey boxes and a straight line was fine.
+    ///
+    /// Its own field rather than the horde's: the horde rebuilds around the
+    /// player every few ticks, so borrowing it would have the bot and the enemies
+    /// fighting over which way the arrows point.
+    private Vector2 Navigate(Vector3 target)
+    {
+        Vector3 delta = target - _player.GlobalPosition;
+        var straight = new Vector2(delta.X, delta.Z).Normalized();
+
+        if (_navField == null)
+        {
+            _navField = new FlowField(Vector2.Zero, _horde.ArenaExtent, 1.5f);
+
+            // Inflated by roughly a body's radius, so the route is one the player
+            // can physically walk rather than one that scrapes every corner and
+            // catches on the collision shape.
+            Node? obstacles = _player.GetParent()?.GetNodeOrNull("Obstacles");
+            if (obstacles != null)
+            {
+                foreach (Node child in obstacles.GetChildren())
+                {
+                    if (child is not Node3D body ||
+                        body.GetNodeOrNull<CollisionShape3D>("Collision")?.Shape is not BoxShape3D box)
+                    {
+                        continue;
+                    }
+
+                    _navField.BlockBox(
+                        new Vector2(body.Position.X, body.Position.Z),
+                        new Vector2(box.Size.X * 0.5f + 0.9f, box.Size.Z * 0.5f + 0.9f));
+                }
+            }
+        }
+
+        if (target.DistanceSquaredTo(_navTarget) > 0.01f)
+        {
+            _navTarget = target;
+            _navField.Rebuild(target);
+        }
+
+        Vector2 flow = _navField.Sample(_player.GlobalPosition);
+        return flow == Vector2.Zero ? straight : flow;
+    }
+
+    private FlowField? _navField;
+    private Vector3 _navTarget = new(float.MaxValue, 0.0f, float.MaxValue);
 
     private static void Release()
     {

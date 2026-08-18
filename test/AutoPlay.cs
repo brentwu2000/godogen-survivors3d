@@ -89,13 +89,31 @@ public partial class AutoPlay : SceneTree
         // against whatever practice happens to be on disk is not a balance
         // number: practice moves the starting point, so the same route reads
         // differently on a veteran's profile than on a new one.
+        var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
         if (System.Array.IndexOf(args, "profile") < 0)
         {
-            var meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
             if (meta != null)
                 meta.Ephemeral = true;
             else
                 GD.PushWarning("AutoPlay: no MetaManager — the run will use the profile on disk");
+        }
+
+        // Take a job, so the run has to satisfy something as well as survive.
+        //
+        // Contracts had never been driven through a whole run at real speed:
+        // every check on them was arithmetic over a hand-built record. That
+        // proves a target is judged correctly and says nothing about whether it
+        // is reachable — a job asking for twelve brutes is a rule if the run can
+        // produce twelve brutes and a joke if it cannot, and only playing one
+        // finds out which.
+        //
+        // "contract:N" takes the Nth card on the board; the board itself is
+        // pinned so the run is repeatable.
+        _contractIndex = -1;
+        foreach (string arg in args)
+        {
+            if (arg.StartsWith("contract:") && int.TryParse(arg[9..], out int index))
+                _contractIndex = index;
         }
 
         // One layout by default, because a balance number that moves when the
@@ -109,6 +127,8 @@ public partial class AutoPlay : SceneTree
     }
 
     private ulong _seed = 0x51E5D0A7UL;
+    private int _contractIndex = -1;
+    private MetaManager? _meta;
 
     public override bool _PhysicsProcess(double delta)
     {
@@ -481,6 +501,21 @@ public partial class AutoPlay : SceneTree
         _extraction = director.PrimaryPad!;
         _growth = scene.GetNodeOrNull<RunGrowth>("RunGrowth");
         _weapons = player.GetNodeOrNull<WeaponHandler>("WeaponHandler");
+        _meta = scene.GetNodeOrNull<MetaManager>("MetaManager");
+
+        // Taken here rather than in _Initialize: the meta layer loads the profile
+        // in its own _Ready, so anything written before the scene enters the tree
+        // is overwritten by the time the run starts.
+        if (_contractIndex >= 0 && _meta != null)
+        {
+            _meta.Profile.ContractSeed = 4242;
+            Contract[] offer = _meta.Profile.ContractOffer();
+            if (_contractIndex < offer.Length)
+            {
+                _meta.Profile.ContractIndex = _contractIndex;
+                GD.Print($"  contract taken: {offer[_contractIndex].Describe()} for {offer[_contractIndex].Reward}");
+            }
+        }
 
         var found = new System.Collections.Generic.List<LootContainer>();
         foreach (Node child in crateParent.GetChildren())
@@ -611,6 +646,14 @@ public partial class AutoPlay : SceneTree
         GD.Print(Growth());
         GD.Print($"  lowest HP {_lowestHealth:F0}/{_player.MaxHealth:F0}, " +
                  $"enemies at the end {_horde.Pool.Count}, peak {_peakEnemies}");
+
+        if (_meta?.ContractTaken is { } contract)
+        {
+            RunRecord? run = _meta.LastRun;
+            GD.Print($"  contract \"{contract.Describe()}\" for {contract.Reward}: " +
+                     $"{(_meta.ContractMet ? "MET" : "failed")}" +
+                     (run != null ? $" ({contract.Progress(run)})" : ""));
+        }
 
         bool ok = state == RunState.Extracted && _endedBanked > 0;
         GD.Print(ok ? "AUTOPLAY OK" : "AUTOPLAY FAILED");
