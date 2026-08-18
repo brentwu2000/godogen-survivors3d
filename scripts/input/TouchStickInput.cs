@@ -1,41 +1,65 @@
 using Godot;
 
-/// Touch input: left stick moves, right stick aims and fires.
+/// Touch input: one stick to move, four buttons to decide.
 ///
-/// Holding the aim stick off-center is the fire input — a separate fire button
-/// would need a third finger, which is one more than a phone comfortably gives.
+/// **There is no aim stick.** Aiming with the right thumb was the original plan
+/// and it costs the whole thumb, which is the entire touch budget for everything
+/// that is not walking. It buys very little: firing is automatic, the weapon
+/// already picks the nearest target in range, and the survivors-like contract
+/// this game is built on is that the player steers and the weapon handles
+/// itself. On a phone that thumb is worth more as four decisions than as an
+/// override for a system that is right most of the time.
+///
+/// So the run's discrete actions — secure, use, throw, swap — get the right
+/// side, and the level-up offer is answered by tapping the card it is already
+/// drawing rather than by a fifth button nobody would find.
 public sealed class TouchStickInput : IInputSource
 {
-    private const float FireDeadzone = 0.35f;
-
     private readonly VirtualStick _moveStick;
-    private readonly VirtualStick _aimStick;
+    private readonly TouchButton[] _buttons;
 
     public Vector2 Move { get; private set; }
-    public Vector2 Aim { get; private set; }
-    public bool FireHeld { get; private set; }
 
-    // Reserved for the HUD buttons that land with the loot UI; touch has no
-    // keyboard fallback for these.
-    public bool InteractPressed { get; private set; }
-    public bool ReloadPressed { get; private set; }
+    /// Always zero: touch never overrides auto-targeting. Kept because the
+    /// interface is the same one the desktop build uses, and the mouse does.
+    public Vector2 Aim => Vector2.Zero;
+
     public bool SecurePressed { get; private set; }
     public bool UsePressed { get; private set; }
     public bool SwapPressed { get; private set; }
     public bool ThrowPressed { get; private set; }
 
-    public TouchStickInput(VirtualStick moveStick, VirtualStick aimStick)
+    /// Order matches TouchAction.
+    public TouchStickInput(VirtualStick moveStick, TouchButton[] buttons)
     {
         _moveStick = moveStick;
-        _aimStick = aimStick;
+        _buttons = buttons;
     }
 
     public void Update(Vector3 playerPosition)
     {
         Move = _moveStick.Value;
 
-        Vector2 aim = _aimStick.Value;
-        FireHeld = aim.Length() >= FireDeadzone;
-        Aim = FireHeld ? aim.Normalized() : Vector2.Zero;
+        // Consumed, not sampled. A button press lasts one frame for the same
+        // reason `IsActionJustPressed` does — holding "use" down would empty the
+        // backpack in half a second.
+        SecurePressed = Take(TouchAction.Secure);
+        UsePressed = Take(TouchAction.Use);
+        SwapPressed = Take(TouchAction.Swap);
+        ThrowPressed = Take(TouchAction.Throw);
     }
+
+    private bool Take(TouchAction action)
+    {
+        int index = (int)action;
+        return index >= 0 && index < _buttons.Length && _buttons[index].ConsumePress();
+    }
+}
+
+public enum TouchAction
+{
+    Secure,
+    Use,
+    Throw,
+    Swap,
 }

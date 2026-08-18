@@ -7,9 +7,6 @@ public sealed class KeyboardMouseInput : IInputSource
 
     public Vector2 Move { get; private set; }
     public Vector2 Aim { get; private set; }
-    public bool FireHeld => Input.IsActionPressed("fire");
-    public bool InteractPressed => Input.IsActionJustPressed("interact");
-    public bool ReloadPressed => Input.IsActionJustPressed("reload");
     public bool SecurePressed => Input.IsActionJustPressed("secure");
     public bool UsePressed => Input.IsActionJustPressed("use");
     public bool SwapPressed => Input.IsActionJustPressed("swap");

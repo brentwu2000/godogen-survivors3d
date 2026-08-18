@@ -60,6 +60,11 @@ public partial class Player : CharacterBody3D
     /// call, the player falls back to keyboard and mouse.
     public void SetInputSource(IInputSource source) => _input = source;
 
+    /// Which implementation is installed. Only a probe asks — and it has to,
+    /// because "the touch layer is present" and "the touch layer is connected"
+    /// looked identical for sixteen phases, and the second one was false.
+    public string InputSourceName => _input?.GetType().Name ?? "none";
+
     public override void _Ready()
     {
         _sprite = GetNode<Sprite3D>("Sprite");
@@ -160,6 +165,24 @@ public partial class Player : CharacterBody3D
         Backpack.RemoveOne(best);
         ItemThrown?.Invoke(chosen.ItemName);
         return chosen.Value;
+    }
+
+    /// Whether spending something would currently do anything at all. Asked by
+    /// the touch controls to dim the use button — the same question TryUseBest
+    /// answers by returning zero, but asked before the tap rather than after.
+    public bool HasUsableItem
+    {
+        get
+        {
+            for (int i = 0; i < Backpack.EntryCount; i++)
+            {
+                ItemResource item = Backpack.ItemAt(i);
+                if (item.IsUsable && WouldHelp(item))
+                    return true;
+            }
+
+            return false;
+        }
     }
 
     /// How many throwables are in the bag, for the readout. A tactical item the

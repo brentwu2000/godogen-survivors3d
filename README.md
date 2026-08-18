@@ -21,11 +21,22 @@ godot --headless --quit              # scene loads clean
 godot                                # play — opens at the base
 ```
 
-WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
-reloads, `[F]` secures the top item into the safe box, `[Q]` uses a carried item, `[G]` throws one,
-`[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]` answer a level-up. At the base, `[1]`/`[2]`/`[3]` take a
-contract and `[R]` rerolls the board for credits. Actions are read through `IInputSource`, so the
-touch implementation drives the same code with two virtual sticks.
+WASD/arrows move, weapons fire themselves and reload themselves, `[F]` secures the top item into the
+safe box, `[Q]` uses a carried item, `[G]` throws one, `[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]`
+answer a level-up — or click the card. At the base, `[1]`/`[2]`/`[3]` take a contract and `[R]` rerolls
+the board for credits.
+
+**On a touchscreen the layout is one stick and four buttons.** The left half of the screen is a
+floating move stick, whose origin is wherever the thumb lands; the bottom right is an arc of four
+buttons — secure, use, throw, swap — that grey out when they would do nothing. Level-ups are answered
+by tapping the card the offer is already drawing.
+
+There is no aim stick. It was the original plan and it costs the whole second thumb, which is the
+entire touch budget for everything that is not walking, and it buys very little: firing is automatic,
+the weapon already picks the nearest target, and the survivors-like contract this is built on is that
+the player steers and the weapon handles itself. Actions are read through `IInputSource`, so both
+implementations drive exactly the same code. Run any script with `-- touch` to force the controls on
+without a touchscreen.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
 
@@ -48,6 +59,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/ContractProbe.cs` | yes | Three distinct jobs with at most one clock card, exact thresholds, nothing paid on a corpse, and rerolls cost |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
+| `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
@@ -386,6 +398,29 @@ or below zero, the pool despawns an entry that was never live, and `Count` drops
 leaving. A few of those drive it negative, and then the next spawn writes to index -1 — a crash several
 seconds and one system away from the blast that caused it. `Horde.Damage` and `EnemyPool.DespawnAt`
 both refuse out-of-range indices now. The hitscan path had always guarded; the melee path never had.
+
+**The touch layer had never been executed.** It was written in Phase 1 and compiled for sixteen phases
+with nothing instantiating a `VirtualStick`, `TouchStickInput` never constructed, `SetInputSource`
+never called, and six of the actions it exposed hardcoded to false. `FireHeld`, `InteractPressed` and
+`ReloadPressed` were on the interface and read by nothing at all — firing and reloading are automatic —
+so they are gone: an interface member nobody reads is a promise nobody checks, and every implementation
+still had to invent an answer for it.
+
+Two bugs that only exist on touch, both found by the probe rather than by looking:
+
+- The move stick owns the left half of the screen on a higher canvas layer, and it sat on top of the
+  left-hand level-up card. The player could read three options and take two. The row lifts above the
+  stick on a touch build, rather than disabling movement while an offer is up — that would be a pause
+  by another name, and the offer was designed not to pause.
+- `Hud` asked `TouchHud` whether touch was active during `_Ready`, which is too early: nodes are
+  readied in tree order and `TouchHud` is added later, so the answer was always "no". The layout
+  decision moved to the first frame.
+
+`TouchProbe` pushes synthetic fingers through the input singleton rather than calling `_GuiInput`,
+because half of what can be wrong with a touch UI is layout — a control the finger never reaches, a
+filter that swallows the press — and calling the handler skips exactly those. It needs a real display:
+the headless dummy never dispatches GUI input, so every stage passes its rect check and receives
+nothing.
 
 **The field is capped at 160 concurrent enemies.** Nothing had ever enforced a ceiling — the director
 added spawns and the field grew until somebody died — and a twenty-run sweep found the wall between one

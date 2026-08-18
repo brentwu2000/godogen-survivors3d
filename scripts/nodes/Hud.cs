@@ -98,6 +98,18 @@ public partial class Hud : CanvasLayer
             _cards[i].Color = CardFace;
             Style(_cardText[i], 22, HorizontalAlignment.Center);
             _cardText[i].AutowrapMode = TextServer.AutowrapMode.WordSmart;
+
+            // Tappable. The offer is the one thing in a run answered by a key
+            // that never reached the input abstraction — RunGrowth polls
+            // pick_1/2/3 directly — so on a touch device it could not be
+            // answered at all, and the cards would sit there forever.
+            //
+            // The card the offer is already drawing is the button. A fifth
+            // on-screen control for something that appears twice a minute is a
+            // control nobody would find.
+            int index = i;
+            _cards[i].MouseFilter = Control.MouseFilterEnum.Stop;
+            _cards[i].GuiInput += @event => OnCardInput(@event, index);
         }
 
         var shader = GD.Load<Shader>("res://assets/shaders/vignette.gdshader");
@@ -135,6 +147,36 @@ public partial class Hud : CanvasLayer
             _director.RunEnded += OnRunEnded;
     }
 
+    private bool _touchActive;
+    private bool _layoutSettled;
+
+    /// Asked on the first frame rather than in _Ready, because _Ready is too
+    /// early: nodes are readied in tree order and TouchHud is added after this
+    /// one, so its answer is still "no touchscreen" when this node asks. The
+    /// symptom was the offer staying under the thumb — the left-hand card sits
+    /// inside the move stick, which is on a higher canvas layer and swallowed
+    /// every tap on it, so the player could read three options and take two.
+    ///
+    /// Lifting the row above the stick is the fix that does not involve
+    /// disabling movement while an offer is up, which would be a pause by
+    /// another name and is exactly what the offer was designed not to be.
+    private void AdoptTouchLayout()
+    {
+        if (_layoutSettled)
+            return;
+
+        _layoutSettled = true;
+        _touchActive = GetParent()?.GetNodeOrNull<TouchHud>("TouchHud")?.Active ?? false;
+        if (!_touchActive)
+            return;
+
+        for (int i = 0; i < _cards.Length; i++)
+        {
+            _cards[i].Position = new Vector2(_cards[i].Position.X, 196.0f);
+            _cardText[i].Position = new Vector2(_cardText[i].Position.X, 212.0f);
+        }
+    }
+
     private Bar FindBar(string name)
     {
         var bar = new Bar
@@ -168,6 +210,7 @@ public partial class Hud : CanvasLayer
     public override void _Process(double delta)
     {
         float step = (float)delta;
+        AdoptTouchLayout();
 
         UpdateHealth(step);
         UpdateCargo();
@@ -268,8 +311,13 @@ public partial class Hud : CanvasLayer
         if (_player?.AdrenalineActive == true)
             _arms.Text += $"      ADRENALINE {_player.AdrenalineRemaining:F0}s";
 
-        _keys.Text = "[Tab] swap   [Q] use   [F] secure" +
-                     (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "");
+        // Silent on a touch build. Naming keys that do not exist is worse than
+        // naming nothing — the buttons on the right are the answer there, and
+        // they say what they do on their faces.
+        _keys.Text = _touchActive
+            ? ""
+            : "[Tab] swap   [Q] use   [F] secure" +
+              (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "");
     }
 
     private void UpdateClock()
@@ -440,6 +488,17 @@ public partial class Hud : CanvasLayer
         }
 
         return best;
+    }
+
+    /// A tap or a click on a card takes it. Both, because the same build runs on
+    /// a desktop where the mouse is how anyone would try it first.
+    private void OnCardInput(InputEvent @event, int index)
+    {
+        bool pressed = @event is InputEventScreenTouch { Pressed: true }
+                    or InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left };
+
+        if (pressed && _growth is { HasOffer: true })
+            _growth.Choose(index);
     }
 
     /// Eight-way arrow in screen space. World +Z is down-screen under this

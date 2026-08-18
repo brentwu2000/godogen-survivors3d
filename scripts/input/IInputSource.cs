@@ -9,6 +9,14 @@ using Godot;
 /// Both vectors are in the world XZ plane, already corrected for the camera's
 /// yaw, so +Y on the vector means "away from the camera" regardless of how the
 /// rig is rotated.
+///
+/// It used to carry `FireHeld`, `InteractPressed` and `ReloadPressed` as well.
+/// Nothing read any of them: firing is automatic by design — the survivors-like
+/// contract is that the player steers and the weapon handles itself — and
+/// reloading happens on its own when the magazine empties. An interface member
+/// nobody reads is a promise nobody checks, and every implementation still had
+/// to invent an answer for it. Building the touch layer is what made that cost
+/// visible, because on a phone a fire button is a whole thumb.
 public interface IInputSource
 {
     /// Movement intent, magnitude 0..1.
@@ -18,13 +26,8 @@ public interface IInputSource
     /// not aiming, in which case auto-targeting decides where shots go.
     Vector2 Aim { get; }
 
-    bool FireHeld { get; }
-    bool InteractPressed { get; }
-    bool ReloadPressed { get; }
-
-    /// Moves the best item from the backpack into the safe box. Separate from
-    /// Interact because it is used mid-fight, under time pressure, and must not
-    /// compete with whatever Interact grows into.
+    /// Moves the best item from the backpack into the safe box. Its own action
+    /// because it is used mid-fight, under time pressure.
     bool SecurePressed { get; }
 
     /// Spends the cheapest carried item that would currently help.

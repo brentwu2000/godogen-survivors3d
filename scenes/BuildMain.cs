@@ -118,6 +118,13 @@ public partial class BuildMain : SceneTree
         var effects = new Node3D { Name = "Effects" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(effects, "res://scripts/nodes/EffectDirector.cs"));
 
+        // Above the readout, so a thumb on the stick is not competing with a
+        // label for the same pixels. Present in every build and hidden unless
+        // the device has a touchscreen — one scene, not two, which is the thing
+        // the input abstraction was written for and never used.
+        var touch = new CanvasLayer { Name = "TouchHud", Layer = 3 };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(touch, "res://scripts/nodes/TouchHud.cs"));
+
         Node scripted = SceneBuildUtil.AttachScriptToRoot(root, "res://scripts/nodes/GameRoot.cs");
         bool ok = SceneBuildUtil.PackAndSave(scripted, "res://scenes/Main.tscn");
         scripted.Free();
