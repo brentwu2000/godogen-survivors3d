@@ -21,6 +21,14 @@ public partial class WeaponHandler : Node3D
     /// Metres above the ground that shots leave from and projectiles fly at.
     [Export] public float MuzzleHeight { get; set; } = 1.0f;
 
+    /// Stops the weapon starting an attack, without stopping anything else.
+    ///
+    /// Turning the whole node off is the obvious way to isolate a measurement and
+    /// it is wrong: projectiles are stepped here, and so is the burst queue, so a
+    /// disabled handler measures a trait that can never happen. This suppresses
+    /// the decision to fire and leaves the rest of the tick running.
+    [Export] public bool HoldFire { get; set; }
+
     /// One weapon's entire live state. Two of these rather than one, because a
     /// swap has to keep the other weapon's magazine, cooldown and levels — a
     /// sidearm that resets every time it is put away is not a sidearm.
@@ -32,6 +40,14 @@ public partial class WeaponHandler : Node3D
         public int RunUpgrades;
         public float Cooldown;
         public float ReloadRemaining;
+
+        /// Shots still owed by a burst, and the wait before the next one. Queued
+        /// rather than fired all at once: a burst that lands in a single frame is
+        /// one loud shot with a bigger number, and the whole point of the trait
+        /// is the rhythm.
+        public int BurstLeft;
+        public float BurstDelay;
+        public Vector2 BurstDirection;
     }
 
     private readonly Slot[] _slots = { new(), new() };
@@ -232,6 +248,13 @@ public partial class WeaponHandler : Node3D
         slot.Cooldown = 0.0f;
         slot.ReloadRemaining = 0.0f;
         slot.RunUpgrades = 0;
+
+        // The burst belongs to the weapon that started it. Left standing, the
+        // shots it still owes come out of whatever is put in the slot next — a
+        // rifle's two queued rounds fired as axe swings, on the rifle's timing,
+        // while the early return skipped the normal firing path entirely.
+        slot.BurstLeft = 0;
+        slot.BurstDelay = 0.0f;
     }
 
     public int GetProficiency(WeaponCategory category) => _proficiency[(int)category];
@@ -248,6 +271,25 @@ public partial class WeaponHandler : Node3D
             return;
 
         int level = Level;
+
+        // A burst finishes even if the target has died or moved: the shots were
+        // already fired as far as the player is concerned, and a burst that
+        // silently stops halfway reads as the weapon jamming.
+        if (slot.BurstLeft > 0)
+        {
+            slot.BurstDelay -= step;
+            if (slot.BurstDelay <= 0.0f)
+            {
+                slot.BurstLeft--;
+                slot.BurstDelay = weapon.TraitAmount;
+                Fire(GlobalPosition, slot.BurstDirection, level, allowBurst: false);
+
+                if (weapon.MagazineSize > 0)
+                    slot.Ammo = Mathf.Max(0, slot.Ammo - 1);
+            }
+
+            return;
+        }
 
         if (slot.ReloadRemaining > 0.0f)
         {
@@ -274,7 +316,7 @@ public partial class WeaponHandler : Node3D
         }
 
         slot.Cooldown -= step;
-        if (slot.Cooldown > 0.0f)
+        if (slot.Cooldown > 0.0f || HoldFire)
             return;
 
         Vector3 origin = GlobalPosition;
@@ -332,7 +374,7 @@ public partial class WeaponHandler : Node3D
         return true;
     }
 
-    private void Fire(Vector3 origin, Vector2 direction, int level)
+    private void Fire(Vector3 origin, Vector2 direction, int level, bool allowBurst = true)
     {
         WeaponResource weapon = Weapon!;
         float range = weapon.GetEffectiveRange(level);
@@ -348,6 +390,14 @@ public partial class WeaponHandler : Node3D
         float knockback = weapon.Knockback + Mods.Knockback;
 
         Fired?.Invoke(weapon.Category, origin, direction);
+
+        if (allowBurst && weapon.Trait == WeaponTrait.Burst && weapon.TraitCount > 0)
+        {
+            Slot slot = _slots[_active];
+            slot.BurstLeft = weapon.TraitCount;
+            slot.BurstDelay = weapon.TraitAmount;
+            slot.BurstDirection = direction;
+        }
 
         if (weapon.IsMelee)
         {
@@ -365,8 +415,30 @@ public partial class WeaponHandler : Node3D
 
                 Vector3 where = _horde.Pool.Position[index];
                 _horde.Damage(index, damage, direction * knockback);
+                ApplyBleed(weapon, index);
                 RecordHit(weapon.Category, where);
             }
+
+            // Cleave: the same reach, behind as well, for a fraction of the
+            // damage. Being surrounded stops being purely a problem — which is
+            // the one thing a melee weapon can offer that a rifle cannot.
+            if (weapon.Trait == WeaponTrait.Cleave && weapon.TraitAmount > 0.0f)
+            {
+                int behind = _horde.QueryArc(origin, -direction, range * Mods.AreaScale,
+                                             weapon.SwingArcDegrees * 0.5f, _hitList);
+
+                for (int i = behind - 1; i >= 0; i--)
+                {
+                    int index = _hitList[i];
+                    if (index >= _horde.Pool.Count)
+                        continue;
+
+                    Vector3 where = _horde.Pool.Position[index];
+                    _horde.Damage(index, damage * weapon.TraitAmount, -direction * knockback);
+                    RecordHit(weapon.Category, where);
+                }
+            }
+
             return;
         }
 
@@ -381,7 +453,8 @@ public partial class WeaponHandler : Node3D
                 damage,
                 knockback,
                 range / speed,
-                weapon.Penetration + Mods.Pierce);
+                weapon.Penetration + Mods.Pierce,
+                weapon.Trait == WeaponTrait.Ricochet ? weapon.TraitCount : 0);
             return;
         }
 
@@ -405,6 +478,7 @@ public partial class WeaponHandler : Node3D
 
             Vector3 where = _horde.Pool.Position[index];
             _horde.Damage(index, damage, shot * knockback);
+            ApplyBleed(weapon, index);
             RecordHit(weapon.Category, where);
             remaining--;
         }
@@ -449,14 +523,54 @@ public partial class WeaponHandler : Node3D
             if (target < 0)
                 continue;
 
+            // The next target is chosen *before* the hit lands. A kill
+            // swap-removes, which moves the last enemy into the victim's slot —
+            // so asking afterwards to exclude "the one just hit" excludes
+            // whoever took its index, and with two enemies on the field that is
+            // reliably the only candidate. Same family as the stale index a
+            // death blast leaves behind.
+            int next = Projectiles.Bounces[i] > 0
+                ? _horde.NearestExcept(position, BounceRange, target)
+                : -1;
+            Vector3 nextPosition = next >= 0 ? _horde.Pool.Position[next] : Vector3.Zero;
+
             _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
             RecordHit(WeaponCategory.BowCrossbow, position);
+
+            // Ricochet turns to face somebody new rather than carrying straight
+            // on, which is what makes it different from penetration: it curves
+            // through a group instead of needing them lined up.
+            if (Projectiles.Bounces[i] > 0)
+            {
+                if (next >= 0)
+                {
+                    Vector3 toNext = nextPosition - position;
+                    var heading = new Vector2(toNext.X, toNext.Z);
+                    if (heading.LengthSquared() > 0.0001f)
+                    {
+                        Projectiles.Bounces[i]--;
+                        Projectiles.Velocity[i] = heading.Normalized() * velocity.Length();
+                        Projectiles.Life[i] = Mathf.Max(Projectiles.Life[i], BounceRange / velocity.Length());
+                        continue;
+                    }
+                }
+            }
 
             if (--Projectiles.Pierce[i] <= 0)
                 Projectiles.DespawnAt(i);
         }
 
         _projectileRenderer?.Sync(Projectiles, ProjectileHeight);
+    }
+
+    /// How far a ricochet will look for its next target. Short: a bounce is a
+    /// crowd tool, and one that can cross the arena is a homing missile.
+    private const float BounceRange = 7.0f;
+
+    private void ApplyBleed(WeaponResource weapon, int index)
+    {
+        if (weapon.Trait == WeaponTrait.Bleed && weapon.TraitAmount > 0.0f)
+            _horde!.ApplyBleed(index, weapon.TraitAmount, weapon.TraitCount);
     }
 
     private void RecordHit(WeaponCategory category, Vector3 where)

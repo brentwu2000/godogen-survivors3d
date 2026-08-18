@@ -2,6 +2,24 @@ using Godot;
 
 /// Writes the starting weapon set to resources/weapons/*.tres.
 ///
+/// Every weapon carries a trait as well as its numbers. Six weapons separated
+/// only by damage, range and magazine size are six difficulty settings for one
+/// weapon: the choice at the shop is meant to be "which way do I want to fight",
+/// and it cannot be while the answer to every question is the same shot with a
+/// bigger number on it.
+///
+///   knife    bleeds     — rewards touching many things once, which is the exact
+///                         opposite of what its damage number suggests
+///   axe      cleaves     — hits behind at half damage; being surrounded stops
+///                         being purely a problem
+///   scythe   cleaves     — the same, at three quarters, which is what the tier
+///                         is buying rather than a larger number
+///   bow      ricochets   — one jump to a *new* target, so it curves through a
+///                         group instead of needing them lined up
+///   rifles   burst       — extra shots on a short delay; the magazine empties
+///                         faster than it looks like it should, and that is the
+///                         cost the trait is paid for
+///
 ///   godot --headless --script scripts/tools/BuildWeapons.cs
 ///
 /// Balance lives in the .tres files once written; this only seeds them. Re-run
@@ -28,6 +46,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Combat Knife",
+                Trait = WeaponTrait.Bleed,
+                TraitAmount = 4.0f,
+                TraitCount = 3,
                 Category = WeaponCategory.MeleeShort,
                 BaseDamage = 6.0f,
                 BaseAttackSpeed = 3.2f,
@@ -42,6 +63,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Fire Axe",
+                Trait = WeaponTrait.Cleave,
+                TraitAmount = 0.5f,
+                TraitCount = 0,
                 Category = WeaponCategory.MeleeLong,
                 Price = 250,
                 BaseDamage = 16.0f,
@@ -57,6 +81,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Hunting Bow",
+                Trait = WeaponTrait.Ricochet,
+                TraitAmount = 0.0f,
+                TraitCount = 1,
                 Category = WeaponCategory.BowCrossbow,
                 Price = 400,
                 BaseDamage = 22.0f,
@@ -74,6 +101,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Scavenged Rifle",
+                Trait = WeaponTrait.Burst,
+                TraitAmount = 0.09f,
+                TraitCount = 1,
                 Category = WeaponCategory.Firearm,
                 BaseDamage = 12.0f,
                 BaseAttackSpeed = 6.0f,
@@ -98,6 +128,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Service Rifle",
+                Trait = WeaponTrait.Burst,
+                TraitAmount = 0.07f,
+                TraitCount = 2,
                 Category = WeaponCategory.Firearm,
                 Tier = 2,
                 Price = 1400,
@@ -121,6 +154,9 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Reaper Scythe",
+                Trait = WeaponTrait.Cleave,
+                TraitAmount = 0.75f,
+                TraitCount = 0,
                 Category = WeaponCategory.MeleeLong,
                 Tier = 2,
                 Price = 1100,

@@ -395,6 +395,18 @@ public partial class Horde : Node3D
                 Pool.HitFlash[i] = Mathf.Max(0.0f, Pool.HitFlash[i] - fade);
         }
 
+        // Bleeding, walked backwards because it kills and a kill swap-removes.
+        // No flash and no blast: a wound ticking is not a hit landing, and a
+        // bleed that could set off a bloater would make the knife a bomb.
+        for (int i = Pool.Count - 1; i >= 0; i--)
+        {
+            if (Pool.BleedRemaining[i] <= 0.0f)
+                continue;
+
+            Pool.BleedRemaining[i] -= step;
+            Damage(i, Pool.Bleed[i] * step, Vector2.Zero, allowBlast: false, flash: false);
+        }
+
         if (_player == null || Pool.Count == 0)
         {
             StepEnemyShots(step);
@@ -705,6 +717,42 @@ public partial class Horde : Node3D
         ApplyKillRules(deathPosition);
         EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
+    }
+
+    /// Opens a wound. Refreshes rather than stacks: two knives should be twice
+    /// the swings, not twice the bleed on the same body, and a stacking wound is
+    /// a number that runs away in exactly the crowd it was designed for.
+    public void ApplyBleed(int index, float damagePerSecond, float seconds)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return;
+
+        Pool.Bleed[index] = Mathf.Max(Pool.Bleed[index], damagePerSecond);
+        Pool.BleedRemaining[index] = Mathf.Max(Pool.BleedRemaining[index], seconds);
+    }
+
+    /// The nearest enemy to a point that is not `except`. For a ricochet picking
+    /// its next target — it has to be somebody new, or the arrow bounces between
+    /// the corpse it just made and itself.
+    public int NearestExcept(Vector3 point, float radius, int except)
+    {
+        int best = -1;
+        float bestSqr = radius * radius;
+
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (i == except)
+                continue;
+
+            float d = FlatDistanceSquared(Pool.Position[i], point);
+            if (d < bestSqr)
+            {
+                bestSqr = d;
+                best = i;
+            }
+        }
+
+        return best;
     }
 
     /// A thrown charge going off. Enemies only, for the same reason the burning

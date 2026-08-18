@@ -13,3 +13,6 @@ BaseReloadTime = 2.2
 StartingReserve = 240
 MaxReserve = 360
 Knockback = 0.08
+Trait = 1
+TraitAmount = 0.09
+TraitCount = 1

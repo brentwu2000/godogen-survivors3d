@@ -12,3 +12,6 @@ BaseRange = 1.6
 SwingArcDegrees = 45.0
 MagazineSize = 0
 Knockback = 0.05
+Trait = 2
+TraitAmount = 4.0
+TraitCount = 3

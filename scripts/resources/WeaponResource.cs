@@ -8,6 +8,37 @@ public enum WeaponCategory
     Firearm,
 }
 
+/// A weapon's signature behaviour — the thing that makes it that weapon rather
+/// than a row of larger numbers.
+///
+/// Six weapons that differ only in damage, range and magazine size are six
+/// difficulty settings for one weapon. The player's choice at the shop is
+/// supposed to be "which way do I want to fight", and it cannot be while the
+/// answer to every question is the same shot with a different number on it.
+public enum WeaponTrait
+{
+    None,
+
+    /// Fires TraitCount extra shots TraitAmount seconds apart. Turns a rifle
+    /// from a metronome into something with a rhythm, and makes the reload
+    /// matter — a burst empties a magazine faster than it looks like it should.
+    Burst,
+
+    /// Hits leave TraitAmount damage per second on the target for TraitCount
+    /// seconds. Rewards touching many things once instead of one thing many
+    /// times, which is exactly the opposite of what a knife's numbers suggest.
+    Bleed,
+
+    /// A projectile that jumps to another target TraitCount times after a hit.
+    /// The bow's answer to a crowd, without giving it penetration — a bounce
+    /// picks a *new* target, so it curves through a group rather than lining up.
+    Ricochet,
+
+    /// The swing also strikes everything within reach behind the swinger, at
+    /// TraitAmount of the damage. Being surrounded stops being purely a problem.
+    Cleave,
+}
+
 /// Weapon stats as data, so balance lives in .tres files rather than in code.
 ///
 /// Proficiency is applied here rather than at the call site: every consumer then
@@ -58,6 +89,13 @@ public partial class WeaponResource : Resource
     [Export] public float ProjectileSpeed { get; set; } = 24.0f;
 
     [Export] public float Knockback { get; set; }
+
+    /// The weapon's signature. What TraitAmount and TraitCount mean depends on
+    /// it — see WeaponTrait — because one pair of numbers shared by every trait
+    /// is far less to carry than a field per behaviour that only one weapon has.
+    [Export] public WeaponTrait Trait { get; set; } = WeaponTrait.None;
+    [Export] public float TraitAmount { get; set; }
+    [Export] public int TraitCount { get; set; }
 
     /// Shop tier. 1 is starting kit — owned from the first run, never lost.
     [Export] public int Tier { get; set; } = 1;

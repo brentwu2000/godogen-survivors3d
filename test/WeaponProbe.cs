@@ -197,7 +197,16 @@ public partial class WeaponProbe : SceneTree
             _horde.Spawn(new Vector3(-2.2f, 0.0f, 0.0f));   // behind
 
             _weapons!.SetProficiency(WeaponCategory.MeleeLong, 0);
-            _weapons.Equip(GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres"));
+
+            // The axe with its cleave switched off, on a copy. The invariant here
+            // is that SwingArcDegrees is the *full* sweep and not the half-angle —
+            // the Phase 3 bug where 100 became 200 and reached behind the swinger.
+            // The axe now cleaves on purpose, so testing the arc with it as-is
+            // asks two questions at once and gets the wrong answer to both; that
+            // it reaches behind is TraitProbe's business.
+            var axe = GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres").Duplicate() as WeaponResource;
+            axe!.Trait = WeaponTrait.None;
+            _weapons.Equip(axe);
             return null;
         }
 

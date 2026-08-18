@@ -12,4 +12,6 @@ BaseRange = 3.0
 SwingArcDegrees = 100.0
 MagazineSize = 0
 Knockback = 0.55
+Trait = 4
+TraitAmount = 0.5
 Price = 250

@@ -40,6 +40,12 @@ public sealed class EnemyPool
     /// nothing about whether the weapon works.
     public readonly float[] HitFlash;
 
+    /// Damage per second still to be applied, and how long it has left. A knife
+    /// that bleeds rewards touching many things once rather than one thing many
+    /// times, and that only works if the wound outlives the swing.
+    public readonly float[] Bleed;
+    public readonly float[] BleedRemaining;
+
     public int Count { get; private set; }
 
     public EnemyPool(int capacity)
@@ -52,6 +58,8 @@ public sealed class EnemyPool
         Type = new byte[capacity];
         AttackCooldown = new float[capacity];
         HitFlash = new float[capacity];
+        Bleed = new float[capacity];
+        BleedRemaining = new float[capacity];
     }
 
     public bool TrySpawn(Vector3 position, byte type, float health, float phase)
@@ -67,6 +75,8 @@ public sealed class EnemyPool
         Type[i] = type;
         AttackCooldown[i] = 0.0f;
         HitFlash[i] = 0.0f;
+        Bleed[i] = 0.0f;
+        BleedRemaining[i] = 0.0f;
         return true;
     }
 
@@ -91,6 +101,8 @@ public sealed class EnemyPool
             Type[index] = Type[last];
             AttackCooldown[index] = AttackCooldown[last];
             HitFlash[index] = HitFlash[last];
+            Bleed[index] = Bleed[last];
+            BleedRemaining[index] = BleedRemaining[last];
         }
     }
 

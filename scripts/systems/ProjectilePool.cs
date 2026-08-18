@@ -18,6 +18,11 @@ public sealed class ProjectilePool
     /// Enemies this shot can still pass through, including the next one.
     public readonly int[] Pierce;
 
+    /// Jumps left to a new target after a hit. Distinct from Pierce: piercing
+    /// carries straight on through whoever is in line, bouncing turns to face
+    /// somebody else.
+    public readonly int[] Bounces;
+
     public int Count { get; private set; }
 
     public ProjectilePool(int capacity)
@@ -29,14 +34,17 @@ public sealed class ProjectilePool
         Knockback = new float[capacity];
         Life = new float[capacity];
         Pierce = new int[capacity];
+        Bounces = new int[capacity];
     }
 
-    public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life, int pierce)
+    public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life,
+                         int pierce, int bounces = 0)
     {
         if (Count >= Capacity)
             return false;
 
         int i = Count++;
+        Bounces[i] = bounces;
         Position[i] = position;
         Velocity[i] = velocity;
         Damage[i] = damage;
@@ -58,6 +66,7 @@ public sealed class ProjectilePool
         Knockback[index] = Knockback[last];
         Life[index] = Life[last];
         Pierce[index] = Pierce[last];
+        Bounces[index] = Bounces[last];
     }
 
     public void Clear() => Count = 0;

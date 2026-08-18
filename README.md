@@ -61,6 +61,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
+| `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
@@ -212,6 +213,24 @@ It waits for a key. Anything that dismisses itself is something the player learn
 to stop reading.
 
 ## Growth
+
+**Every weapon carries a signature as well as a stat line.** Six weapons separated only by damage,
+range and magazine size are six difficulty settings for one weapon, and the choice at the shop is
+supposed to be "which way do I want to fight". The knife bleeds — which rewards touching many things
+once, the exact opposite of what its damage number suggests. The axe and the scythe cleave, hitting
+what is behind at half and three quarters, so being surrounded stops being purely a problem. The bow
+ricochets to a *new* target, which is what makes it different from penetration: it curves through a
+group instead of needing them lined up. Both rifles burst, and the trait's cost is the ammunition —
+a burst that fires extra shots for free is a damage buff with a sound effect.
+
+Two bugs the traits uncovered, both about an index that stopped meaning what it meant:
+
+- A ricochet chose its next target *after* the hit landed, and a kill swap-removes — so "anyone but
+  the one I just hit" excluded whoever had taken the victim's index, which with two enemies on the
+  field is reliably the only candidate. The next target is now picked before the damage.
+- `Equip` did not clear the burst queue, so the shots a rifle still owed came out of whatever was put
+  in the slot next, on the rifle's timing, while the early return skipped the normal firing path
+  entirely. Swapping mid-burst fired an axe as a rifle.
 
 **The upgrade pool is eighteen options, and twelve of them are rules rather than
 numbers.** It used to be five, all of them a stat going up, which is the one thing
