@@ -32,6 +32,28 @@ public partial class RunDirector : Node3D
 
     [Export] public float EndSpeedScale { get; set; } = 1.6f;
 
+    /// Most enemies alive at once. Spawning stops here and resumes as they die.
+    ///
+    /// Without it the field grows without bound, and a twenty-run sweep found the
+    /// wall between one and two minutes: every layout survived a sixty-second
+    /// linger at near-full health with a peak around a hundred, and nothing at all
+    /// survived a hundred and eighty, with peaks of three and four hundred. A
+    /// three-hundred-second deadline nobody has ever seen the second half of is
+    /// the same as no deadline.
+    ///
+    /// A ceiling rather than a slower rate, for the reason Phase 8 cut the end
+    /// rate from twelve to eight: what the player reads is density, and density
+    /// saturates. Past the point where the screen is full, more of them only
+    /// changes how fast a number they cannot count climbs — while the escalation
+    /// they *can* read, the roster turning into brutes and bloaters and everything
+    /// moving 1.6x faster, carries on unaffected.
+    ///
+    /// 160 rather than a number picked to make the sweep pass: the mobile budget
+    /// has been 150-200 concurrent enemies since before any code existed, and
+    /// nothing had ever enforced it — the field simply grew until somebody died.
+    /// The design number and the performance number are now the same number.
+    [Export] public int MaxLiveEnemies { get; set; } = 160;
+
     /// Payout multiplier at the deadline. Loot alone gives no reason to stay past
     /// the first minute — every crate is empty by then — so the reward for
     /// staying has to come from the clock instead.
@@ -186,7 +208,15 @@ public partial class RunDirector : Node3D
             // Fractional credit, so a rate below one per second still spawns
             // instead of rounding to nothing every tick.
             _spawnCredit += Mathf.Lerp(StartSpawnRate, EndSpawnRate, Intensity) * step;
-            while (_spawnCredit >= 1.0f)
+
+            // Credit is discarded at the ceiling rather than banked. Banked, the
+            // moment the player clears a gap the whole backlog arrives at once —
+            // which is the pile-up the ceiling exists to prevent, delivered as a
+            // single wave instead of gradually.
+            if (_horde.Pool.Count >= MaxLiveEnemies)
+                _spawnCredit = 0.0f;
+
+            while (_spawnCredit >= 1.0f && _horde.Pool.Count < MaxLiveEnemies)
             {
                 _spawnCredit -= 1.0f;
                 if (!_horde.SpawnByIntensity(SpawnPoint()))

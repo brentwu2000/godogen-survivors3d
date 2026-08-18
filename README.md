@@ -47,6 +47,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/DebriefProbe.cs` | yes | The record is what happened — kills by variant, crates, items, the worst moment — and the screen reports the record |
 | `test/ContractProbe.cs` | yes | Three distinct jobs with at most one clock card, exact thresholds, nothing paid on a corpse, and rerolls cost |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
+| `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
@@ -109,8 +110,9 @@ movie frame renders before `_Process` and `CameraRig`'s lerp has not run yet.
 
 ## The loop
 
-A run is 300 s. The horde spawns at 2/s and ramps to 8/s while its speed scales to 1.6x. The
-extraction pad opens at 15% of the clock and needs a 5 s hold, cancelled by stepping out.
+A run is 300 s. The horde spawns at 2/s and ramps to 8/s while its speed scales to 1.6x, **up to 160
+alive at once**. The extraction pad opens at 15% of the clock and needs a 5 s hold, cancelled by
+stepping out.
 
 The top of that ramp used to be 12/s. A maxed weapon clears roughly three a second against the late
 roster, so the field is already growing without bound at six — every rate above it only changed how
@@ -384,6 +386,16 @@ or below zero, the pool despawns an entry that was never live, and `Count` drops
 leaving. A few of those drive it negative, and then the next spawn writes to index -1 — a crash several
 seconds and one system away from the blast that caused it. `Horde.Damage` and `EnemyPool.DespawnAt`
 both refuse out-of-range indices now. The hitscan path had always guarded; the melee path never had.
+
+**The field is capped at 160 concurrent enemies.** Nothing had ever enforced a ceiling — the director
+added spawns and the field grew until somebody died — and a twenty-run sweep found the wall between one
+and two minutes: every layout survived a sixty-second linger at near-full health with a peak around a
+hundred, and nothing at all survived a hundred and eighty, with peaks of three and four hundred. A
+three-hundred-second deadline nobody has seen the second half of is the same as no deadline. A ceiling
+rather than a slower rate, for the reason Phase 8 cut the end rate from twelve to eight: what the player
+reads is density, and density saturates. And 160 is not a number picked to make the test pass — the
+mobile budget has been 150-200 since before any code existed, so the design number and the performance
+number are now the same number.
 
 **Enemies are not physics bodies.** The game asks one question about an enemy — who is near me — and
 a uniform `SpatialGrid` answers it with an O(n) counting sort per tick, so separation is a single

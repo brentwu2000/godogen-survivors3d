@@ -168,6 +168,7 @@ public partial class AutoPlay : SceneTree
             // line the interesting question — how far up the curve the player got
             // before it stopped mattering — is the one the report leaves out.
             GD.Print(Growth());
+            Sweep("Died", _tick / 60.0f, _player.SafeBox.TotalValue);
             Quit(1);
             return true;
         }
@@ -636,6 +637,18 @@ public partial class AutoPlay : SceneTree
         }
     }
 
+    /// One machine-readable line, printed on every outcome including a death.
+    ///
+    /// `BalanceSweep` runs this script twenty times and reads these. It could
+    /// have re-implemented the bot instead and been much faster, and it would
+    /// then be measuring a second bot — the sweep has to be looking at the same
+    /// thing a play-test looks at, or the table it prints is about something
+    /// nobody plays. Same rule as the reachability check asking a real FlowField.
+    private void Sweep(string outcome, float seconds, int banked) =>
+        GD.Print($"SWEEP outcome={outcome} seconds={seconds:F1} banked={banked} " +
+                 $"lowestHp={_lowestHealth:F0} maxHp={_player.MaxHealth:F0} " +
+                 $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} seed={_seed}");
+
     private bool Finish()
     {
         Release();
@@ -654,6 +667,8 @@ public partial class AutoPlay : SceneTree
                      $"{(_meta.ContractMet ? "MET" : "failed")}" +
                      (run != null ? $" ({contract.Progress(run)})" : ""));
         }
+
+        Sweep(state.ToString(), _tick / 60.0f, _endedBanked);
 
         bool ok = state == RunState.Extracted && _endedBanked > 0;
         GD.Print(ok ? "AUTOPLAY OK" : "AUTOPLAY FAILED");
