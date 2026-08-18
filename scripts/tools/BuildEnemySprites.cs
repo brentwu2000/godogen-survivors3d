@@ -56,6 +56,14 @@ public partial class BuildEnemySprites : SceneTree
         ("brute", "brute", 3.0f),
         ("bloater", "bloater", 2.4f),
         ("spitter", "spitter", 2.0f),
+
+        // The first version of this row reused the brute's painting at nearly
+        // twice the height, on the theory that a familiar shape arriving at an
+        // unfamiliar size is what makes a boss. On screen it read as a brute
+        // standing closer to the camera. It has its own painting now — bone
+        // plating, one arm mutated past the other — because the size difference
+        // is doing enough work already and the silhouette was doing none.
+        ("boss", "boss", 5.5f),
     };
 
     /// The quad height a scale of 1.0 draws, matching Horde.SpriteHeight.

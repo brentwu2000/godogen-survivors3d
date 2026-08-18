@@ -220,9 +220,15 @@ public partial class EnemyTypeProbe : SceneTree
     private bool CheckTable()
     {
         EnemyTypeResource[] types = _horde!.Types;
-        if (types.Length != 5)
+
+        // Five that turn up on their own plus the boss, which the director places
+        // by hand. The count is asserted rather than merely tolerated because a
+        // sixth row appearing unannounced would mean the sprite array and the
+        // table had drifted apart, and every layer after the gap would draw the
+        // wrong creature.
+        if (types.Length != 6)
         {
-            GD.PushError($"PROBE FAILED — expected 5 variants, got {types.Length}");
+            GD.PushError($"PROBE FAILED — expected 6 variants, got {types.Length}");
             return false;
         }
 

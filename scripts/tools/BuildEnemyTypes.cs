@@ -112,6 +112,39 @@ public partial class BuildEnemyTypes : SceneTree
                 UnlockIntensity = 0.3f,
                 ExperienceValue = 2.0f,
             },
+
+            // The run's climax, and the only enemy the director places by hand.
+            //
+            // UnlockIntensity above 1 keeps it out of the weighted roll entirely:
+            // a boss that could turn up twice, or not at all, is not a climax, it
+            // is a rare spawn. Enormous and slow, so the fight is about the space
+            // around it rather than about reflexes — and everything else on the
+            // field is still there while it comes.
+            new()
+            {
+                TypeName = "boss",
+                SpriteLayer = 5,
+                DesignHeightMeters = 5.5f,
+                MaxHealth = 1600.0f,
+                MoveSpeed = 1.15f,
+                ContactDamagePerSecond = 26.0f,
+
+                // Slow enough to outwalk, which is the reason it also shoots.
+                // Siege rather than Ranged: it opens fire at 22 m and keeps
+                // coming, so distance buys time and never buys safety.
+                Behavior = EnemyBehavior.Siege,
+                StandoffDistance = 22.0f,
+                AttackInterval = 1.5f,
+                ProjectileSpeed = 13.0f,
+                ProjectileDamage = 14.0f,
+                SpriteScale = 3.157f,
+                KnockbackScale = 0.0f,
+                DeathBlastRadius = 6.0f,
+                DeathBlastDamage = 30.0f,
+                SpawnWeight = 0.0f,
+                UnlockIntensity = 2.0f,
+                ExperienceValue = 120.0f,
+            },
         };
 
         foreach (EnemyTypeResource type in types)

@@ -40,6 +40,11 @@ varying flat float v_layer;
 // decoding bug waiting for whoever changes the flip flag next.
 varying flat float v_flash;
 
+// Green and blue of the instance colour: which elite rule this one carries, or
+// black for an ordinary enemy. Separate from the flash so a marked enemy being
+// shot can show both at once.
+varying flat vec2 v_elite;
+
 void vertex() {
     // INSTANCE_CUSTOM.x: 1.0 mirrors the sprite. One drawn facing, mirrored at
     // runtime — generators cannot reliably draw a specific direction anyway.
@@ -50,6 +55,7 @@ void vertex() {
     v_flip = INSTANCE_CUSTOM.x;
     v_layer = INSTANCE_CUSTOM.w;
     v_flash = COLOR.r * flash_enabled;
+    v_elite = COLOR.gb * flash_enabled;
 
     float spin = INSTANCE_CUSTOM.z;
     if (spin != 0.0) {
@@ -96,5 +102,26 @@ void fragment() {
     // entirely and a hit enemy is a solid white cut-out — which reads as a
     // missing texture rather than as an impact, and is worst exactly when it
     // matters most, with a dozen of them lit at once by a blast.
-    ALBEDO = mix(texel.rgb, vec3(1.0), v_flash * 0.72);
+    // The elite mark, mostly multiplied and only slightly added.
+    //
+    // The first version added 0.55 flat and the screenshot settled it: an
+    // armoured brute came out as a solid blue silhouette with none of the
+    // painting left, which is the hit flash's failure mode wearing a different
+    // colour — and this one is permanent rather than a tenth of a second.
+    //
+    // Scaling the sprite's own colour pushes the hue hard while keeping every
+    // fold and shadow the artist put there, because the shading is what is being
+    // multiplied. The small additive term is what stops a black brute from
+    // staying black: multiply alone has nothing to work on at zero.
+    //
+    // The push is scaled by how dark the sprite already is, because a flat
+    // multiplier is two different effects on two different paintings: the brute
+    // is dark and took the blue well, while the bloater is pale and clipped to a
+    // glowing white-green blob with no drawing left in it. Weighting by (1 - lum)
+    // spends the strength where there is headroom and backs off where there is
+    // none, so one number is right for both.
+    vec3 mark = vec3(0.0, v_elite.x, v_elite.y);
+    float lum = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 marked = texel.rgb * (1.0 + mark * 2.2 * (1.0 - lum)) + mark * 0.07;
+    ALBEDO = mix(marked, vec3(1.0), v_flash * 0.72);
 }

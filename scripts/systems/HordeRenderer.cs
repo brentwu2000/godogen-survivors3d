@@ -147,9 +147,11 @@ public sealed class HordeRenderer
         for (int i = 0; i < pool.Count; i++)
         {
             EnemyTypeResource type = types[pool.Type[i]];
-            Write(i, pool.Position[i], type.SpriteScale,
+            byte elite = pool.Elite[i];
+
+            Write(i, pool.Position[i], type.SpriteScale * Elites.ScaleBonus(elite),
                   pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer,
-                  pool.HitFlash[i]);
+                  pool.HitFlash[i], Elites.Tint(elite));
         }
 
         Upload(pool.Count);
@@ -176,7 +178,7 @@ public sealed class HordeRenderer
     }
 
     private void Write(int index, Vector3 position, float scale, float flip, float phase, float spin,
-                       int layer, float flash = 0.0f)
+                       int layer, float flash = 0.0f, Color tint = default)
     {
         int b = index * _floatsPerInstance;
 
@@ -195,9 +197,13 @@ public sealed class HordeRenderer
         int c = b + 12;
         if (_useColours)
         {
+            // Red is the hit flash and green/blue are the elite tint. They share
+            // the block because they have to be able to happen at once: an
+            // armoured elite being shot is both, and one channel could only say
+            // one of them.
             _buffer[c + 0] = flash;
-            _buffer[c + 1] = 0.0f;
-            _buffer[c + 2] = 0.0f;
+            _buffer[c + 1] = tint.G;
+            _buffer[c + 2] = tint.B;
             _buffer[c + 3] = 1.0f;
             c += 4;
         }

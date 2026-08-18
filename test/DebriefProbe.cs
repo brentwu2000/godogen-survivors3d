@@ -230,7 +230,10 @@ public partial class DebriefProbe : SceneTree
             return false;
         }
 
-        bool kills = run.KillsByType.Length == 5
+        // Sized from the live table rather than a literal. The count was written
+        // out as 5 here and the row count grew by one when the boss landed, so
+        // the probe failed on a breakdown that was entirely correct.
+        bool kills = run.KillsByType.Length == _horde!.Types.Length
                      && run.KillsByType[1] == 5 && run.KillsByType[3] == 2 && run.Kills == 7;
         bool crate = run.CratesLooted == 1 && run.LootValue == _crateValue;
         bool items = run.ItemsUsed == 1 && run.ItemsThrown == 1;

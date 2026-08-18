@@ -175,7 +175,10 @@ public partial class SoundDirector : Node
         }
 
         if (_director != null)
+        {
             _director.RunEnded += OnRunEnded;
+            _director.BossArrived += OnBossArrived;
+        }
 
         Node? crates = root?.GetNodeOrNull("LootContainers");
         if (crates != null)
@@ -350,6 +353,12 @@ public partial class SoundDirector : Node
     private void OnHit(Vector3 where) => Play(Sfx.Impact, -4.0f);
 
     private void OnEnemyKilled(int type, Vector3 position) => Play(Sfx.EnemyDeath, -5.0f);
+
+    /// The explosion clip dropped nearly two octaves. A fifteenth synthesised
+    /// waveform would be the tidy answer, but a low, slow blast is already the
+    /// shape of a roar, and a sound the player has heard forty times arriving
+    /// wrong-sized is more unsettling than an unfamiliar one.
+    private void OnBossArrived() => Play(Sfx.Explosion, 2.0f, 0.32f);
 
     private void OnExploded(Vector3 position) => Play(Sfx.Explosion, 2.0f);
 

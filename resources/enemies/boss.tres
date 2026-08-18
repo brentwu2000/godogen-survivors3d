@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_jlmjw"]
+
+[resource]
+script = ExtResource("1_jlmjw")
+TypeName = "boss"
+MaxHealth = 1600.0
+MoveSpeed = 1.15
+ContactDamagePerSecond = 26.0
+SpriteScale = 3.157
+DesignHeightMeters = 5.5
+SpriteLayer = 5
+KnockbackScale = 0.0
+DeathBlastRadius = 6.0
+DeathBlastDamage = 30.0
+Behavior = 2
+StandoffDistance = 22.0
+AttackInterval = 1.5
+ProjectileSpeed = 13.0
+ProjectileDamage = 14.0
+SpawnWeight = 0.0
+UnlockIntensity = 2.0
+ExperienceValue = 120.0

@@ -54,7 +54,7 @@ public partial class Horde : Node3D
     /// Variant order. Drives three things at once — the .tres to load, the sprite
     /// stacked at that layer, and the byte stored per instance — so they cannot
     /// drift apart the way three separate lists would.
-    private static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter" };
+    private static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
 
     /// A kill, for anything that wants to count them. A plain C# event rather
     /// than a Godot signal: both ends are C#, and EmitSignal marshals a Variant
@@ -66,6 +66,12 @@ public partial class Horde : Node3D
     /// the same event to anything watching — both are a radius of damage the
     /// player has to read off the screen in the moment it happens.
     public event System.Action<Vector3>? Exploded;
+
+    /// The same kill `EnemyKilled` reports, with the variant and the elite mark
+    /// attached. A second event rather than a wider first one: six things listen
+    /// for a death and exactly one needs to know that an armoured walker is worth
+    /// four times a plain one.
+    public event System.Action<int, byte, Vector3>? KillDetail;
 
     public EnemyPool Pool { get; private set; } = null!;
     public EnemyTypeResource[] Types { get; private set; } = System.Array.Empty<EnemyTypeResource>();
@@ -119,9 +125,13 @@ public partial class Horde : Node3D
         _field = new FlowField(Vector2.Zero, ArenaExtent, 1.5f);
         _neighbours = new int[Capacity];
 
+        // The elite bonus has to be in here too. It multiplies the largest sprite
+        // the table declares, so leaving it out sizes the AABB for a world where
+        // the biggest thing on screen never happens — and the symptom is the
+        // marked enemies, the ones worth watching, popping out at the frame edge.
         float maxScale = 1.0f;
         foreach (EnemyTypeResource type in Types)
-            maxScale = Mathf.Max(maxScale, type.SpriteScale);
+            maxScale = Mathf.Max(maxScale, type.SpriteScale * Elites.ScaleBonus((byte)EliteKind.Armoured));
 
         _renderer = new HordeRenderer(texture, shader, SpriteHeight, Capacity, ArenaExtent,
                                       maxScale: maxScale, useColours: true);
@@ -336,12 +346,52 @@ public partial class Horde : Node3D
     /// the run director calls SpawnByIntensity instead.
     public bool Spawn(Vector3 position) => Spawn(position, 0);
 
-    public bool Spawn(Vector3 position, int type)
+    /// Index of the first live enemy of a variant, or -1. Linear, and called once
+    /// a frame by the boss bar — a lookup table for a variant that exists at most
+    /// once would cost more to keep correct across swap-remove than it saves.
+    public int FirstOfType(int type)
+    {
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (Pool.Type[i] == type)
+                return i;
+        }
+
+        return -1;
+    }
+
+    public bool Spawn(Vector3 position, int type) => Spawn(position, type, EliteKind.None);
+
+    public bool Spawn(Vector3 position, int type, EliteKind elite)
     {
         if (type < 0 || type >= Types.Length)
             return false;
 
-        return Pool.TrySpawn(position, (byte)type, Types[type].MaxHealth, NextFloat() * Mathf.Tau);
+        float health = Types[type].MaxHealth * Elites.HealthScale((byte)elite);
+        if (!Pool.TrySpawn(position, (byte)type, health, NextFloat() * Mathf.Tau))
+            return false;
+
+        Pool.Elite[Pool.Count - 1] = (byte)elite;
+        return true;
+    }
+
+    /// Chance that a spawn arrives marked, as a function of how far into the run
+    /// it is. None at the start: the first minute is where the player learns what
+    /// an ordinary walker does, and a rule bent before the rule is known is just
+    /// an enemy behaving inexplicably.
+    [Export] public float EliteChanceAtEnd { get; set; } = 0.14f;
+    [Export] public float EliteStartsAt { get; set; } = 0.25f;
+
+    private EliteKind RollElite()
+    {
+        if (SpawnIntensity < EliteStartsAt)
+            return EliteKind.None;
+
+        float ramp = (SpawnIntensity - EliteStartsAt) / Mathf.Max(0.01f, 1.0f - EliteStartsAt);
+        if (NextFloat() > ramp * EliteChanceAtEnd)
+            return EliteKind.None;
+
+        return (EliteKind)(1 + (int)(NextFloat() * 3.0f) % 3);
     }
 
     /// Picks a variant by weight among those the run has unlocked. Late in a run
@@ -357,7 +407,7 @@ public partial class Horde : Node3D
         }
 
         if (total <= 0.0f)
-            return Spawn(position, 0);
+            return Spawn(position, 0, RollElite());
 
         float roll = NextFloat() * total;
         for (int i = 0; i < Types.Length; i++)
@@ -367,11 +417,11 @@ public partial class Horde : Node3D
 
             roll -= Types[i].SpawnWeight;
             if (roll <= 0.0f)
-                return Spawn(position, i);
+                return Spawn(position, i, RollElite());
         }
 
         // Only reachable on floating-point slack at the very end of the range.
-        return Spawn(position, 0);
+        return Spawn(position, 0, RollElite());
     }
 
     /// How fast a hit flash fades, in units per second. About a tenth of a second
@@ -456,6 +506,13 @@ public partial class Horde : Node3D
                     : Pool.Velocity[i].Normalized();
             }
 
+            // Siege fires on the same rules and then ignores the answer: the
+            // return value means "stop closing", and the whole point of the
+            // behaviour is that it never does. It still takes the contact branch
+            // below, so arriving is a second threat rather than a replacement.
+            if (type.Behavior == EnemyBehavior.Siege)
+                StepRanged(i, type, position, playerFlat, flat, toPlayerSqr, scaledStep);
+
             if (type.Behavior == EnemyBehavior.Ranged)
             {
                 if (StepRanged(i, type, position, playerFlat, flat, toPlayerSqr, scaledStep))
@@ -467,7 +524,7 @@ public partial class Horde : Node3D
                 contactDamage += type.ContactDamagePerSecond;
             }
 
-            Vector2 velocity = desired * type.MoveSpeed * SpeedScale;
+            Vector2 velocity = desired * type.MoveSpeed * SpeedScale * Elites.SpeedScale(Pool.Elite[i]);
 
             if (near)
                 velocity += Separation(i, position) * SeparationStrength;
@@ -688,7 +745,7 @@ public partial class Horde : Node3D
 
         EnemyTypeResource type = Types[Pool.Type[index]];
 
-        Pool.Health[index] -= amount;
+        Pool.Health[index] -= amount * Elites.DamageScale(Pool.Elite[index]);
         if (Pool.Health[index] > 0.0f)
         {
             // The only confirmation a shot landed on something that lived. A
@@ -709,12 +766,18 @@ public partial class Horde : Node3D
         }
 
         Vector3 deathPosition = Pool.Position[index];
+        byte eliteMark = Pool.Elite[index];
         Pool.DespawnAt(index);
 
         if (allowBlast && type.DeathBlastRadius > 0.0f)
             Blast(deathPosition, type.DeathBlastRadius, type.DeathBlastDamage);
 
+        (float eliteRadius, float eliteDamage) = Elites.DeathBlast(eliteMark);
+        if (allowBlast && eliteRadius > 0.0f)
+            Blast(deathPosition, eliteRadius, eliteDamage);
+
         ApplyKillRules(deathPosition);
+        KillDetail?.Invoke(type.SpriteLayer, eliteMark, deathPosition);
         EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
     }

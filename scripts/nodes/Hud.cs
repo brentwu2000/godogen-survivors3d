@@ -47,7 +47,13 @@ public partial class Hud : CanvasLayer
     private Label _payout = null!;
     private Label _exit = null!;
     private Label _banner = null!;
+    private Label _alert = null!;
+    private ColorRect _bossBack = null!;
+    private ColorRect _bossFill = null!;
     private ColorRect _vignette = null!;
+
+    private float _alertLeft;
+    private float _bossBarWidth;
     private ShaderMaterial? _vignetteMaterial;
 
     private readonly ColorRect[] _cards = new ColorRect[3];
@@ -81,6 +87,9 @@ public partial class Hud : CanvasLayer
         _payout = GetNode<Label>("Payout");
         _exit = GetNode<Label>("Exit");
         _banner = GetNode<Label>("Banner");
+        _alert = GetNode<Label>("Alert");
+        _bossBack = GetNode<ColorRect>("BossBarBack");
+        _bossFill = GetNode<ColorRect>("BossBarFill");
         _vignette = GetNode<ColorRect>("Vignette");
 
         Style(_arms, 22, HorizontalAlignment.Left);
@@ -90,6 +99,15 @@ public partial class Hud : CanvasLayer
         Style(_exit, 22, HorizontalAlignment.Right);
         Style(_banner, 44, HorizontalAlignment.Center);
         _banner.Visible = false;
+
+        Style(_alert, 30, HorizontalAlignment.Center, Critical);
+        _alert.Visible = false;
+
+        _bossBack.Color = Track;
+        _bossFill.Color = Critical;
+        _bossBarWidth = _bossFill.Size.X;
+        _bossBack.Visible = false;
+        _bossFill.Visible = false;
 
         for (int i = 0; i < _cards.Length; i++)
         {
@@ -144,7 +162,21 @@ public partial class Hud : CanvasLayer
         _containers = found.ToArray();
 
         if (_director != null)
+        {
             _director.RunEnded += OnRunEnded;
+            _director.BossArrived += OnBossArrived;
+        }
+    }
+
+    private void OnBossArrived() => Announce("SOMETHING BIG IS COMING", 4.0f);
+
+    /// A line that says itself and then gets out of the way. Anything permanent
+    /// in the upper third competes with the thing it is warning about.
+    public void Announce(string text, float seconds)
+    {
+        _alert.Text = text;
+        _alert.Visible = true;
+        _alertLeft = seconds;
     }
 
     private bool _touchActive;
@@ -219,7 +251,48 @@ public partial class Hud : CanvasLayer
         UpdateExit();
         UpdateHold();
         UpdateOffer();
+        UpdateAlert(step);
+        UpdateBossBar();
         UpdateVignette(step);
+    }
+
+    private void UpdateAlert(float step)
+    {
+        if (_alertLeft <= 0.0f)
+            return;
+
+        _alertLeft -= step;
+        _alert.Visible = _alertLeft > 0.0f;
+
+        // Blink rather than fade. A fading warning reads as something already
+        // over; a pulsing one reads as still true, which it is until the thing
+        // is dead.
+        _alert.Modulate = new Color(1.0f, 1.0f, 1.0f,
+                                    0.55f + 0.45f * Mathf.Abs(Mathf.Sin(_alertLeft * 6.0f)));
+    }
+
+    /// Hidden until it exists, hidden again once it is dead. The bar is not a
+    /// readout of a number the player asked for — it is the answer to "is this
+    /// working", and a bar that stays at zero after the fight says the opposite.
+    private void UpdateBossBar()
+    {
+        int index = _director is { BossAlive: true } && _horde != null
+            ? _horde.FirstOfType(_director.BossType)
+            : -1;
+
+        if (index < 0 || _horde == null)
+        {
+            _bossBack.Visible = false;
+            _bossFill.Visible = false;
+            return;
+        }
+
+        float max = Mathf.Max(1.0f, _horde.Types[_director!.BossType].MaxHealth);
+        float fraction = Mathf.Clamp(_horde.Pool.Health[index] / max, 0.0f, 1.0f);
+
+        _bossBack.Visible = true;
+        _bossFill.Visible = true;
+        _bossFill.Size = new Vector2(_bossBarWidth * fraction, _bossFill.Size.Y);
     }
 
     private void UpdateHealth(float step)

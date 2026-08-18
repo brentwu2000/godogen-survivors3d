@@ -315,6 +315,36 @@ public partial class BuildMain : SceneTree
             Size = new Vector2(ScreenWidth, 200.0f),
         });
 
+        // Its own label rather than borrowing the banner's. They overlap in time
+        // only at the very end of a run, but "boss" and "you died" wanting the
+        // same line is exactly the collision that shows up once, in front of a
+        // player, and never in a probe.
+        hud.AddChild(new Label
+        {
+            Name = "Alert",
+            Position = new Vector2(0.0f, 96.0f),
+            Size = new Vector2(ScreenWidth, 60.0f),
+        });
+
+        // The boss bar sits under the clock, not over the character. Full width
+        // is deliberate: it is the only bar in the game that is about something
+        // other than the player, and it should not be mistakable for one of theirs.
+        hud.AddChild(new ColorRect
+        {
+            Name = "BossBarBack",
+            Position = new Vector2(ScreenWidth * 0.5f - 420.0f, 150.0f),
+            Size = new Vector2(840.0f, 14.0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
+        hud.AddChild(new ColorRect
+        {
+            Name = "BossBarFill",
+            Position = new Vector2(ScreenWidth * 0.5f - 420.0f, 150.0f),
+            Size = new Vector2(840.0f, 14.0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
         return (Hud)SceneBuildUtil.AttachScriptToRoot(hud, "res://scripts/nodes/Hud.cs");
     }
 

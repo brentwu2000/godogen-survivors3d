@@ -72,6 +72,24 @@ public partial class RunDirector : Node3D
 
     [Signal] public delegate void RunEndedEventHandler(int state, int bankedValue);
 
+    /// Announced rather than merely spawned. A boss the player only notices when
+    /// their health starts dropping is a difficulty spike; one they are told
+    /// about is a decision — leave now with what you have, or stay and take it.
+    [Signal] public delegate void BossArrivedEventHandler();
+
+    /// Fraction of the run at which it walks in.
+    ///
+    /// 0.62 was the design answer and the sweep threw it out: runs end between 83
+    /// and 142 seconds, so a boss at 186 happened in one run out of twenty. A
+    /// climax the run does not reach is not late, it is absent. 0.40 puts it
+    /// inside the band where runs are still alive and still being decided.
+    [Export] public float BossAt { get; set; } = 0.40f;
+
+    [Export] public int BossType { get; set; } = 5;
+
+    public bool BossSpawned { get; private set; }
+    public bool BossAlive { get; private set; }
+
     public RunState State { get; private set; } = RunState.Running;
     public float Elapsed { get; private set; }
     public float Remaining => Mathf.Max(0.0f, RunSeconds - Elapsed);
@@ -196,6 +214,9 @@ public partial class RunDirector : Node3D
         if (!_padsRevealed && Intensity >= ExtractionOpensAt)
             RevealPads();
 
+        if (!BossSpawned && Intensity >= BossAt)
+            SendTheBoss();
+
         if (_horde != null)
         {
             _horde.SpeedScale = Mathf.Lerp(1.0f, EndSpeedScale, Intensity);
@@ -226,6 +247,67 @@ public partial class RunDirector : Node3D
 
         if (Elapsed >= RunSeconds)
             End(RunState.TimedOut, SafeBoxValue);
+    }
+
+    /// One boss, once, well outside the ring the ordinary spawns use — it has to
+    /// be seen coming, and at its speed that is most of the encounter.
+    private void SendTheBoss()
+    {
+        BossSpawned = true;
+
+        if (_horde == null || BossType < 0 || BossType >= _horde.Types.Length)
+            return;
+
+        Vector3 around = _player?.GlobalPosition ?? Vector3.Zero;
+        float angle = NextFloat() * Mathf.Tau;
+        var spot = new Vector3(
+            Mathf.Clamp(around.X + Mathf.Cos(angle) * 30.0f, -ArenaExtent, ArenaExtent),
+            0.0f,
+            Mathf.Clamp(around.Z + Mathf.Sin(angle) * 30.0f, -ArenaExtent, ArenaExtent));
+
+        if (!_horde.Spawn(spot, BossType))
+            return;
+
+        BossAlive = true;
+        _horde.EnemyKilled += OnEnemyKilled;
+        GD.Print($"boss arrives at {Elapsed:F0}s");
+        EmitSignal(SignalName.BossArrived);
+    }
+
+    /// Killing it is worth something the player can carry: a crate where it fell,
+    /// biased hard toward the rare tail. A boss that pays in experience alone
+    /// pays in a currency that evaporates when the run ends.
+    private void OnEnemyKilled(int type, Vector3 position)
+    {
+        if (!BossAlive || type != BossType)
+            return;
+
+        BossAlive = false;
+        if (_horde != null)
+            _horde.EnemyKilled -= OnEnemyKilled;
+
+        Node? crates = GetParent().GetNodeOrNull("LootContainers");
+        if (crates == null)
+            return;
+
+        var reward = new LootContainer
+        {
+            Name = "BossCache",
+            Position = new Vector3(position.X, 0.0f, position.Z),
+            RarityBias = 3.2f,
+            RollCount = 5,
+            SearchSeconds = 1.6f,
+        };
+
+        reward.AddChild(new MeshInstance3D
+        {
+            Name = "Mesh",
+            Mesh = new BoxMesh { Size = new Vector3(1.4f, 1.1f, 1.4f) },
+            Position = new Vector3(0.0f, 0.55f, 0.0f),
+        });
+
+        crates.AddChild(reward);
+        GD.Print($"boss down at {Elapsed:F0}s — cache dropped");
     }
 
     private Vector3 SpawnPoint()

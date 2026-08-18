@@ -46,6 +46,12 @@ public sealed class EnemyPool
     public readonly float[] Bleed;
     public readonly float[] BleedRemaining;
 
+    /// Which elite modifier this one carries, or None. A byte on the same
+    /// structure-of-arrays as everything else rather than a subclass: an elite is
+    /// an ordinary enemy with one rule bent, and a hundred of them must cost what
+    /// a hundred ordinary ones cost.
+    public readonly byte[] Elite;
+
     public int Count { get; private set; }
 
     public EnemyPool(int capacity)
@@ -60,6 +66,7 @@ public sealed class EnemyPool
         HitFlash = new float[capacity];
         Bleed = new float[capacity];
         BleedRemaining = new float[capacity];
+        Elite = new byte[capacity];
     }
 
     public bool TrySpawn(Vector3 position, byte type, float health, float phase)
@@ -77,6 +84,7 @@ public sealed class EnemyPool
         HitFlash[i] = 0.0f;
         Bleed[i] = 0.0f;
         BleedRemaining[i] = 0.0f;
+        Elite[i] = 0;
         return true;
     }
 
@@ -103,6 +111,7 @@ public sealed class EnemyPool
             HitFlash[index] = HitFlash[last];
             Bleed[index] = Bleed[last];
             BleedRemaining[index] = BleedRemaining[last];
+            Elite[index] = Elite[last];
         }
     }
 

@@ -26,6 +26,7 @@ public partial class Screenshot : SceneTree
     private int _frame;
     private Vector3? _teleport;
     private bool _mixed;
+    private bool _boss;
     private bool _throw;
     private bool _flash;
     private bool _fx;
@@ -64,6 +65,7 @@ public partial class Screenshot : SceneTree
         foreach (string arg in args)
         {
             _mixed |= arg == "mixed";
+            _boss |= arg == "boss";
             _throw |= arg == "throw";
             _flash |= arg == "flash";
             _fx |= arg == "fx";
@@ -94,6 +96,24 @@ public partial class Screenshot : SceneTree
                     horde.SpawnByIntensity(player.GlobalPosition + new Vector3(
                         Mathf.Cos(angle) * radius, 0.0f, Mathf.Sin(angle) * radius));
                 }
+            }
+
+            // The boss, and one of each mark next to it. Both are things no
+            // exit-code probe can judge: whether the tint is legible at a glance
+            // and whether 5.5 m reads as enormous rather than as broken scale are
+            // questions only a picture answers.
+            if (_boss && horde != null && player != null)
+            {
+                Vector3 at = player.GlobalPosition;
+                // Up-screen but not off it. The quad is ground-anchored, so a
+                // 5.5 m boss placed at the same distance as a 3 m brute puts its
+                // head above the top edge — the first version of this shot
+                // photographed a pair of feet.
+                horde.Spawn(at + new Vector3(0.0f, 0.0f, -6.0f), 5);
+                horde.Spawn(at + new Vector3(-6.0f, 0.0f, -3.5f), 2, EliteKind.Armoured);
+                horde.Spawn(at + new Vector3(-3.0f, 0.0f, 1.5f), 0, EliteKind.Swift);
+                horde.Spawn(at + new Vector3(3.0f, 0.0f, -2.0f), 3, EliteKind.Volatile);
+                horde.Spawn(at + new Vector3(6.0f, 0.0f, -3.5f), 2);
             }
 
             // After the crowd, not before. Thrown items resolve instantly and the

@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/EliteProbe.cs` | yes | A mark is a different fight — armour soaks, swift outruns, volatile bursts — it survives the swap-remove, and the boss arrives once, announced, and pays |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
@@ -154,6 +155,36 @@ Escalation is also a change of composition, not only of rate. Five variants shar
 | spitter | 8 | 2.0 | — | 1.0 | 30% | holds at 8 m and shoots, so kiting is the wrong answer |
 | brute | 60 | 1.4 | 14/s | 1.5 | 45% | takes knockback at 0.2x, which makes knockback a choice |
 | bloater | 25 | 1.8 | 6/s | 1.2 | 60% | 25 damage in 3 m on death — clearing a pile face-first costs something |
+| boss | 1600 | 1.15 | 26/s | 3.16 | 40% | placed by hand, once — the only thing in the run that is an event |
+
+From 25% of the clock, a spawn can arrive **marked**, on a chance that ramps to 14% at the end. A mark
+is one rule bent on an otherwise ordinary enemy: no new sprite, no new behaviour, one number changed
+and a colour that says which. All three are 1.25x bigger, worth 4x experience, and answer a way of
+playing that has stopped needing an answer.
+
+| Mark | Bends | Answers |
+| :--- | :--- | :--- |
+| armoured | takes 0.35x damage, 3x health | a build that solved crowds and never has to aim |
+| swift | moves 1.9x, 2x health | standing still, once the ring around the player clears itself |
+| volatile | 40 damage in 4.5 m on death, 3x health | killing the thing in your face by reflex |
+
+The colour lives in the instance colour block's green and blue because **red is the hit flash**, and an
+armoured elite being shot is both at once — one channel could only say one of them. Size does the
+reading anyway: nobody fighting fifty things compares colours.
+
+The boss is the run's only scripted event: one, at 40% of the clock, from 30 m out. It is announced —
+on the HUD, and by the explosion clip dropped two octaves — because a boss noticed only when health
+starts dropping is a difficulty spike, while one that is announced is a decision: leave now with what
+you have, or stay and take it. Killing it drops a cache biased hard toward the rare tail, so the
+answer is worth something that outlives the run.
+
+**It shoots, and that is not what it was designed to do.** The first version was slow, enormous and
+melee, on the theory that the fight would be about the space around it. The balance sweep put one on
+the field for a full minute and every measured outcome came back unchanged to within a rounding error:
+at 1.15 m/s it can be walked away from forever, so it was scenery with a health bar. `EnemyBehavior`
+gained a third case — `Siege`, which opens fire at 22 m *and keeps closing*, unlike `Ranged`, which
+settles at its standoff. After that change the survivors' worst moment moved from 62 HP to 26 and from
+86 to 30 on the two runs that reached it. Distance now buys time and never buys safety.
 
 ## Between runs
 
@@ -567,6 +598,42 @@ seen it.
 
 **Input actions are generated**, not hand-written into `project.godot` — `Object(InputEventKey,...)`
 literals are version-sensitive and a malformed one drops the whole action with no error.
+
+**Adding one row to the enemy table broke two probes that were entirely right about the game.**
+`EnemyTypeProbe` and `DebriefProbe` both had `5` written into them as the variant count, so a correct
+sixth row made them report a correct game as broken. `DebriefProbe` now reads `_horde.Types.Length`;
+`EnemyTypeProbe` keeps a literal but moved it to 6 with the reason written down, because *that* probe's
+job includes noticing a row nobody announced. The general shape is worth keeping in mind: a constant
+copied out of the data is a claim about the data that stops being checked the moment it is copied.
+
+**A kill's worth cannot be measured on the progress bar.** The first version of the elite experience
+check read `RunGrowth.Experience` before and after a kill, and measured a marked walker at **minus
+eight** — true about the bar, which is spent on every level-up, and silent about the question. The fix
+was a second counter (`ExperienceEarned`) that only ever goes up. Anything spent is not a measurement
+of what was earned.
+
+**The elite scale bonus had to go into the custom AABB too.** The horde's bounds are computed from the
+largest `SpriteScale` in the table, and elites multiply that by 1.25 at draw time. Left out, the
+symptom would have been the marked enemies — the ones worth watching — vanishing early at the screen
+edge while everything around them kept drawing, which reads as a culling glitch rather than as a
+number that was never updated.
+
+**`KillDetail` is a second event rather than a wider first one.** Six things subscribe to
+`EnemyKilled`, and exactly one of them needs to know that a marked walker is worth four times a plain
+one. Widening the shared signature would have written that one subscriber's requirement into five
+files that do not care.
+
+**The elite tint took three tries, and only a screenshot could judge any of them.** Added flat at 0.55
+it erased the painting — an armoured brute was a solid blue silhouette, which is the hit flash's
+failure mode wearing a different colour, except permanent. Multiplied instead, the brute came back but
+the bloater — a much paler sprite — clipped to a glowing white-green blob. The answer was to weight the
+push by `1 - luminance`, spending strength where the sprite has headroom and backing off where it has
+none, so one constant is right for a dark creature and a pale one. Every probe passed at every stage.
+
+**Where the boss walks in was decided by the sweep, not by the design.** 62% of the clock was the
+written answer: late enough for a build, early enough not to collide with the timer. The sweep said
+runs end between 83 and 142 seconds, so a boss at 186 happened once in twenty runs. A climax the run
+does not reach is not late, it is absent. 40%.
 
 ## Performance
 

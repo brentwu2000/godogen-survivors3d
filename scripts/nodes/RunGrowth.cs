@@ -76,6 +76,12 @@ public partial class RunGrowth : Node
     public float Experience { get; private set; }
     public float ExperienceForNext => BaseLevelCost + Level * LevelCostStep;
 
+    /// Everything ever earned this run, never spent. `Experience` is the progress
+    /// bar and goes down every time it fills, so it cannot answer "was that kill
+    /// worth more than the last one" — the honest answer there is negative about
+    /// once a minute.
+    public float ExperienceEarned { get; private set; }
+
     /// Picks earned but not yet spent. Ignoring an offer stacks rather than
     /// wasting it — the player is allowed to decide that staying alive matters
     /// more this second than choosing well.
@@ -109,7 +115,7 @@ public partial class RunGrowth : Node
             _caps[(int)option] = DefaultCap(option);
 
         if (_horde != null)
-            _horde.EnemyKilled += OnEnemyKilled;
+            _horde.KillDetail += OnEnemyKilled;
         else
             GD.PushWarning("RunGrowth: no Horde sibling — nothing will grant experience");
     }
@@ -117,7 +123,7 @@ public partial class RunGrowth : Node
     public override void _ExitTree()
     {
         if (_horde != null)
-            _horde.EnemyKilled -= OnEnemyKilled;
+            _horde.KillDetail -= OnEnemyKilled;
     }
 
     /// Caps come from the equipped gear, summed. Called by the meta layer once
@@ -165,12 +171,17 @@ public partial class RunGrowth : Node
         _ => GrowthRarity.Common,
     };
 
-    private void OnEnemyKilled(int type, Vector3 position)
+    private void OnEnemyKilled(int type, byte elite, Vector3 position)
     {
         if (_horde == null || type < 0 || type >= _horde.Types.Length)
             return;
 
-        Experience += _horde.Types[type].ExperienceValue;
+        // The elite multiplier is applied here rather than baked into the
+        // variant row, because it is the mark that earned it and the same
+        // walker is worth one or four depending on nothing else.
+        float gained = _horde.Types[type].ExperienceValue * Elites.ExperienceScale(elite);
+        Experience += gained;
+        ExperienceEarned += gained;
 
         while (Experience >= ExperienceForNext)
         {

@@ -8,6 +8,13 @@ public enum EnemyBehavior
     /// Stops at StandoffDistance and shoots. Never touches, so kiting it is
     /// useless — the answer is cover or killing it.
     Ranged,
+
+    /// Closes *and* shoots, using StandoffDistance as the range it opens fire at
+    /// rather than the distance it settles on. Exists because the first boss was
+    /// slow, melee, and therefore free: the balance sweep put one on the field
+    /// for a whole minute and every measured outcome was unchanged to within a
+    /// rounding error. A threat the player can simply walk away from is scenery.
+    Siege,
 }
 
 /// One enemy variant, as data. The horde carries a byte index per instance and
