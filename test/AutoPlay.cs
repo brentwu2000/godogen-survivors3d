@@ -189,6 +189,27 @@ public partial class AutoPlay : SceneTree
         // extracting immediately — that is what turns this into a difficulty
         // measurement rather than a route check.
         bool lingering = _leg == _route.Length - 1 && _director.Elapsed < _lingerSeconds;
+
+        // Losing beats arriving — but only while the destination is optional.
+        //
+        // A player at half health with eighteen things on them walks away from a
+        // crate. They do not walk away from the *exit*: at that point the crowd
+        // is the reason to leave and retreating is choosing to stay in it. The
+        // first version had no such distinction, broke contact at 128 s on the
+        // way to the pad, and died forty metres from an open extraction it had
+        // been walking to.
+        //
+        // Every balance number in this project comes out of this file, so what
+        // the bot cannot do is indistinguishable from what the game does not
+        // allow — and the fix belongs here rather than in the difficulty curve.
+        bool discretionary = lingering || _leg < _route.Length - 1;
+        if (discretionary && ShouldBreakContact())
+        {
+            Steer(RetreatPoint());
+            _retreatTicks++;
+            return false;
+        }
+
         Vector3 target = lingering ? OrbitPoint() : _route[_leg];
         float distance = _player.GlobalPosition.DistanceTo(target);
 
@@ -541,8 +562,16 @@ public partial class AutoPlay : SceneTree
         // Two crates then the pad: enough to prove looting is worth a detour
         // without turning the test into a full clear. The rest stay on the map
         // as the supply the linger phase can go and find.
+        //
+        // Chosen by what they are worth against what they cost to reach, not by
+        // tree order. `found[0]` and `found[1]` are whichever two the generator
+        // happened to place first, which meant the bot's route was uncorrelated
+        // with the value on the map — and the depth bias, which is the entire
+        // reason to walk away from the spawn, was invisible to every balance
+        // number this file has ever produced. The Flats exists to reward going
+        // deep and measured as the worst biome in the game.
         _allCrates = found.ToArray();
-        _crates = found.Count >= 2 ? new[] { found[0], found[1] } : found.ToArray();
+        _crates = BestCrates(_player.GlobalPosition, 2);
 
         var route = new System.Collections.Generic.List<Vector3>();
         var labels = new System.Collections.Generic.List<string>();
@@ -568,35 +597,198 @@ public partial class AutoPlay : SceneTree
 
     private string Label() => _leg < _routeLabels.Length ? _routeLabels[_leg] : "done";
 
-    /// Where to be while waiting out the timer: the nearest crate still worth
-    /// opening, or a wide circuit once they are all empty.
+    // ---- what is worth walking to --------------------------------------------
+
+    /// How much a metre of walking is worth giving up in rarity bias.
+    ///
+    /// The trade the level generator built and nothing was ever making: a crate's
+    /// `RarityBias` runs from 1 at the spawn to the biome's depth figure at the
+    /// edge — 3.0 in The Flats — and the cost of collecting it is the walk there
+    /// and back through whatever is in between.
+    ///
+    /// 0.01 per metre: a 50 m walk has to buy half a bias step. Measured rather
+    /// than guessed — the first value was 0.02 and the bot chose crates at 11 m
+    /// with a bias of 1.18 over crates at 45 m with a bias of 1.74, because
+    /// 0.02 × 34 m of extra walking is more than the 0.56 of bias it bought. At
+    /// 3.4 m/s that walk costs ten seconds of a three-hundred-second run for a
+    /// materially better loot table, which is a trade a player takes every time.
+    ///
+    /// Too high and the bot never leaves the spawn; too low and it crosses the
+    /// map for a rounding error and dies on the way.
+    private const float BiasPerMetre = 0.01f;
+
+    /// The n crates with the best value for the walk, nearest-first within the
+    /// set so the route does not cross itself.
+    ///
+    /// <param name="announce">
+    /// Off for the linger target, which asks this every frame. On for the route,
+    /// which asks once and is worth a line in the log — knowing which crates the
+    /// bot judged worth the walk is most of reading a balance result.
+    /// </param>
+    private LootContainer[] BestCrates(Vector3 from, int count, bool announce = true)
+    {
+        var open = new System.Collections.Generic.List<LootContainer>();
+        foreach (LootContainer crate in _allCrates)
+        {
+            if (!crate.Looted)
+                open.Add(crate);
+        }
+
+        open.Sort((a, b) => Worth(from, b).CompareTo(Worth(from, a)));
+
+        var chosen = open.GetRange(0, Mathf.Min(count, open.Count));
+        chosen.Sort((a, b) => from.DistanceSquaredTo(a.GlobalPosition)
+                                 .CompareTo(from.DistanceSquaredTo(b.GlobalPosition)));
+
+        if (announce && chosen.Count > 0)
+        {
+            var summary = new System.Collections.Generic.List<string>();
+            foreach (LootContainer crate in chosen)
+            {
+                summary.Add($"{crate.Name} (x{crate.RarityBias:F2} at " +
+                            $"{from.DistanceTo(crate.GlobalPosition):F0}m)");
+            }
+
+            GD.Print($"  worth the walk: {string.Join(", ", summary)}");
+        }
+
+        return chosen.ToArray();
+    }
+
+    private static float Worth(Vector3 from, LootContainer crate) =>
+        crate.RarityBias - from.DistanceTo(crate.GlobalPosition) * BiasPerMetre;
+
+    // ---- breaking contact ----------------------------------------------------
+
+    /// Health below which the bot stops going where it was going.
+    ///
+    /// Not a panic threshold. At 45% a player still has choices, and the point of
+    /// retreating is to spend the seconds *before* the choices run out — a bot
+    /// that only ran at 10% would be measuring the same death slightly later.
+    private const float RetreatBelow = 0.45f;
+
+    /// And the level it will return to the route at. The gap is what stops the
+    /// bot oscillating on the boundary: without it, one healing tick sends it
+    /// back into the crowd that just hurt it.
+    private const float ResumeAbove = 0.7f;
+
+    private const float ContactRadius = 9.0f;
+    private const int ContactCount = 5;
+
+    /// Ticks of retreating before it gives up and presses on regardless.
+    ///
+    /// A bot that can retreat forever never finishes a run, and a measurement
+    /// that never ends is worse than a death — the sweep would hang rather than
+    /// report. Twelve seconds is long enough to break contact in the open and
+    /// short enough that a cornered bot still resolves.
+    private const int RetreatCap = 60 * 12;
+
+    private bool _retreating;
+    private int _retreatTicks;
+
+    private bool ShouldBreakContact()
+    {
+        if (_retreatTicks > RetreatCap)
+            return false;
+
+        float fraction = _player.Health / Mathf.Max(1.0f, _player.MaxHealth);
+
+        // Hysteresis, same shape as the music mix and for the same reason: the
+        // crowd count around the player is not a smooth number.
+        if (_retreating)
+        {
+            if (fraction >= ResumeAbove || Nearby(ContactRadius) < ContactCount / 2)
+            {
+                _retreating = false;
+                GD.Print($"  back on route at {_director.Elapsed:F0}s, HP {_player.Health:F0}, " +
+                         $"{_retreatTicks / 60.0f:F1}s spent breaking contact");
+            }
+
+            return _retreating;
+        }
+
+        if (fraction < RetreatBelow && Nearby(ContactRadius) >= ContactCount)
+        {
+            _retreating = true;
+            GD.Print($"  breaking contact at {_director.Elapsed:F0}s, HP {_player.Health:F0}, " +
+                     $"{Nearby(ContactRadius)} within {ContactRadius:F0}m");
+        }
+
+        return _retreating;
+    }
+
+    /// Away from where the crowd is, not away from the nearest enemy.
+    ///
+    /// The nearest one is often the one already touching, and running directly
+    /// from it is as likely to run into the rest. The centroid of what is close
+    /// is the direction with the fewest things in it.
+    private Vector3 RetreatPoint()
+    {
+        Vector3 at = _player.GlobalPosition;
+        Vector3 crowd = Vector3.Zero;
+        int count = 0;
+
+        for (int i = 0; i < _horde.Pool.Count; i++)
+        {
+            Vector3 position = _horde.Pool.Position[i];
+            if (position.DistanceSquaredTo(at) < ContactRadius * ContactRadius * 4.0f)
+            {
+                crowd += position;
+                count++;
+            }
+        }
+
+        if (count == 0)
+            return at;
+
+        Vector3 away = at - crowd / count;
+        away.Y = 0.0f;
+
+        if (away.LengthSquared() < 0.01f)
+            away = new Vector3(1.0f, 0.0f, 0.0f);
+
+        // Clamped inside the arena, or the bot retreats into a wall and stands
+        // there being eaten while the probe reports it is moving.
+        float extent = _horde.ArenaExtent - 4.0f;
+        Vector3 goal = at + away.Normalized() * 14.0f;
+        return new Vector3(Mathf.Clamp(goal.X, -extent, extent), 0.0f, Mathf.Clamp(goal.Z, -extent, extent));
+    }
+
+    private int Nearby(float radius)
+    {
+        Vector3 at = _player.GlobalPosition;
+        float radiusSqr = radius * radius;
+        int count = 0;
+
+        for (int i = 0; i < _horde.Pool.Count; i++)
+        {
+            if (_horde.Pool.Position[i].DistanceSquaredTo(at) < radiusSqr)
+                count++;
+        }
+
+        return count;
+    }
+
+    /// Where to be while waiting out the timer: the crate most worth the walk
+    /// from here, or a wide circuit once they are all empty.
     ///
     /// Looting during the linger is not decoration. Ammo comes out of crates, so
     /// a bot that loots its route once and then circles measures a game where
     /// the reserve can only ever run down — which is a different game from the
     /// one with a supply line in it.
+    ///
+    /// The nearest crate was the old rule and it is the one thing a player never
+    /// does with three minutes to spend. Nearest means never leaving the middle,
+    /// and the middle is where the generator puts the cheapest loot in every
+    /// biome — so the linger phase, the part of the run that exists to measure
+    /// whether staying pays, was systematically collecting the reason it does not.
     private Vector3 OrbitPoint()
     {
-        LootContainer? nearest = null;
-        float bestDistance = float.MaxValue;
-
         if (_noLoot)
             return Circuit();
 
-        foreach (LootContainer crate in _allCrates)
-        {
-            if (crate.Looted)
-                continue;
-
-            float distance = crate.GlobalPosition.DistanceTo(_player.GlobalPosition);
-            if (distance < bestDistance)
-            {
-                bestDistance = distance;
-                nearest = crate;
-            }
-        }
-
-        return nearest?.GlobalPosition ?? Circuit();
+        LootContainer[] best = BestCrates(_player.GlobalPosition, 1, announce: false);
+        return best.Length > 0 ? best[0].GlobalPosition : Circuit();
     }
 
     /// Kiting is what a competent player does with nothing left to search, so

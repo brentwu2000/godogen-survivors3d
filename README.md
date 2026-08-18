@@ -915,34 +915,40 @@ minute.
 crowd that has to route around fifty blocks arrives slower than it spawns. The field the player is
 kiting through is denser than the same run used to be, and the reason is the map, not the rate.
 
-### The shipping baseline
+### The baseline
 
 Twelve cells — four loiter tiers across three terrains, one seed, the bot from `test/AutoPlay.cs`.
-Recorded, not tuned: numbers changed at ship time are numbers nothing has had time to verify.
 
 | Loiter | Rail Yard | Old Town | The Flats |
 | ---: | :--- | :--- | :--- |
-| 0 s | 379 at 33 s | 411 at 26 s | 356 at 26 s |
-| 60 s | **982** at 70 s | 971 at 66 s | 368 at 71 s |
-| 120 s | **died** at 129 s | 858 at 126 s | 223 at 133 s |
-| 180 s | **died** at 148 s | **1005** at 187 s | 269 at 192 s |
+| 0 s | 421 at 26 s | 339 at 24 s | 332 at 32 s |
+| 60 s | **987** at 74 s | **978** at 74 s | 383 at 71 s |
+| 120 s | 392 at 130 s | 492 at 134 s | 378 at 133 s |
+| 180 s | 479 at 193 s | **died** at 147 s | **456** at 192 s |
 
-**The terrains are three different games and the table says so.** Rail Yard's mixed cover cannot hold
-past two minutes — it dies in both long tiers, at 161 enemies. Old Town survives every tier and pays
-more the longer you stay, because cover is what makes a crowd of 160 survivable and eleven close
-crates are what make the time worth spending. The Flats survives on sight lines and never pays: seven
-crates emptied early, and after that staying is cost with no income.
+**These are not the numbers this table had a phase ago, and the game did not change — the driver did.**
+The bot used to route to `found[0]` and `found[1]`, whichever two crates the generator happened to
+place first, and during the linger phase it walked to the *nearest* unlooted crate. Both rules are
+uncorrelated with where the value is: `RarityBias` runs from 1 at the spawn to the biome's depth figure
+at the edge, so "nearest" is a rule for systematically collecting the cheapest loot on the map. Every
+balance number this project has ever printed came from a bot that could not see the one mechanic the
+level generator is built around.
 
-**Payout dips in the middle of every column and that is the item system arguing with the multiplier.**
-Banked is what you carry times what the clock is worth, and a longer run spends consumables on staying
-alive — so between the point where the crates run out and the point where the multiplier catches up,
-carrying less beats multiplying more. It is left alone here for the reason the whole section is: this
-is a record of what the game currently is.
+It picks by worth-per-metre now, and The Flats — which existed to reward going deep and measured as
+the worst terrain in the game — climbs with time instead of falling. That column was left untouched at
+Phase 26 on the grounds that it might be the bot. It was the bot.
 
-**The Flats' column is the weakest and is deliberately not touched.** Its compensation is entirely in
-the depth bias — crates far out are worth up to three times a near one — and the bot routes to the two
-nearest crates in every biome. Tuning against a bot that never goes deep is the Phase 16 mistake with
-new numbers.
+**The bot is not uniformly better at surviving, and that is correct.** Old Town now dies at 180 s where
+it used to walk out at 187 s: going deep in a dense biome means being far from the pad when it goes
+wrong. It takes more risk for more value, which is what a player does, and a driver that never took a
+risk was measuring a game nobody plays.
+
+**What is left is the 60-second spike, and it has a mechanism now.** The bag holds 528 at 60 s and 40
+at 120 s — not capped, *spent*. Every valuable thing in the backpack is also the thing that keeps you
+alive, so surviving the second minute means converting the payout into survival, and the extraction
+multiplier's 1.0 → 1.56 cannot buy back ninety percent of a bag. Loot is fuel and the horde's growth
+outruns the map's supply. That is one design decision arguing with another, which is the argument they
+were built to have — but at present one of them wins outright.
 
 The bot now paths with a flow field of its own rather than steering straight. On a hand-made arena
 with five blocks that was enough; on a generated one it walked into the first wall between it and the
@@ -1037,8 +1043,11 @@ person**, not things that need code.
 - **`test/TouchProbe.cs` needs a real display** and so has never run in the regression sweep. The
   headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
   whose tests are green only when someone runs them by hand.
-- **The clock is unvalidated by a human.** Every balance number in this file came from a bot that
-  routes to the two nearest crates and never goes deep. See Balance.
+- **The clock is unvalidated by a human.** The bot picks crates by worth, breaks contact when it is
+  losing, and knows not to do that on the way to the exit — but it still does not use cover, does not
+  kite, and never decides to leave early because a run is going badly. See Balance.
+- **The payout still peaks at 60 s.** Measured, diagnosed, not yet fixed: loot is fuel, so the second
+  minute is spent rather than earned. See Balance.
 - **The proof video is three phases stale.** `test/Presentation.cs` films a game without elites, a
   boss, biomes, or music.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
