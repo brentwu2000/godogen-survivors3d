@@ -82,7 +82,16 @@ public partial class LevelGenerator : Node3D
     /// on.
     private int[] _tiles = System.Array.Empty<int>();
 
-    public override void _Ready() => Generate();
+    /// Which place this is. Set from `GameSession.Biome` before generating, so
+    /// the base screen's choice survives the scene change without a node in the
+    /// new scene having to be ready in time to be asked.
+    public BiomeResource Biome { get; set; } = new();
+
+    public override void _Ready()
+    {
+        Biome = BiomeBook.Load(GameSession.Biome);
+        Generate();
+    }
 
     /// Public so a probe can regenerate in place and compare: reproducing a
     /// layout from its seed is a property worth testing, not an implementation
@@ -297,16 +306,20 @@ public partial class LevelGenerator : Node3D
                 continue;
             }
 
-            var tile = (Tile)(int)(NextFloat() * 4.0f);
+            Tile tile = RollTile();
             _tiles[gz * GridSize + gx] = (int)tile;
 
+            // Counts and sizes are scaled and then floored at one. A biome that
+            // asked for 0.55x of three pieces would otherwise place zero, and an
+            // empty "yard" tile is indistinguishable from open ground — which
+            // makes the tile weights a lie about what the map contains.
             switch (tile)
             {
                 case Tile.Open:
                     break;   // open ground; a map with no gaps has no routes
 
                 case Tile.Yard:
-                    Cluster(blocks, center, cell, count: 3, size: 4.0f, tile);
+                    Cluster(blocks, center, cell, Scaled(3), 4.0f * Biome.ClusterSizeScale, tile);
                     break;
 
                 case Tile.Corridor:
@@ -314,10 +327,35 @@ public partial class LevelGenerator : Node3D
                     break;
 
                 default:
-                    Cluster(blocks, center, cell, count: 5, size: 2.0f, tile);
+                    Cluster(blocks, center, cell, Scaled(5), 2.0f * Biome.ClusterSizeScale, tile);
                     break;
             }
         }
+    }
+
+    private int Scaled(int count) => Mathf.Max(1, Mathf.RoundToInt(count * Biome.ClusterCountScale));
+
+    /// A weighted draw over the four tile kinds.
+    ///
+    /// Weights, not a fixed rotation: a biome should be a tendency the player
+    /// learns to expect, and a map should still be a map. Old Town rolls rubble
+    /// most of the time and open ground sometimes, which is what keeps the
+    /// occasional clear line worth noticing.
+    private Tile RollTile()
+    {
+        float total = Biome.WeightTotal;
+        if (total <= 0.0f)
+            return (Tile)(int)(NextFloat() * 4.0f);
+
+        float pick = NextFloat() * total;
+        for (int i = 0; i < 4; i++)
+        {
+            pick -= Biome.WeightOf(i);
+            if (pick <= 0.0f)
+                return (Tile)i;
+        }
+
+        return Tile.Open;
     }
 
     private void Cluster(System.Collections.Generic.List<Block> blocks,
@@ -344,7 +382,7 @@ public partial class LevelGenerator : Node3D
         bool horizontal = NextFloat() < 0.5f;
         float length = cell * 0.38f;
         float thickness = 1.2f;
-        float gap = 3.0f;
+        float gap = Biome.CorridorGap;
 
         for (int side = -1; side <= 1; side += 2)
         {
@@ -452,7 +490,14 @@ public partial class LevelGenerator : Node3D
             for (int gx = 0; gx < GridSize; gx++)
             {
                 int tile = _tiles.Length > 0 ? _tiles[gz * GridSize + gx] : 0;
-                image.SetPixel(gx, gz, TileTints[Mathf.Clamp(tile, 0, TileTints.Length - 1)]);
+
+                // The biome tints the tile rather than replacing it. Multiplying
+                // keeps the per-tile reading — the player still sees where the
+                // rubble is from the floor colour — while the place as a whole
+                // shifts, which is what makes a biome a parameter instead of a
+                // second set of ground textures.
+                image.SetPixel(gx, gz,
+                               TileTints[Mathf.Clamp(tile, 0, TileTints.Length - 1)] * Biome.GroundTint);
             }
         }
 
@@ -579,7 +624,7 @@ public partial class LevelGenerator : Node3D
     /// step, so the far corners are where the serum actually lives.
     private void BuildCrates(Node3D parent, System.Collections.Generic.List<Block> blocks)
     {
-        for (int i = 0; i < CrateCount; i++)
+        for (int i = 0; i < Biome.CrateCount; i++)
         {
             Vector2 spot;
             int guard = 0;
@@ -599,7 +644,7 @@ public partial class LevelGenerator : Node3D
             {
                 Name = $"Crate{i}",
                 Position = new Vector3(spot.X, 0.0f, spot.Y),
-                RarityBias = Mathf.Lerp(1.0f, DepthRarityBias, depth),
+                RarityBias = Mathf.Lerp(1.0f, Biome.DepthRarityBias, depth),
             };
 
             crate.AddChild(new MeshInstance3D

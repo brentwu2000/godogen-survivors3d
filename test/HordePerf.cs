@@ -39,7 +39,15 @@ public partial class HordePerf : SceneTree
             _targetCount = requested;
 
         foreach (string arg in args)
+        {
             _mixed |= arg == "mixed";
+
+            // The densest biome is where the cover budget is actually spent, and
+            // it is not the default — so the frame time recorded without this
+            // flag is the frame time of the map with the least in it.
+            if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
+                GameSession.Biome = biome;
+        }
 
         DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
 

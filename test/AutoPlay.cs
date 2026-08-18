@@ -71,6 +71,12 @@ public partial class AutoPlay : SceneTree
 
             if (arg.StartsWith("seed:") && ulong.TryParse(arg[5..], out ulong seed))
                 _seed = seed;
+
+            // Set before the scene enters the tree, because the level generator
+            // and the horde both read GameSession in _Ready — which is the point
+            // of it living there rather than on a node.
+            if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
+                GameSession.Biome = biome;
         }
 
         var scene = GD.Load<PackedScene>("res://scenes/Main.tscn")?.Instantiate();
@@ -366,9 +372,16 @@ public partial class AutoPlay : SceneTree
                         continue;
                     }
 
+                    // 0.55, not 0.9. The player's collision radius is 0.35, and
+                    // 0.9 was picked for an arena with a dozen widely spaced
+                    // blocks where over-inflating cost nothing. In a dense biome
+                    // it closes gaps that exist: at a 1.5 m cell size, 0.9 either
+                    // side turns a 2.2 m doorway into no doorway, and the bot
+                    // reported "could not reach extraction" on a map the player
+                    // walks through without touching anything.
                     _navField.BlockBox(
                         new Vector2(body.Position.X, body.Position.Z),
-                        new Vector2(box.Size.X * 0.5f + 0.9f, box.Size.Z * 0.5f + 0.9f));
+                        new Vector2(box.Size.X * 0.5f + 0.55f, box.Size.Z * 0.5f + 0.55f));
                 }
             }
         }

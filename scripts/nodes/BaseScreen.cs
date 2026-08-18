@@ -55,6 +55,8 @@ public partial class BaseScreen : Control
             TakeContract(2);
         else if (Input.IsActionJustPressed("menu_reroll"))
             Reroll();
+        else if (Input.IsActionJustPressed("menu_biome"))
+            CycleBiome();
         else
             return;
 
@@ -186,9 +188,37 @@ public partial class BaseScreen : Control
         Persist();
     }
 
+    /// Steps to the next place the player has opened, skipping the rest.
+    ///
+    /// Cycling rather than a submenu: there are three, the list is on screen with
+    /// what each one costs you, and a menu for a three-way choice is a menu.
+    private void CycleBiome()
+    {
+        int count = BiomeBook.All.Length;
+        for (int step = 1; step <= count; step++)
+        {
+            int next = (_profile.Biome + step) % count;
+            if (!BiomeBook.Allows(_profile, next))
+                continue;
+
+            _profile.Biome = next;
+            _message = $"heading for {BiomeBook.Load(next).BiomeName}";
+            Persist();
+            return;
+        }
+
+        _message = "nowhere else to go yet";
+    }
+
     private void Launch()
     {
         GameSession.LaunchedFromBase = true;
+
+        // Handed over here rather than read from the profile by the level, so
+        // that a probe or capture script — which never touches this screen —
+        // gets the default rather than whatever the player last chose.
+        GameSession.Biome = _profile.Biome;
+
         Persist();
         GetTree().ChangeSceneToFile("res://scenes/Main.tscn");
     }
@@ -208,6 +238,17 @@ public partial class BaseScreen : Control
         // wondering why it is missing.
         text.AppendLine($"practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
                         $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   (not for sale)");
+
+        // Where the run is going, on the shop screen rather than at launch.
+        // Terrain has to be known while equipment is being bought, or the
+        // loadout could not have been built for it — which is the whole reason
+        // the two exist.
+        BiomeResource here = BiomeBook.Load(_profile.Biome);
+        string more = BiomeBook.All.Length > 1 && !BiomeBook.Allows(_profile, _profile.Biome + 1)
+            ? $"   (next opens after {BiomeBook.OpensAt(_profile.Biome + 1)} extractions)"
+            : "";
+
+        text.AppendLine($"heading for  {here.BiomeName} — {here.Blurb}   [B] change{more}");
 
         // What the cursor is on, in the piece's own numbers.
         //

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BiomeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/BiomeResource.cs" id="1_u8i7i"]
+
+[resource]
+script = ExtResource("1_u8i7i")
+BiomeName = "Old Town"
+Blurb = "no line of fire; the crowd arrives close"
+TileWeights = PackedFloat32Array(0.2, 1.2, 1.8, 2.2)
+ClusterCountScale = 2.0
+ClusterSizeScale = 1.25
+CorridorGap = 3.2
+CrateCount = 11
+DepthRarityBias = 1.4
+SpawnRingScale = 0.78
+GroundTint = Color(0.82, 0.8, 0.86, 1)
+PropTint = Color(0.88, 0.87, 0.92, 1)

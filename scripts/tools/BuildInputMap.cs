@@ -53,6 +53,9 @@ public partial class BuildInputMap : SceneTree
         // mnemonic is worth more than a spare letter.
         Define("menu_reroll", Keys(Key.R));
 
+        // Base screen only, so it is free to be a letter a run already uses.
+        Define("menu_biome", Keys(Key.B));
+
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)
         {

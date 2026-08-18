@@ -51,6 +51,20 @@ public partial class Horde : Node3D
     [Export] public float SpawnRingMin { get; set; } = 12.0f;
     [Export] public float SpawnRingMax { get; set; } = 40.0f;
 
+    /// Scaled by the biome in `_Ready`, read from `GameSession` rather than from
+    /// the level generator. Both nodes want the same answer and neither should
+    /// have to be ready before the other to get it.
+    ///
+    /// The ring travels with the terrain because the two are one decision: open
+    /// ground with a tight ring is an ambush rather than open ground, and closed
+    /// ground with a wide one is a map where nothing ever reaches you.
+    private void ApplyBiome()
+    {
+        BiomeResource biome = BiomeBook.Load(GameSession.Biome);
+        SpawnRingMin *= biome.SpawnRingScale;
+        SpawnRingMax *= biome.SpawnRingScale;
+    }
+
     /// Variant order. Drives three things at once — the .tres to load, the sprite
     /// stacked at that layer, and the byte stored per instance — so they cannot
     /// drift apart the way three separate lists would.
@@ -98,6 +112,8 @@ public partial class Horde : Node3D
 
     public override void _Ready()
     {
+        ApplyBiome();
+
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
         if (shader == null || !LoadTypes())
         {

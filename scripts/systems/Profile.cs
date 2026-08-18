@@ -83,6 +83,12 @@ public sealed class Profile
     /// whether one was ever fought.
     public int BossesKilled { get; set; }
 
+    /// Where the next run goes, as an index into `BiomeBook.All`. Stored rather
+    /// than asked at launch, because terrain has to be known while the player is
+    /// buying equipment — a choice made after the shop is a choice the loadout
+    /// could not have been built for, which is the entire reason it exists.
+    public int Biome { get; set; }
+
     public bool HasUnlocked(string id) => Unlocked.Contains(id);
 
     /// Returns whether this actually opened something. The caller announces on
@@ -270,6 +276,7 @@ public sealed class Profile
             { "contract_index", ContractIndex },
             { "unlocked", Unlocked },
             { "bosses_killed", BossesKilled },
+            { "biome", Biome },
         };
 
         return Json.Stringify(root, "  ");
@@ -379,6 +386,9 @@ public sealed class Profile
 
         if (root.TryGetValue("bosses_killed", out Variant bosses))
             profile.BossesKilled = bosses.AsInt32();
+
+        if (root.TryGetValue("biome", out Variant biome))
+            profile.Biome = biome.AsInt32();
 
         if (root.TryGetValue("unlocked", out Variant unlocked) && unlocked.VariantType == Variant.Type.Array)
         {

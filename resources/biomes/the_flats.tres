@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="BiomeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/BiomeResource.cs" id="1_ljgfy"]
+
+[resource]
+script = ExtResource("1_ljgfy")
+BiomeName = "The Flats"
+Blurb = "nothing in the way, in either direction"
+TileWeights = PackedFloat32Array(3.4, 0.9, 0.15, 0.4)
+ClusterCountScale = 0.55
+ClusterSizeScale = 1.5
+CorridorGap = 5.0
+CrateCount = 7
+DepthRarityBias = 3.0
+GroundTint = Color(1.06, 1.02, 0.9, 1)
+PropTint = Color(1.04, 1, 0.92, 1)

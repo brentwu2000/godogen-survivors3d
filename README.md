@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/BiomeProbe.cs` | yes | Every biome loads, one has cover everywhere and the other has sight lines, the emptier one pays better for the walk, and both the crowd and a 0.35 m body can cross the dense one |
 | `test/LoadoutProbe.cs` | yes | No slot has a piece that beats its neighbour everywhere, a piece's rule is live before the first level-up, two sets permit two different decks, and the starting kit grants exactly nothing |
 | `test/UnlockProbe.cs` | yes | A fresh profile is offered less, every condition fires on its own run and nothing else's, opening one moves exactly one card, a locked row is listed and explains itself, and a save from before unlocks keeps what it proved |
 | `test/EliteProbe.cs` | yes | A mark is a different fight — armour soaks, swift outruns, volatile bursts — it survives the swap-remove, and the boss arrives once, announced, and pays |
@@ -136,6 +137,27 @@ roster, so the field is already growing without bound at six — every rate abov
 fast the number climbed, and the whole second half of the escalation curve was escalation the player
 could not read. Eight keeps the curve visible at four times the opening while leaving the last
 stretch somewhere skill still moves the outcome.
+
+**Three places to fight, and they are different questions rather than different textures.** One arena
+rule with a seed on it drew a different map every run and asked the same thing every time — fine until
+the loadouts had identities, at which point a build made for standing still and a build made for
+shooting through six were permanently being compared on the same ground.
+
+| | Cover | Line of fire | Crates | Depth pays |
+| :--- | ---: | ---: | ---: | ---: |
+| Rail Yard | 63 blocks | 26 m | 8 | x1.9 |
+| Old Town | 166 blocks | 17 m | 11 | x1.4 |
+| The Flats | 12 blocks | 36 m | 7 | x3.0 |
+
+Old Town is loot-rich with nothing to shoot down: crates are close together and a pierce build spends
+the run hitting a bin, while thorns and knockback have walls to work against. The Flats has fewer
+crates, further out, worth much more when you get there, across ground with nowhere to break contact —
+speed and range are the answer and standing still is not. A biome is a row of numbers, not a second
+asset pipeline: the ground tint multiplies the per-tile colour rather than replacing it, so the
+player can still read where the rubble is from the floor.
+
+Terrain is chosen at the base with `[B]`, **before** the shop, because a loadout that could not have
+been built for the ground it is going to is a loadout whose identity does not matter.
 
 **The arena is generated per run from one seed**, printed at startup so an interesting layout can be
 walked again. A 5×5 grid of tiles — open ground, block clusters, walled corridors with a gap — around
@@ -689,6 +711,29 @@ file rather than in any probe, because the probe's fixtures all had an all-zero 
 stage that was supposed to catch cross-firing had a written-in exemption saying the bow was allowed to
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
+
+**The dense biome shipped with an exit the play-test bot could not reach.** "Could not reach
+extraction in 60 s, still 49 m away" — on a map whose own reachability check had carved nothing,
+because it found every route fine. Three numbers were involved and none of them was the geometry: the
+player's body is 0.35 m, the navigation grid is 1.5 m cells, and the bot inflated obstacles by 0.9 m
+before pathing. A 2.2 m doorway survives a 0.35 m body and does not survive 0.9 m of inflation at that
+resolution. The bot's margin came down to 0.55 and the biome's doorways went up to 3.2 m — a gap that
+only just exists on the grid is one that some consumer of the grid will decide is not there.
+
+**"The crowd gets through" and "the player gets through" are different claims.** Enemies are not
+physics bodies; they follow a flow field and collide with nothing, so a stage that watches 24 walkers
+close from 34 m says only that a route exists. `BiomeProbe` now runs a separate check with the
+player's own radius, to the pads that will actually open — the first version asserted all three and
+failed on a correct map, because some pads are decoys the generator never promises a route to.
+
+**The Flats measured as a smaller run rather than a different one.** First numbers gave it a wider
+spawn ring, on the theory that open ground with a tight ring is an ambush rather than open ground. The
+play-test came back with a third of the payout *and* half the peak crowd of the other two — no trade,
+just less of everything, and nobody would pick it. What makes open ground open is that there is
+nothing to break contact behind, not that the crowd starts further away; the ring went back to
+neutral. Its payout still reads low against the others, and that part is left alone: the compensation
+is entirely in the depth bias, the bot routes to the two nearest crates, and tuning against a bot that
+does not go deep is the Phase 16 mistake with new numbers.
 
 **A neutral value of 1 among a dozen neutral values of 0.** Gear rules were first
 accumulated into a `RunModifiers`, which is the obvious container and the wrong

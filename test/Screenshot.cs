@@ -71,6 +71,9 @@ public partial class Screenshot : SceneTree
             _fx |= arg == "fx";
             if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
                 _warmup = Mathf.Max(1, frames);
+
+            if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
+                GameSession.Biome = biome;
         }
     }
 
