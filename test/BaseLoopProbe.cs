@@ -30,7 +30,11 @@ public partial class BaseLoopProbe : SceneTree
 
         // A profile with something to lose, so the return trip has a result to
         // report rather than a row of zeroes.
-        var profile = new Profile { Credits = 500 };
+        // `HasSeenBase` set, because this probe is testing the returning player's
+        // loop. Without it the base screen does what it should for a new player —
+        // launches straight into a run — and the probe never gets to press a key
+        // on the screen it exists to drive.
+        var profile = new Profile { Credits = 500, HasSeenBase = true };
         using (var file = FileAccess.Open(ProfilePath, FileAccess.ModeFlags.Write))
             file?.StoreString(profile.ToJson());
 

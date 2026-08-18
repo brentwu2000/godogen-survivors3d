@@ -43,13 +43,26 @@ public partial class LootContainer : Node3D
         LoadTable();
     }
 
-    private void LoadTable()
+    /// The item table, read from disk once per process rather than once per
+    /// crate. Eleven crates in the densest biome meant eleven directory scans and
+    /// eleven loads of the same nine resources during level generation — cached
+    /// by the engine after the first, and still eleven trips through the file
+    /// system on a frame the player is waiting on.
+    ///
+    /// Static because the table is the same for every crate; the *weights* are
+    /// not, because those depend on how far out the crate sits.
+    private static ItemResource[]? _sharedTable;
+
+    private static ItemResource[] SharedTable()
     {
+        if (_sharedTable != null)
+            return _sharedTable;
+
         using var dir = DirAccess.Open("res://resources/items");
         if (dir == null)
         {
             GD.PushWarning("LootContainer: res://resources/items missing — run BuildItems.cs");
-            return;
+            return System.Array.Empty<ItemResource>();
         }
 
         string[] files = dir.GetFiles();
@@ -67,7 +80,13 @@ public partial class LootContainer : Node3D
                 loaded.Add(item);
         }
 
-        _table = loaded.ToArray();
+        _sharedTable = loaded.ToArray();
+        return _sharedTable;
+    }
+
+    private void LoadTable()
+    {
+        _table = SharedTable();
 
         // Biased weights are computed once here rather than per roll: the bias
         // never changes after the level places the crate, and PickWeighted runs

@@ -57,6 +57,14 @@ public partial class BuildInputMap : SceneTree
         Define("menu_biome", Keys(Key.B));
         Define("menu_daily", Keys(Key.D));
 
+        // Landscape, locked. The touch layer is a stick on the left half and four
+        // buttons in an arc bottom-right, laid out for a wide screen; a build
+        // that let the device rotate would put the stick under the player's palm.
+        // Set here rather than in the editor for the same reason the actions are:
+        // this file is generated, and a hand-edit to it is a change nothing
+        // records the reason for.
+        ProjectSettings.SetSetting("display/window/handheld/orientation", "landscape");
+
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)
         {

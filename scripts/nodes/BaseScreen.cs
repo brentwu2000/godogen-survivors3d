@@ -28,6 +28,25 @@ public partial class BaseScreen : Control
 
         _profile = SaveSystem.Load();
         _catalogue = new ShopCatalogue();
+
+        // A player who has never played goes straight into a run.
+        //
+        // Everything on this screen is an answer to a question they have not been
+        // asked yet: a fifteen-row shop, three terrains, a contract board and
+        // eight unlock conditions describing a game they have not seen. Ninety
+        // seconds of playing it first turns all of that from a menu into a set of
+        // decisions about something they now understand.
+        //
+        // Deferred rather than immediate: `ChangeSceneToFile` during `_Ready`
+        // frees the node currently being readied.
+        if (!_profile.HasSeenBase)
+        {
+            _profile.HasSeenBase = true;
+            Persist();
+            CallDeferred(nameof(Launch));
+            return;
+        }
+
         Redraw();
     }
 
@@ -296,7 +315,7 @@ public partial class BaseScreen : Control
         // nobody sees — which is how the first version of this shipped its
         // description into the void.
         if (_cursor >= 0 && _cursor < _catalogue.All.Count)
-            text.AppendLine($"           {Describe(_catalogue.All[_cursor])}");
+            text.AppendLine($"           {_catalogue.All[_cursor].Summary}");
 
         text.AppendLine();
 
@@ -374,84 +393,6 @@ public partial class BaseScreen : Control
 
         int first = Mathf.Clamp(_cursor - Rows / 2, 0, count - Rows);
         return (first, first + Rows);
-    }
-
-    /// One line of what a row actually does, read off the resource.
-    ///
-    /// Every non-zero field, and nothing else. A curated sentence per piece would
-    /// read better and would go stale the first time a number changed — and a
-    /// shop that describes equipment it no longer sells is worse than a terse one.
-    private static string Describe(ShopCatalogue.Entry entry)
-    {
-        var parts = new System.Collections.Generic.List<string>();
-
-        // Asked of the entry, not attempted by loading. GD.Load<T> on the wrong
-        // type throws an InvalidCastException rather than returning null, so
-        // "try gear, fall back to weapon" takes the whole screen down on the
-        // first rifle — and the catalogue already knows which is which.
-        if (!entry.IsWeapon && GD.Load<GearResource>(entry.Path) is { } gear)
-        {
-            Add(parts, "health", gear.HealthBonus);
-            Add(parts, "armour", gear.ArmourBonus);
-            Add(parts, "speed", gear.MoveSpeedBonus);
-            Add(parts, "carry", gear.CarryBonus);
-            Add(parts, "safe box", gear.SafeBoxBonus);
-            Add(parts, "pierce", gear.PierceBonus);
-            Add(parts, "area", gear.AreaBonus);
-            Add(parts, "thorns", gear.ThornsBonus);
-            Add(parts, "regen", gear.RegenBonus);
-            Add(parts, "knockback", gear.KnockbackBonus);
-            Add(parts, "dodge", gear.DodgeBonus);
-
-            // The ceilings are half of what a piece is, and the half a player
-            // cannot discover by wearing it for ten seconds.
-            var caps = new System.Collections.Generic.List<string>();
-            Cap(caps, "health", gear.HealthUpgradeCap);
-            Cap(caps, "armour", gear.ArmourUpgradeCap);
-            Cap(caps, "speed", gear.SpeedUpgradeCap);
-            Cap(caps, "search", gear.SearchUpgradeCap);
-            Cap(caps, "pierce", gear.PierceUpgradeCap);
-            Cap(caps, "crit", gear.CritUpgradeCap);
-            Cap(caps, "area", gear.AreaUpgradeCap);
-            Cap(caps, "thorns", gear.ThornsUpgradeCap);
-            Cap(caps, "regen", gear.RegenUpgradeCap);
-            Cap(caps, "knockback", gear.KnockbackUpgradeCap);
-            Cap(caps, "dodge", gear.DodgeUpgradeCap);
-            Cap(caps, "fortune", gear.FortuneUpgradeCap);
-
-            if (caps.Count > 0)
-                parts.Add($"upgrades: {string.Join(" ", caps)}");
-
-            return parts.Count > 0 ? string.Join("   ", parts) : "grants nothing";
-        }
-
-        if (entry.IsWeapon && GD.Load<WeaponResource>(entry.Path) is { } weapon)
-        {
-            parts.Add($"{weapon.BaseDamage:F0} dmg");
-            parts.Add($"{weapon.BaseAttackSpeed:F1}/s");
-            parts.Add($"{weapon.BaseRange:F1} m");
-            if (weapon.Trait != WeaponTrait.None)
-                parts.Add(weapon.Trait.ToString().ToLower());
-
-            return string.Join("   ", parts);
-        }
-
-        return "";
-    }
-
-    private static void Add(System.Collections.Generic.List<string> parts, string name, float amount)
-    {
-        if (amount != 0.0f)
-            parts.Add($"{(amount > 0.0f ? "+" : "")}{amount:0.##} {name}");
-    }
-
-    private static void Cap(System.Collections.Generic.List<string> caps, string name, int value)
-    {
-        // -1 is "no opinion" and 0 is "none allowed". Printing them the same way
-        // would hide the entire cost side of a sidegrade: the bandolier's zero
-        // fortune is the reason its five pierce is a trade.
-        if (value >= 0)
-            caps.Add($"{name} {value}");
     }
 
     /// The right-hand column: what to chase, what to take, and which keys do it.

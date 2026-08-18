@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/FirstRunProbe.cs` | yes | A fresh profile has not seen the base, an older save has, and opening the game on a new profile lands in a run without a keypress |
 | `test/MusicProbe.cs` | yes | Four layers of one length all playing from the first frame, layers arriving with intensity and crowd and the boss, a threshold that does not chatter, silence when the run ends, and every layer audibly what it claims to be |
 | `test/DailyProbe.cs` | yes | One date derives one run every time, consecutive days differ, the second attempt does not count, dying spends it too, a streak is consecutive days, and the score is mostly about the shared card |
 | `test/BiomeProbe.cs` | yes | Every biome loads, one has cover everywhere and the other has sight lines, the emptier one pays better for the walk, and both the crowd and a 0.35 m body can cross the dense one |
@@ -757,6 +758,18 @@ stage that was supposed to catch cross-firing had a written-in exemption saying 
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
 
+**A new player's first ninety seconds was a shop.** Fifteen rows, three terrains, a contract board and
+eight unlock conditions, every one of them an answer to a question they had not been asked. The first
+launch now goes straight into a run and the base is what they come back to, with a result in hand.
+It is the least-exercised path in the game and the one the most people meet — everyone sees it, nobody
+sees it twice, and a developer with a save file on disk cannot see it at all — so `FirstRunProbe`
+drives it end to end rather than asserting the flag.
+
+The flag is stored rather than inferred from "are the run counts zero", because zero counts are also
+what a probe writes for a clean profile. An absent key means a save written before this existed, and
+those players default to *seen* — the other way round would drop every existing player into a run on
+their next launch, past the shop they were walking to.
+
 **A probe cannot hear, so it checks the things that fail inaudibly.** Whether the mix sounds good was
 settled by listening, which is the only way. `MusicProbe` exists so a change three phases from now
 does not silently undo it: that the four loops are the same length (unequal lengths drift apart and
@@ -902,6 +915,35 @@ minute.
 crowd that has to route around fifty blocks arrives slower than it spawns. The field the player is
 kiting through is denser than the same run used to be, and the reason is the map, not the rate.
 
+### The shipping baseline
+
+Twelve cells — four loiter tiers across three terrains, one seed, the bot from `test/AutoPlay.cs`.
+Recorded, not tuned: numbers changed at ship time are numbers nothing has had time to verify.
+
+| Loiter | Rail Yard | Old Town | The Flats |
+| ---: | :--- | :--- | :--- |
+| 0 s | 379 at 33 s | 411 at 26 s | 356 at 26 s |
+| 60 s | **982** at 70 s | 971 at 66 s | 368 at 71 s |
+| 120 s | **died** at 129 s | 858 at 126 s | 223 at 133 s |
+| 180 s | **died** at 148 s | **1005** at 187 s | 269 at 192 s |
+
+**The terrains are three different games and the table says so.** Rail Yard's mixed cover cannot hold
+past two minutes — it dies in both long tiers, at 161 enemies. Old Town survives every tier and pays
+more the longer you stay, because cover is what makes a crowd of 160 survivable and eleven close
+crates are what make the time worth spending. The Flats survives on sight lines and never pays: seven
+crates emptied early, and after that staying is cost with no income.
+
+**Payout dips in the middle of every column and that is the item system arguing with the multiplier.**
+Banked is what you carry times what the clock is worth, and a longer run spends consumables on staying
+alive — so between the point where the crates run out and the point where the multiplier catches up,
+carrying less beats multiplying more. It is left alone here for the reason the whole section is: this
+is a record of what the game currently is.
+
+**The Flats' column is the weakest and is deliberately not touched.** Its compensation is entirely in
+the depth bias — crates far out are worth up to three times a near one — and the bot routes to the two
+nearest crates in every biome. Tuning against a bot that never goes deep is the Phase 16 mistake with
+new numbers.
+
 The bot now paths with a flow field of its own rather than steering straight. On a hand-made arena
 with five blocks that was enough; on a generated one it walked into the first wall between it and the
 crate and reported the route as blocked. A player looks at the screen and goes around, and the
@@ -980,31 +1022,30 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-Everything the player looks at has now had a pass. What is left is **whether the numbers behind it still
-work**.
+Everything the player looks at has had a pass, the numbers behind it are recorded above, and 24 probes
+say the systems do what they claim. What is left is almost entirely **things that need a device or a
+person**, not things that need code.
 
-The linger curve moved under Phase 14: on one pinned seed, leaving at 0 s banks 381, at 60 s banks 698,
-and at 120 s the bot dies with 296 enemies on the field. Some of that is the layout changing because the
-prop code consumes the RNG differently, and some of it is real — cover makes the horde pile up, which
-Phase 10 first noticed and which the capture script ran into head-on when the same settings that filmed
-a clean extraction started killing the bot at fifteen seconds. **A three-hundred-second deadline is only
-a deadline if someone can reach it.**
-
-That is Phase 15: measure the curve across several seeds before touching anything, then reach for a
-field cap or stronger separation before touching the spawn rate — the pile-up looks like a pathing
-problem wearing a difficulty problem's clothes. The base screen, still a monospace list next to a HUD
-made of bars, comes along with it. See the roadmap.
-
-Engineering gaps, separately:
-
-- **Mobile is unmeasured.** 150-200 concurrent enemies is an estimate, not a measurement. If a real
-  device falls short, cut the distance-tiering thresholds before cutting enemy count.
-- **The 300 s clock is unvalidated by a human.** See Balance.
+- **The APK has never been built, let alone run.** Blocked on three installs this machine does not
+  have: an Android SDK, a JDK, and an export template matching 4.7.1 (the only one present is 4.6.3).
+  `export_presets.cfg` is written and committed — arm64, landscape locked, no permissions, `art-src/`
+  excluded — so with those three in place it is one `godot --headless --export-debug "Android"`. A
+  preset that has never produced an APK is a plan, not a build, and it is listed here as one.
+- **Mobile performance is unmeasured.** 150–200 concurrent enemies is a desktop measurement and an
+  estimate everywhere else. If a real device falls short, cut the distance-tiering thresholds before
+  cutting enemy count.
+- **`test/TouchProbe.cs` needs a real display** and so has never run in the regression sweep. The
+  headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
+  whose tests are green only when someone runs them by hand.
+- **The clock is unvalidated by a human.** Every balance number in this file came from a bot that
+  routes to the two nearest crates and never goes deep. See Balance.
+- **The proof video is three phases stale.** `test/Presentation.cs` films a game without elites, a
+  boss, biomes, or music.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
   it. Behaviour is correct today, but moving to 30 Hz means re-checking every damping constant.
-- **No export presets.** The game runs from the editor and from headless capture only.
 - **The audio bus has no limiter.** The mix keeps its headroom by the master volume alone, set
   against a captured run; a louder moment than any capture happened to catch would clip rather than
-  compress.
+  compress. The four music layers are quiet enough that all of them at once peak at 0.33, which is
+  measured, but it is headroom by arithmetic rather than by a compressor.
 - Third-party CC0 sources (Kenney, Quaternius) are safe to use directly; aggregators like Poly Pizza
   license per item and would need checking per file. Nothing from either is currently in the repo.

@@ -111,6 +111,19 @@ public sealed class Profile
     /// could not have been built for, which is the entire reason it exists.
     public int Biome { get; set; }
 
+    /// Whether this player has ever been shown the base screen.
+    ///
+    /// A brand-new player opening the game meets a shop with fifteen rows, three
+    /// terrains, eight unlock conditions and a contract board — none of which
+    /// means anything until they have played once. So the first launch goes
+    /// straight into a run and the base is what they come back to, with a result
+    /// in hand and every one of those numbers now describing something they did.
+    ///
+    /// A stored flag rather than "are the run counts zero", because zero counts
+    /// are also what a probe writes when it wants a clean profile to drive the
+    /// returning-player loop with.
+    public bool HasSeenBase { get; set; }
+
     /// Daily results, date key to score. One entry per day, written once.
     ///
     /// A dictionary rather than "today's score and a best": the point of a daily
@@ -374,6 +387,7 @@ public sealed class Profile
             { "unlocked", Unlocked },
             { "bosses_killed", BossesKilled },
             { "biome", Biome },
+            { "seen_base", HasSeenBase },
             { "daily", Daily },
             { "most_crates", MostCrates },
             { "best_throw", BestThrow },
@@ -496,6 +510,12 @@ public sealed class Profile
 
         if (root.TryGetValue("biome", out Variant biome))
             profile.Biome = biome.AsInt32();
+
+        // Absent means a file written before the first-run path existed, and
+        // those players have very much seen the base screen. Defaulting to false
+        // would drop every existing player straight into a run on next launch,
+        // past the shop they were on their way to.
+        profile.HasSeenBase = !root.TryGetValue("seen_base", out Variant seen) || seen.AsBool();
 
         if (root.TryGetValue("daily", out Variant daily) && daily.VariantType == Variant.Type.Dictionary)
         {
