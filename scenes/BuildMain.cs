@@ -81,10 +81,17 @@ public partial class BuildMain : SceneTree
         var growth = new Node { Name = "RunGrowth" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(growth, "res://scripts/nodes/RunGrowth.cs"));
 
+        // Before the meta manager, which asks it to freeze the run: the log has
+        // to have been subscribed for the whole run, not attached at the end.
+        var log = new Node { Name = "RunLog" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(log, "res://scripts/nodes/RunLog.cs"));
+
         // After the director so its RunEnded signal exists to connect to, and
         // after the player so the loadout has something to equip.
         var meta = new Node { Name = "MetaManager" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(meta, "res://scripts/nodes/MetaManager.cs"));
+
+        root.AddChild(BuildDebrief());
 
         root.AddChild(BuildHud());
 
@@ -238,6 +245,45 @@ public partial class BuildMain : SceneTree
         });
 
         return (Hud)SceneBuildUtil.AttachScriptToRoot(hud, "res://scripts/nodes/Hud.cs");
+    }
+
+    /// The end-of-run report. A layer over the arena rather than a scene of its
+    /// own: the horde is still walking in behind it, which is the honest picture
+    /// — the run ended because the player left, not because the world did.
+    private static CanvasLayer BuildDebrief()
+    {
+        var layer = new CanvasLayer { Name = "Debrief", Layer = 2 };
+
+        layer.AddChild(new ColorRect
+        {
+            Name = "Panel",
+            Position = new Vector2(ScreenWidth * 0.5f - 640.0f, 150.0f),
+            Size = new Vector2(1280.0f, 730.0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
+        layer.AddChild(new Label
+        {
+            Name = "Title",
+            Position = new Vector2(ScreenWidth * 0.5f - 640.0f, 186.0f),
+            Size = new Vector2(1280.0f, 60.0f),
+        });
+
+        layer.AddChild(new Label
+        {
+            Name = "Body",
+            Position = new Vector2(ScreenWidth * 0.5f - 580.0f, 286.0f),
+            Size = new Vector2(1160.0f, 480.0f),
+        });
+
+        layer.AddChild(new Label
+        {
+            Name = "Footer",
+            Position = new Vector2(ScreenWidth * 0.5f - 640.0f, 818.0f),
+            Size = new Vector2(1280.0f, 40.0f),
+        });
+
+        return (DebriefScreen)SceneBuildUtil.AttachScriptToRoot(layer, "res://scripts/nodes/DebriefScreen.cs");
     }
 
     /// A bar is a track, a fill and a caption over the top. Three nodes rather

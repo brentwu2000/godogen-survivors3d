@@ -48,6 +48,11 @@ public partial class BuildInputMap : SceneTree
         Define("menu_sell", Keys(Key.S));
         Define("menu_launch", Keys(Key.L));
 
+        // Shares the R key with `reload`, which is only read during a run. Two
+        // actions on one key is safe as long as no screen polls both, and the
+        // mnemonic is worth more than a spare letter.
+        Define("menu_reroll", Keys(Key.R));
+
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)
         {

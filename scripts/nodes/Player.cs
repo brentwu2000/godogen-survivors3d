@@ -16,6 +16,16 @@ public partial class Player : CharacterBody3D
 
     [Signal] public delegate void DiedEventHandler();
 
+    /// Something left the backpack and did something. Two events rather than one
+    /// because spending a medkit and throwing a pipe bomb are different answers
+    /// to different questions, and a contract asking "did you get out without
+    /// healing" must not be satisfied by never having thrown anything.
+    ///
+    /// Carries the item name rather than the resource: the only readers are a log
+    /// and a readout, and a name is what both of them want.
+    public event System.Action<string>? ItemUsed;
+    public event System.Action<string>? ItemThrown;
+
     /// Bulk the safe box holds. Deliberately tiny: it is a hedge against a bad
     /// death, not a second backpack.
     [Export] public int SafeBoxCapacity { get; set; } = 4;
@@ -97,6 +107,7 @@ public partial class Player : CharacterBody3D
             return 0;
 
         Backpack.RemoveOne(best);
+        ItemUsed?.Invoke(chosen.ItemName);
         return chosen.Value;
     }
 
@@ -147,6 +158,7 @@ public partial class Player : CharacterBody3D
         }
 
         Backpack.RemoveOne(best);
+        ItemThrown?.Invoke(chosen.ItemName);
         return chosen.Value;
     }
 

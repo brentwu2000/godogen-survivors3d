@@ -2,22 +2,29 @@
 
 [ext_resource type="Script" path="res://scripts/nodes/BaseScreen.cs" id="1_c07sk"]
 
-[node name="Base" type="Control" unique_id=1531962799]
+[node name="Base" type="Control" unique_id=2047475754]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1_c07sk")
 
-[node name="Backdrop" type="ColorRect" parent="." unique_id=659282860]
+[node name="Backdrop" type="ColorRect" parent="." unique_id=1676910609]
 layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 color = Color(0.09, 0.1, 0.12, 1)
 
-[node name="Screen" type="Label" parent="." unique_id=745641256]
+[node name="Screen" type="Label" parent="." unique_id=1127789783]
 layout_mode = 0
 offset_left = 64.0
 offset_top = 48.0
-offset_right = 1664.0
-offset_bottom = 1008.0
+offset_right = 964.0
+offset_bottom = 1028.0
+
+[node name="Side" type="Label" parent="." unique_id=1815943026]
+layout_mode = 0
+offset_left = 1010.0
+offset_top = 48.0
+offset_right = 1850.0
+offset_bottom = 1028.0

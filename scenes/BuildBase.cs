@@ -29,11 +29,22 @@ public partial class BuildBase : SceneTree
             AnchorBottom = 1.0f,
         });
 
+        // Two columns rather than one long list. The shop grew past the bottom of
+        // the screen the moment contracts were added below it, and a list that
+        // runs off the edge does not look full — it looks like the contracts do
+        // not exist.
         root.AddChild(new Label
         {
             Name = "Screen",
             Position = new Vector2(64.0f, 48.0f),
-            Size = new Vector2(1600.0f, 960.0f),
+            Size = new Vector2(900.0f, 980.0f),
+        });
+
+        root.AddChild(new Label
+        {
+            Name = "Side",
+            Position = new Vector2(1010.0f, 48.0f),
+            Size = new Vector2(840.0f, 980.0f),
         });
 
         Node scripted = SceneBuildUtil.AttachScriptToRoot(root, "res://scripts/nodes/BaseScreen.cs");

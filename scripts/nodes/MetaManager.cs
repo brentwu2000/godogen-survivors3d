@@ -15,14 +15,21 @@ public partial class MetaManager : Node
 
     public Profile Profile { get; private set; } = new();
 
-    /// Where the run returns when it ends. Only a run that came from the base
-    /// screen goes back to it — probes and capture scripts own their own tree.
-    [Export] public float ReturnDelaySeconds { get; set; } = 3.5f;
+    /// The finished run, once there is one. The debrief reads it; so does anything
+    /// that wants to know how the last run went without re-deriving it.
+    public RunRecord? LastRun { get; private set; }
+
+    public Profile.RecordsBeaten LastRecordsBeaten { get; private set; }
+
+    /// Whether the contract taken into this run was met, and what it paid.
+    public bool ContractMet { get; private set; }
+    public Contract? ContractTaken { get; private set; }
 
     private RunDirector? _director;
     private Player? _player;
     private WeaponHandler? _weapons;
     private RunGrowth? _growth;
+    private RunLog? _log;
 
     public override void _Ready()
     {
@@ -32,6 +39,7 @@ public partial class MetaManager : Node
         _player = GetParent().GetNodeOrNull<Player>("Player");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _growth = GetParent().GetNodeOrNull<RunGrowth>("RunGrowth");
+        _log = GetParent().GetNodeOrNull<RunLog>("RunLog");
 
         ApplyLoadout();
 
@@ -134,6 +142,7 @@ public partial class MetaManager : Node
 
         Profile.Credits += bankedValue;
 
+        string[] lost = System.Array.Empty<string>();
         if (survived)
         {
             Profile.RunsSurvived++;
@@ -141,12 +150,13 @@ public partial class MetaManager : Node
         else
         {
             Profile.RunsLost++;
-            LoseCarriedEquipment();
+            lost = LoseCarriedEquipment();
         }
 
         // Practice is knowledge, not cargo — it survives a death. Banked once
         // here rather than levelled as it is earned, so it stays a separate and
         // much slower curve from the growth inside the run.
+        var practice = new int[Profile.Proficiency.Length];
         if (_weapons != null)
         {
             for (int i = 0; i < Profile.Proficiency.Length; i++)
@@ -155,22 +165,75 @@ public partial class MetaManager : Node
                 if (gained <= 0)
                     continue;
 
+                practice[i] = gained;
                 Profile.Proficiency[i] += gained;
-                GD.Print($"practice: {(WeaponCategory)i} +{gained} " +
-                         $"(now {Profile.Proficiency[i]}, {_weapons.HitsThisRun((WeaponCategory)i)} hits)");
             }
         }
 
+        // The record is assembled before the contract is judged and before the
+        // records are folded in, because both of those read it. One set of
+        // numbers, three consumers — a contract that counted kills its own way
+        // would disagree with the screen reporting them, and the player would be
+        // right to trust neither.
+        LastRun = _log?.Freeze(runState, bankedValue, practice, lost)
+                  ?? new RunRecord { Outcome = runState, Banked = bankedValue };
+
+        LastRecordsBeaten = Profile.ApplyRecords(LastRun);
+        SettleContract(LastRun);
+
         Persist();
         GD.Print($"profile: credits {Profile.Credits} (+{bankedValue}), " +
-                 $"survived {Profile.RunsSurvived} lost {Profile.RunsLost}");
+                 $"survived {Profile.RunsSurvived} lost {Profile.RunsLost}, streak {Profile.Streak}");
         EmitSignal(SignalName.ProfileBanked, bankedValue, Profile.Credits);
 
-        // Long enough to read the banner. Only for a run that came from the base
-        // screen: a probe owns its tree, and swapping the scene underneath one
-        // mid-measurement would end the test rather than the run.
+        // Only for a run that came from the base screen: a probe owns its tree,
+        // and swapping the scene underneath one mid-measurement would end the
+        // test rather than the run.
         if (GameSession.LaunchedFromBase)
-            ReturnToBase();
+            ShowDebrief();
+    }
+
+    /// Pays the job if the run satisfied it, then puts three new ones up.
+    ///
+    /// The board is re-rolled either way. A failed contract that stayed on offer
+    /// would let a player retry the same easy card until it landed, which turns a
+    /// commitment made before leaving into a formality.
+    private void SettleContract(RunRecord run)
+    {
+        ContractTaken = Profile.AcceptedContract;
+        ContractMet = ContractTaken?.IsMet(run) ?? false;
+
+        if (ContractTaken is { } contract && ContractMet)
+        {
+            Profile.Credits += contract.Reward;
+            GD.Print($"contract met: {contract.Describe(_log)} (+{contract.Reward})");
+        }
+
+        Profile.RollContracts();
+    }
+
+    /// Hands the run back to the player before handing them back to the shop.
+    ///
+    /// This used to be a three and a half second timer, which was long enough to
+    /// not finish reading a two-line banner and far too short for everything the
+    /// run actually produced. The screen waits for a key instead — the payoff is
+    /// the one moment in the loop that should not be on a clock.
+    private void ShowDebrief()
+    {
+        GameSession.LaunchedFromBase = false;
+
+        var debrief = GetParent().GetNodeOrNull<DebriefScreen>("Debrief");
+        if (debrief != null)
+        {
+            debrief.Show(this, _log);
+            return;
+        }
+
+        // No screen in this scene: go straight back rather than stranding the
+        // player in a finished run with no way out.
+        GD.PushWarning("MetaManager: no Debrief node — returning to base directly");
+        if (IsInsideTree())
+            GetTree().ChangeSceneToFile("res://scenes/Base.tscn");
     }
 
     /// Dying leaves the good kit on the ground. Starting kit is exempt — it is
@@ -179,7 +242,7 @@ public partial class MetaManager : Node
     ///
     /// This is the rule that makes the shop a decision rather than a one-time
     /// unlock: buying the better rifle is easy, taking it out is the wager.
-    private void LoseCarriedEquipment()
+    private string[] LoseCarriedEquipment()
     {
         var lost = new System.Collections.Generic.List<string>();
 
@@ -197,23 +260,14 @@ public partial class MetaManager : Node
 
         if (lost.Count > 0)
             GD.Print($"lost on death: {string.Join(", ", lost)}");
+
+        return lost.ToArray();
     }
 
     private void StashAll(Inventory inventory)
     {
         for (int i = 0; i < inventory.EntryCount; i++)
             Profile.AddToStash(inventory.ItemAt(i).ItemName, inventory.CountAt(i));
-    }
-
-    private async void ReturnToBase()
-    {
-        GameSession.LaunchedFromBase = false;
-        await ToSignal(GetTree().CreateTimer(ReturnDelaySeconds), SceneTreeTimer.SignalName.Timeout);
-
-        // The tree can be gone by the time the timer fires if the window was
-        // closed during the wait.
-        if (IsInsideTree())
-            GetTree().ChangeSceneToFile("res://scenes/Base.tscn");
     }
 
     private void Persist()

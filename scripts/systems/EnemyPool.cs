@@ -74,6 +74,13 @@ public sealed class EnemyPool
     /// iterating downward are the ones that stay correct.
     public void DespawnAt(int index)
     {
+        // Refusing rather than trusting. The failure this prevents is not a
+        // crash at the call site — it is Count drifting below zero and the crash
+        // landing on the next spawn, in a different system, with nothing in the
+        // stack trace pointing at whoever despawned a slot that was not live.
+        if (index < 0 || index >= Count)
+            return;
+
         int last = --Count;
         if (index != last)
         {

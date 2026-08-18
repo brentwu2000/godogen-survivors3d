@@ -9,6 +9,7 @@ using Godot;
 public partial class BaseScreen : Control
 {
     private Label _screen = null!;
+    private Label _side = null!;
     private Profile _profile = null!;
     private ShopCatalogue _catalogue = null!;
     private int _cursor;
@@ -17,8 +18,13 @@ public partial class BaseScreen : Control
     public override void _Ready()
     {
         _screen = GetNode<Label>("Screen");
-        _screen.AddThemeFontSizeOverride("font_size", 18);
-        _screen.AddThemeColorOverride("font_color", new Color(0.94f, 0.93f, 0.88f));
+        _side = GetNode<Label>("Side");
+
+        foreach (Label label in new[] { _screen, _side })
+        {
+            label.AddThemeFontSizeOverride("font_size", 18);
+            label.AddThemeColorOverride("font_color", new Color(0.94f, 0.93f, 0.88f));
+        }
 
         _profile = SaveSystem.Load();
         _catalogue = new ShopCatalogue();
@@ -41,6 +47,14 @@ public partial class BaseScreen : Control
             SellStash();
         else if (Input.IsActionJustPressed("menu_launch"))
             Launch();
+        else if (Input.IsActionJustPressed("pick_1"))
+            TakeContract(0);
+        else if (Input.IsActionJustPressed("pick_2"))
+            TakeContract(1);
+        else if (Input.IsActionJustPressed("pick_3"))
+            TakeContract(2);
+        else if (Input.IsActionJustPressed("menu_reroll"))
+            Reroll();
         else
             return;
 
@@ -113,6 +127,39 @@ public partial class BaseScreen : Control
         _message = $"{_message}{(_message.Length > 0 ? "; " : "")}carrying {entry.Name}";
     }
 
+    /// Commits to one of the three jobs on the board.
+    ///
+    /// Taking one is the point. Three jobs that all pay out if they happen to be
+    /// satisfied are three things that happen to a player; picking one before
+    /// leaving is a plan, and a plan is what makes the twentieth run different
+    /// from the fifth.
+    private void TakeContract(int index)
+    {
+        Contract[] offer = _profile.ContractOffer();
+        if (index < 0 || index >= offer.Length)
+            return;
+
+        _profile.ContractIndex = index;
+        _message = $"took the contract: {offer[index].Describe()}";
+        Persist();
+    }
+
+    /// A new board, for money. Free rerolls mean spinning until the easiest card
+    /// appears, and a job nobody had to weigh is a delayed handout.
+    private void Reroll()
+    {
+        if (_profile.Credits < ContractBook.RerollCost)
+        {
+            _message = $"a new board costs {ContractBook.RerollCost}; you have {_profile.Credits}";
+            return;
+        }
+
+        _profile.Credits -= ContractBook.RerollCost;
+        _profile.RollContracts();
+        _message = $"new contracts for {ContractBook.RerollCost}";
+        Persist();
+    }
+
     /// The stash is sold at face value. The extraction multiplier was earned by
     /// walking out with it and is not paid a second time.
     private void SellStash()
@@ -152,6 +199,7 @@ public partial class BaseScreen : Control
         // wondering why it is missing.
         text.AppendLine($"practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
                         $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   (not for sale)");
+
         text.AppendLine();
 
         for (int i = 0; i < _catalogue.All.Count; i++)
@@ -170,13 +218,57 @@ public partial class BaseScreen : Control
             text.AppendLine($"{(i == _cursor ? " >" : "  ")} {entry.Name,-18} {state,-12}{risk}");
         }
 
+        _screen.Text = text.ToString();
+        _side.Text = SideColumn();
+    }
+
+    /// The right-hand column: what to chase, what to take, and which keys do it.
+    ///
+    /// Records sit next to contracts on purpose. Neither changes a number in the
+    /// next run — one is a target, the other is a job — and putting the pair
+    /// beside the shop, which changes every number, is what makes the two kinds
+    /// of progress legible as different things.
+    private string SideColumn()
+    {
+        var text = new System.Text.StringBuilder();
+
+        text.AppendLine("PERSONAL BEST");
+        text.AppendLine($"  banked {_profile.BestBank}      killed {_profile.BestKills}      " +
+                        $"lasted {_profile.BestSeconds:F0}s");
+        text.AppendLine($"  multiplier x{_profile.BestMultiplier:F2}      " +
+                        $"streak {_profile.BestStreak} (now {_profile.Streak})");
         text.AppendLine();
-        text.AppendLine("up/down choose    enter buy or equip    [S] sell stash    [L] launch");
+
+        text.AppendLine("CONTRACTS");
+        Contract[] offer = _profile.ContractOffer();
+        for (int i = 0; i < offer.Length; i++)
+        {
+            bool taken = _profile.ContractIndex == i;
+            text.AppendLine($"  [{i + 1}] {offer[i].Describe(),-32} {offer[i].Reward,4} cr" +
+                            (taken ? "   <- taking this" : ""));
+        }
+
+        if (!_profile.HasContract)
+        {
+            text.AppendLine();
+            text.AppendLine("  none taken — a run without one still pays,");
+            text.AppendLine("  it just does not ask anything of you");
+        }
+
+        text.AppendLine();
+        text.AppendLine("KEYS");
+        text.AppendLine("  up/down choose          enter buy or equip");
+        text.AppendLine("  [1][2][3] take a contract");
+        text.AppendLine($"  [R] reroll contracts ({ContractBook.RerollCost} cr)");
+        text.AppendLine("  [S] sell stash          [L] launch");
 
         if (_message.Length > 0)
-            text.AppendLine($"\n{_message}");
+        {
+            text.AppendLine();
+            text.AppendLine(_message);
+        }
 
-        _screen.Text = text.ToString();
+        return text.ToString();
     }
 
     private bool IsEquipped(ShopCatalogue.Entry entry) => entry.Slot is { } slot

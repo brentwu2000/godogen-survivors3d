@@ -4,11 +4,12 @@ A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Braw
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
-Status: both loops close, and the surface is on. A run is fight, loot, grow, extract on an arena
-generated fresh each time; between runs a base screen turns what came back into gear that changes the
-next one, and dying in that gear loses it. Five enemy variants with their own art, finite ammo, items
-you can use or throw, synthesised audio, a HUD of bars rather than labels, and hit feedback. Every
-probe below passes. Build gate re-verified 2026-08-18.
+Status: both loops close, the surface is on, and the run reports itself. A run is fight, loot, grow,
+extract on an arena generated fresh each time; it ends on a debrief rather than a timer; between runs
+a base screen turns what came back into gear that changes the next one, offers three contracts and
+keeps your records, and dying in that gear loses it. Five enemy variants with their own art, finite
+ammo, items you can use or throw, synthesised audio, a HUD of bars rather than labels, and hit
+feedback. Every probe below passes. Build gate re-verified 2026-08-18.
 
 ## Running it
 
@@ -21,7 +22,8 @@ godot                                # play — opens at the base
 
 WASD/arrows move, weapons fire themselves (mouse or space forces a shot), `[E]` interacts, `[R]`
 reloads, `[F]` secures the top item into the safe box, `[Q]` uses a carried item, `[G]` throws one,
-`[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]` answer a level-up. Actions are read through `IInputSource`, so the
+`[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]` answer a level-up. At the base, `[1]`/`[2]`/`[3]` take a
+contract and `[R]` rerolls the board for credits. Actions are read through `IInputSource`, so the
 touch implementation drives the same code with two virtual sticks.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
@@ -40,11 +42,15 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/BaseLoopProbe.cs` | yes | Base → launch → die → back at the base, driven from the keys |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
 | `test/AudioProbe.cs` | yes | Every clip exists and carries signal, one-shots end on zero, the horde loop meets itself, and repeats are gated |
+| `test/HudProbe.cs` | yes | Every bar tracks its value at three widths, the cards follow the offer, and the hold bar clears when the run does |
+| `test/DebriefProbe.cs` | yes | The record is what happened — kills by variant, crates, items, the worst moment — and the screen reports the record |
+| `test/ContractProbe.cs` | yes | Three distinct jobs with at most one clock card, exact thresholds, nothing paid on a corpse, and rerolls cost |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
 | `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` lights alternate instances to check the hit-flash channel) |
+| `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
 
 Probes are exit-code judged, so they can all be chained. The ones marked "no" need a real rendering
@@ -140,6 +146,46 @@ what makes the shop a decision rather than a one-time unlock — buying the bett
 rifle is easy, taking it out is the wager. The starting rifle, knife, jacket,
 pack and boots can never be lost or sold; a player who cannot afford a backpack
 still has one, or the loop has no next run.
+
+The right-hand column is what to chase and what to take: personal bests, and
+three contracts of which one can be taken with `[1]`/`[2]`/`[3]`. `[R]` puts a new
+board up for 60 credits — a free reroll means spinning until the easiest card
+appears, and a job nobody had to weigh is a delayed handout.
+
+**Records are not a fourth growth curve.** There are already three — practice,
+gear, in-run upgrades — and a fourth would make it impossible to tell which one
+is moving, which is the exact problem that turned practice into a once-per-run
+settlement. A record changes no number in the next run. It is only a target, and
+a target is what was missing. The exception with teeth is the survival streak: a
+single death takes it back to zero, which stacks another layer onto "do I take
+the good rifle out" without inventing a mechanic to do it.
+
+**Contracts are the only thing in the game that asks you to play differently.**
+Everything else — better gear, more practice, a longer curve — asks you to play
+the same run better. A board is three distinct kinds, and **at most one of them
+pays for leaving early**: "multiply what you are carrying by staying" is the run's
+central tension, and a board that is entirely "leave before 90s" replaces that
+decision with a schedule. One such card is a trade; three are an instruction.
+Every job also requires walking out, because the counts are easiest to hit on
+exactly the run that ends face down — it went on longest.
+
+## The debrief
+
+A run ends on a report, not on a timer. It used to end on a two-line banner and
+three and a half seconds of waiting, which was long enough to not finish reading
+it; everything else the run produced — kills by variant, practice earned, what
+death took, whether it beat the last one — went to the console. The player did the
+work and the log file got the report.
+
+It is composed from one `RunRecord`, frozen the moment the run ends, and so is the
+contract check and so are the records. Three consumers, one set of numbers: a
+contract that counted kills its own way would disagree with the screen reporting
+them, and the player would be right to trust neither. `test/DebriefProbe.cs`
+asserts that agreement by reading the label text, because that is the version a
+player can check too.
+
+It waits for a key. Anything that dismisses itself is something the player learns
+to stop reading.
 
 ## Growth
 
@@ -270,6 +316,15 @@ the scale a number nobody can read as "how big is a brute", so `EnemyTypeResourc
 records the intent and `EnemyTypeProbe` measures quad × scale × the sprite's actual fill against it.
 Re-fitting the art moves the scale, and without something to compare it to a 3 m brute quietly
 becoming 2.4 m looks exactly like a brute.
+
+**A stale enemy index is normal, not a caller error.** One hit can remove several enemies — a bloater's
+death blast takes whatever is standing near it — so every index captured before it can be past the end
+by the time it is used, including the rest of a melee swing's own hit list walked backwards exactly as
+the contract says. Unguarded, the damage lands on a dead slot whose leftover health may already be at
+or below zero, the pool despawns an entry that was never live, and `Count` drops without anything
+leaving. A few of those drive it negative, and then the next spawn writes to index -1 — a crash several
+seconds and one system away from the blast that caused it. `Horde.Damage` and `EnemyPool.DespawnAt`
+both refuse out-of-range indices now. The hitscan path had always guarded; the melee path never had.
 
 **Enemies are not physics bodies.** The game asks one question about an enemy — who is near me — and
 a uniform `SpatialGrid` answers it with an O(n) counting sort per tick, so separation is a single
@@ -484,17 +539,16 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The loop closes and the surface is on: audio, a HUD of bars, hit flash, camera shake, damage
-vignette, and real art for every creature and for the player.
+Everything the player looks at has now had a pass — creatures, the player, the readout, the sound, the
+feedback, and the report that ends a run — **except the thing they stare at for three hundred seconds**.
+The ground is one untextured plane and the cover is fifty grey boxes, and after the art landed those
+boxes became the weakest thing on screen.
 
-What is missing now is the **handover between the two loops**. A run ends on a banner and three and a
-half seconds later the scene is the shop — so everything the run produced (kills by variant, practice
-gained, what was lost, whether it beat the last one) exists only as `GD.Print`. A three-hundred-second
-run collapses into one number, and there is nothing to chase that is not credits. That is Phase 13:
-a debrief screen, personal records, and per-run contracts. See the roadmap.
-
-Still cosmetic and still deferred: the base screen is a monospace list, the ground is an untextured
-plane, and the cover is grey boxes. The boxes are now the weakest thing on screen, which is progress.
+That is Phase 14: textured ground, cover as real CC0 props, a visible difference between the three
+tile types the generator already places, and landmarks to navigate by now that the exits move. The
+technical question it has to answer first is draw calls — fifty individual GLB instances would triple
+the frame's budget, and MultiMesh silently loses an imported mesh on save, so the way through is to
+copy the GLB's mesh into a procedural `ArrayMesh` at build time. See the roadmap.
 
 Engineering gaps, separately:
 

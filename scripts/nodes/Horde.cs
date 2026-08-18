@@ -605,6 +605,21 @@ public partial class Horde : Node3D
 
     private bool Damage(int index, float amount, Vector2 knockback, bool allowBlast)
     {
+        // A stale index is not a caller error here, it is the normal consequence
+        // of a death blast: one hit can remove several enemies, so every index
+        // captured before it — including the rest of a melee swing's own hit list,
+        // walked backwards exactly as the contract says — can be past the end by
+        // the time it is used.
+        //
+        // Without this, the damage lands on a dead slot whose leftover health may
+        // still be at or below zero, and the pool despawns an entry that was
+        // never live. Count goes down without anything leaving, and a few of those
+        // drive it negative — at which point the next spawn writes to index -1 and
+        // the crash is several seconds and one system away from the blast that
+        // caused it.
+        if (index < 0 || index >= Pool.Count)
+            return false;
+
         EnemyTypeResource type = Types[Pool.Type[index]];
 
         Pool.Health[index] -= amount;

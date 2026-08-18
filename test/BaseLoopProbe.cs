@@ -63,7 +63,8 @@ public partial class BaseLoopProbe : SceneTree
         {
             case 0: return Step(StageLaunch, "the base screen launches a run");
             case 1: return Step(StageDie, "the run ends");
-            case 2: return Step(StageReturn, "and hands control back to the base");
+            case 2: return Step(StageDebrief, "the debrief reports it and waits");
+            case 3: return Step(StageReturn, "and hands control back to the base");
             default:
                 Restore();
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
@@ -129,8 +130,50 @@ public partial class BaseLoopProbe : SceneTree
         return director?.State == RunState.Died;
     }
 
+    /// The report has to appear, has to say something, and has to still be there
+    /// a second later.
+    ///
+    /// That last part is the assertion that matters. The screen it replaced was a
+    /// three and a half second timer, and anything that dismisses itself is
+    /// something the player learns to stop reading — so a debrief that vanished
+    /// on its own would pass a test for "appeared" while failing at the only job
+    /// it has.
+    private bool? StageDebrief(int tick)
+    {
+        var debrief = CurrentScene?.GetNodeOrNull<DebriefScreen>("Debrief");
+        if (debrief == null)
+        {
+            GD.Print("  no Debrief node in the run scene");
+            return false;
+        }
+
+        if (tick < 90)
+        {
+            _debriefStayed &= debrief.Visible || tick < 5;
+            return null;
+        }
+
+        var meta = CurrentScene?.GetNodeOrNull<MetaManager>("MetaManager");
+        RunRecord? run = meta?.LastRun;
+
+        GD.Print($"  debrief visible after 1.5s = {debrief.Visible} (never blinked = {_debriefStayed}); " +
+                 $"record says {run?.Outcome} at {run?.Seconds:F1}s, banked {run?.Banked}");
+
+        // Then dismiss it the way a player would.
+        Input.ActionPress("ui_accept");
+        return debrief.Visible && _debriefStayed && run != null && run.Outcome == RunState.Died;
+    }
+
+    private bool _debriefStayed = true;
+
     private bool? StageReturn(int tick)
     {
+        if (tick == 2)
+        {
+            Input.ActionRelease("ui_accept");
+            return null;
+        }
+
         // The base screen is a Control; the run is a Node3D. Either name would
         // do, but the type is what the next thing to touch it cares about.
         if (CurrentScene is Control)
