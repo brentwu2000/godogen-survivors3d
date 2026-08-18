@@ -261,9 +261,26 @@ public partial class GrowthProbe : SceneTree
     /// is dropped rather than left pending against an offer that can never come.
     private bool? StageDeckEmpties(int tick)
     {
+        // Exhaust the whole deck, not the first five. The pool grew from five
+        // options to eighteen in Phase 18, and capping only the originals left
+        // thirteen rules still on offer — so this stage started reporting a
+        // working drop as broken, which is a probe that hardcoded the size of
+        // the thing it was testing.
+        foreach (GrowthOption option in System.Enum.GetValues<GrowthOption>())
+        {
+            for (int i = 0; i < 40 && _growth!.IsAvailable(option); i++)
+                _growth.GrantForTesting(option);
+        }
+
+        // Take whatever is already on the table. An offer built by an earlier
+        // stage is still standing, and BuildOffer only runs when there is none —
+        // so the stale cards made the drop look like it never happened.
+        while (_growth!.HasOffer)
+            _growth.Choose(0);
+
         bool anyAvailable = false;
-        for (int i = 0; i < 5; i++)
-            anyAvailable |= _growth!.IsAvailable((GrowthOption)i);
+        foreach (GrowthOption option in System.Enum.GetValues<GrowthOption>())
+            anyAvailable |= _growth.IsAvailable(option);
 
         EarnOnePick();
         _growth!._PhysicsProcess(0.0);

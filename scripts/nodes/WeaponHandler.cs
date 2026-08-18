@@ -154,6 +154,11 @@ public partial class WeaponHandler : Node3D
 
     public ProjectilePool Projectiles { get; private set; } = null!;
 
+    /// The run's upgrades. Empty until a player exists, so a weapon handler in a
+    /// probe's bare scene behaves like an unmodified one rather than crashing.
+    private RunModifiers Mods => _player?.Mods ?? _fallbackMods;
+    private readonly RunModifiers _fallbackMods = new();
+
     private Horde? _horde;
     private Player? _player;
     private HordeRenderer? _projectileRenderer;
@@ -279,10 +284,23 @@ public partial class WeaponHandler : Node3D
             return;
 
         Fire(origin, direction, level);
-        slot.Cooldown = weapon.GetEffectiveAttackDelay(level);
+        slot.Cooldown = weapon.GetEffectiveAttackDelay(level) * Mods.AttackDelayScale;
 
         if (weapon.MagazineSize > 0)
             slot.Ammo--;
+    }
+
+    /// Fires once, now, in a given direction, ignoring cooldown and ammo.
+    ///
+    /// For probes. Waiting for the weapon to fire on its own means waiting for a
+    /// cooldown and for auto-targeting to agree with the test about which enemy
+    /// matters, and neither is the thing being measured.
+    public void ForceFire(Vector2 direction)
+    {
+        if (Weapon == null || _horde == null)
+            return;
+
+        Fire(GlobalPosition, direction.Normalized(), Level);
     }
 
     private bool TryGetAimDirection(Vector3 origin, float range, out Vector2 direction)
@@ -318,14 +336,24 @@ public partial class WeaponHandler : Node3D
     {
         WeaponResource weapon = Weapon!;
         float range = weapon.GetEffectiveRange(level);
+
+        // Rolled once per attack, not once per target. A swing that crits should
+        // crit — a wide arc rolling separately for each of five enemies turns a
+        // twelve percent chance into "one of them took extra", every time, which
+        // is a different and much duller card.
         float damage = weapon.GetEffectiveDamage(level);
+        if (Mods.CritChance > 0.0f && NextFloat() < Mods.CritChance)
+            damage *= Mods.CritMultiplier;
+
+        float knockback = weapon.Knockback + Mods.Knockback;
 
         Fired?.Invoke(weapon.Category, origin, direction);
 
         if (weapon.IsMelee)
         {
             // SwingArcDegrees is the full sweep; the query wants the half-angle.
-            int count = _horde!.QueryArc(origin, direction, range, weapon.SwingArcDegrees * 0.5f, _hitList);
+            int count = _horde!.QueryArc(origin, direction, range * Mods.AreaScale,
+                                         weapon.SwingArcDegrees * 0.5f, _hitList);
 
             // Backwards: a kill swap-removes the last element into the killed
             // slot, which would silently skip an enemy on a forward walk.
@@ -336,7 +364,7 @@ public partial class WeaponHandler : Node3D
                     continue;
 
                 Vector3 where = _horde.Pool.Position[index];
-                _horde.Damage(index, damage, direction * weapon.Knockback);
+                _horde.Damage(index, damage, direction * knockback);
                 RecordHit(weapon.Category, where);
             }
             return;
@@ -351,14 +379,14 @@ public partial class WeaponHandler : Node3D
                 new Vector3(origin.X, 0.0f, origin.Z),
                 shot * speed,
                 damage,
-                weapon.Knockback,
+                knockback,
                 range / speed,
-                weapon.Penetration);
+                weapon.Penetration + Mods.Pierce);
             return;
         }
 
         int hits = _horde!.QueryRay(origin, shot, range, HitscanThickness, _hitList);
-        int remaining = weapon.Penetration;
+        int remaining = weapon.Penetration + Mods.Pierce;
 
         // A hitscan shot resolves instantly and would otherwise be invisible —
         // the player could not tell a firing weapon from a jammed one. Zero
@@ -376,7 +404,7 @@ public partial class WeaponHandler : Node3D
                 continue;
 
             Vector3 where = _horde.Pool.Position[index];
-            _horde.Damage(index, damage, shot * weapon.Knockback);
+            _horde.Damage(index, damage, shot * knockback);
             RecordHit(weapon.Category, where);
             remaining--;
         }

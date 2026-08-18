@@ -39,6 +39,11 @@ public partial class Player : CharacterBody3D
     /// does not have to know what a player upgrade is.
     public float SearchSpeed { get; private set; } = 1.0f;
 
+    /// What this run's upgrades have changed, for everything that reads a rule
+    /// rather than a number. Lives on the player because a run is a player;
+    /// read by the weapon, the horde and the loot containers at the point of use.
+    public RunModifiers Mods { get; } = new();
+
     public float Health { get; private set; }
     public bool IsAlive => Health > 0.0f;
     public Inventory Backpack { get; private set; } = null!;
@@ -150,12 +155,13 @@ public partial class Player : CharacterBody3D
         switch (chosen.Effect)
         {
             case ItemEffect.Explosive:
-                int killed = _horde.Detonate(landing, chosen.EffectRadius, chosen.EffectAmount);
+                int killed = _horde.Detonate(landing, chosen.EffectRadius * Mods.AreaScale, chosen.EffectAmount);
                 GD.Print($"threw {chosen.ItemName}: {killed} killed");
                 break;
 
             case ItemEffect.Incendiary:
-                _horde.Hazards.Add(landing, chosen.EffectRadius, chosen.EffectAmount, chosen.EffectDuration);
+                _horde.Hazards.Add(landing, chosen.EffectRadius * Mods.AreaScale,
+                                   chosen.EffectAmount, chosen.EffectDuration);
                 break;
 
             default:
@@ -285,8 +291,28 @@ public partial class Player : CharacterBody3D
     /// Contact arrives as a rate, so armour is subtracted from the rate rather
     /// than from each tick's slice — otherwise mitigation would depend on the
     /// physics tick rate, which is not a thing the player can see or choose.
-    public void TakeContactDamage(float damagePerSecond, float delta) =>
+    ///
+    /// Dodge is rolled per tick rather than per hit, for the same reason: there
+    /// are no hits, only a rate. A tenth of dodge therefore removes a tenth of
+    /// the damage over any window long enough to matter, which is what the card
+    /// promises and what a per-hit roll would only approximate.
+    public void TakeContactDamage(float damagePerSecond, float delta)
+    {
+        if (Mods.Dodge > 0.0f && NextFloat() < Mods.Dodge)
+            return;
+
         ApplyDamage(Mitigate(damagePerSecond) * delta);
+    }
+
+    private ulong _rng = 0x9E3779B97F4A7C15UL;
+
+    private float NextFloat()
+    {
+        _rng ^= _rng << 13;
+        _rng ^= _rng >> 7;
+        _rng ^= _rng << 17;
+        return (_rng >> 40) / 16777216.0f;
+    }
 
     /// Twenty percent always gets through. Armour that can reach zero turns the
     /// weakest variant into scenery, and a horde you can stand in is not a horde.
@@ -335,6 +361,9 @@ public partial class Player : CharacterBody3D
 
         if (AdrenalineRemaining > 0.0f)
             AdrenalineRemaining = Mathf.Max(0.0f, AdrenalineRemaining - (float)delta);
+
+        if (Mods.Regen > 0.0f && IsAlive)
+            Heal(Mods.Regen * (float)delta);
 
         Vector2 move = _input.Move;
         float speed = AdrenalineActive ? MoveSpeed * (1.0f + AdrenalineBoost) : MoveSpeed;

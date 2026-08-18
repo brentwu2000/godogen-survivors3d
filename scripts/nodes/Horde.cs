@@ -471,7 +471,25 @@ public partial class Horde : Node3D
         // worth more than three walkers, and the smooth accumulation is what
         // makes being surrounded scale with who actually reached you.
         if (contactDamage > 0.0f && _player is Player player)
+        {
             player.TakeContactDamage(contactDamage, step);
+
+            // Thorns pays back whoever is actually touching, not the crowd.
+            // Being surrounded is what the card answers, so it has to scale with
+            // how surrounded you are — the same shape the damage coming in has.
+            float thorns = player.Mods.Thorns;
+            if (thorns > 0.0f)
+            {
+                var at = new Vector2(player.GlobalPosition.X, player.GlobalPosition.Z);
+                for (int i = Pool.Count - 1; i >= 0; i--)
+                {
+                    Vector3 q = Pool.Position[i];
+                    float dx = q.X - at.X, dz = q.Z - at.Y;
+                    if (dx * dx + dz * dz < ContactRadius * ContactRadius)
+                        Damage(i, thorns * step, Vector2.Zero, allowBlast: true, flash: false);
+                }
+            }
+        }
 
         StepEnemyShots(step);
         StepHazards(step);
@@ -684,6 +702,7 @@ public partial class Horde : Node3D
         if (allowBlast && type.DeathBlastRadius > 0.0f)
             Blast(deathPosition, type.DeathBlastRadius, type.DeathBlastDamage);
 
+        ApplyKillRules(deathPosition);
         EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
     }
@@ -714,6 +733,39 @@ public partial class Horde : Node3D
         }
 
         return killed;
+    }
+
+    /// What this run's upgrades do when something dies.
+    ///
+    /// Rolled here rather than by whoever landed the hit, because a kill is a
+    /// kill however it happened — burning ground and a thrown charge earn the
+    /// same rules a rifle does. Both effects are deliberately small: this is
+    /// chip damage that chains through a crowd, not a second pipe bomb, and a
+    /// chain that could start another chain is a depth nobody chose.
+    private void ApplyKillRules(Vector3 at)
+    {
+        if (_player is not Player player)
+            return;
+
+        RunModifiers mods = player.Mods;
+
+        if (mods.Lifesteal > 0.0f)
+            player.Heal(mods.Lifesteal);
+
+        if (mods.IgniteChance > 0.0f && NextFloat() < mods.IgniteChance)
+            Hazards.Add(at, 2.2f * mods.AreaScale, 14.0f, 3.0f);
+
+        if (mods.DetonateChance > 0.0f && NextFloat() < mods.DetonateChance)
+        {
+            Exploded?.Invoke(at);
+
+            for (int i = Pool.Count - 1; i >= 0; i--)
+            {
+                float radius = 2.6f * mods.AreaScale;
+                if (FlatDistanceSquared(Pool.Position[i], at) < radius * radius)
+                    Damage(i, 18.0f, Vector2.Zero, allowBlast: false, flash: true);
+            }
+        }
     }
 
     /// A death blast, resolved one level deep — blast kills cannot blast in turn.

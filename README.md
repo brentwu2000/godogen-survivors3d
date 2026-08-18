@@ -60,6 +60,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
+| `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
@@ -211,6 +212,31 @@ It waits for a key. Anything that dismisses itself is something the player learn
 to stop reading.
 
 ## Growth
+
+**The upgrade pool is eighteen options, and twelve of them are rules rather than
+numbers.** It used to be five, all of them a stat going up, which is the one thing
+a survivors-like cannot be short of: with five, every run is the same run in a
+different order and the offer stops being a decision by the third level.
+
+Six are rare — crit, ignite, detonate, lifesteal, dodge, fortune — drawn at about
+a third of the weight of a common one, so seeing one is the run's good news rather
+than its baseline. Each has its own ceiling, low for the ones that compound, and
+an option that hits its cap leaves the deck where the player can watch it go.
+
+The rules live in `RunModifiers`, a plain field bag owned by the player and read
+by the weapon, the horde and the loot containers at the point of use. The first
+five options could add to whichever system owned their number; that stops working
+the moment an upgrade is a rule, because a chance to crit is read by the weapon,
+a chance to ignite by the horde and a chance to shrug off a hit by the player, and
+scattering them means three systems each holding a field nobody can find from the
+card that granted it.
+
+Two details worth their own line. **Crit is rolled once per attack, not once per
+target** — a wide arc rolling separately for five enemies turns a twelve percent
+chance into "one of them took extra, every time", which is a duller card. And
+**dodge is rolled per tick, not per hit**, because contact damage is a rate and
+there are no hits: a tenth of dodge therefore removes a tenth of the damage over
+any window that matters, which is exactly what the card promises.
 
 Three axes, and they do not overlap. A run's weapon sits at one number:
 

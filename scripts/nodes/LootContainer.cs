@@ -81,13 +81,15 @@ public partial class LootContainer : Node3D
     }
 
     private float[] _weights = System.Array.Empty<float>();
+    private float _valueScale = 1.0f;
 
     public override void _PhysicsProcess(double delta)
     {
         if (Looted || _player == null || !_player.IsAlive)
             return;
 
-        PlayerInRange = GlobalPosition.DistanceTo(_player.GlobalPosition) <= SearchRadius;
+        PlayerInRange = GlobalPosition.DistanceTo(_player.GlobalPosition)
+                        <= SearchRadius + _player.Mods.SearchRadiusBonus;
 
         if (!PlayerInRange)
         {
@@ -102,6 +104,9 @@ public partial class LootContainer : Node3D
 
         Progress = 1.0f;
         Looted = true;
+        // Read once, here, rather than inside the roll: the value multiplier is
+        // the player's and the roll only knows about items.
+        _valueScale = _player.Mods.LootValueScale;
         EmitSignal(SignalName.Emptied, RollInto(_player.Backpack));
     }
 
@@ -118,7 +123,7 @@ public partial class LootContainer : Node3D
             ItemResource item = PickWeighted();
             int stack = item.MinStack + (int)(NextFloat() * (item.MaxStack - item.MinStack + 1));
             stack = Mathf.Clamp(stack, item.MinStack, item.MaxStack);
-            gained += backpack.TryAdd(item, stack) * item.Value;
+            gained += Mathf.RoundToInt(backpack.TryAdd(item, stack) * item.Value * _valueScale);
         }
 
         return gained;
