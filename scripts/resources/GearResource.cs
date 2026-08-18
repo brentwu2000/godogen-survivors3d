@@ -52,4 +52,46 @@ public partial class GearResource : Resource
     [Export] public int ArmourUpgradeCap { get; set; }
     [Export] public int SpeedUpgradeCap { get; set; }
     [Export] public int SearchUpgradeCap { get; set; }
+
+    // --- Rules --------------------------------------------------------------
+    //
+    // What the piece grants before the first level-up, and which rules it lets
+    // the run stack further than the default.
+    //
+    // This is what turns the shop from a list of numbers into a decision. Two
+    // pieces in the same slot at the same price should not be better and worse;
+    // they should be answers to different questions — and the only way to say
+    // that in data is to let a piece change a *rule* rather than a stat. A
+    // bandolier that carries less loot and pierces two enemies is not a worse
+    // backpack, it is a different run.
+
+    /// Enemies a shot passes through before stopping, on top of the weapon's own.
+    [Export] public int PierceBonus { get; set; }
+
+    /// Multiplies every effect radius: melee arcs, blasts, burning ground.
+    [Export] public float AreaBonus { get; set; }
+
+    /// Fraction of contact damage returned to whatever is touching the player.
+    [Export] public float ThornsBonus { get; set; }
+
+    /// Health per second, always.
+    [Export] public float RegenBonus { get; set; }
+
+    /// Extra shove on every hit.
+    [Export] public float KnockbackBonus { get; set; }
+
+    /// Chance to take nothing from an incoming tick.
+    [Export] public float DodgeBonus { get; set; }
+
+    /// Named for the growth option each one raises, because the pairing is the
+    /// point: a piece that grants a rule the run cannot then stack is a piece
+    /// whose identity stops mattering after the first minute.
+    [Export] public int PierceUpgradeCap { get; set; } = -1;
+    [Export] public int CritUpgradeCap { get; set; } = -1;
+    [Export] public int AreaUpgradeCap { get; set; } = -1;
+    [Export] public int ThornsUpgradeCap { get; set; } = -1;
+    [Export] public int RegenUpgradeCap { get; set; } = -1;
+    [Export] public int KnockbackUpgradeCap { get; set; } = -1;
+    [Export] public int DodgeUpgradeCap { get; set; } = -1;
+    [Export] public int FortuneUpgradeCap { get; set; } = -1;
 }

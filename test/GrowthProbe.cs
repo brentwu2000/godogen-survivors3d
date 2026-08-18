@@ -181,7 +181,8 @@ public partial class GrowthProbe : SceneTree
         if (tick == 1)
         {
             _horde!.Pool.Clear();
-            _growth!.SetCaps(health: 0, armour: ArmourCap, speed: 0, search: 0);
+            _growth!.SetCaps(health: 0, armour: ArmourCap, speed: 0, search: 0,
+                             rules: new System.Collections.Generic.Dictionary<GrowthOption, int>());
             return null;
         }
 

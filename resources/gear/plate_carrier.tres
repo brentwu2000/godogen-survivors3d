@@ -9,5 +9,6 @@ Tier = 2
 Price = 900
 HealthBonus = 25.0
 ArmourBonus = 1.0
+MoveSpeedBonus = -0.35
 HealthUpgradeCap = 7
 ArmourUpgradeCap = 5

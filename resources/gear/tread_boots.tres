@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_hrwpp"]
+
+[resource]
+script = ExtResource("1_hrwpp")
+GearName = "Tread Boots"
+Slot = 2
+Tier = 2
+Price = 700
+SpeedUpgradeCap = 1
+AreaBonus = 0.2
+RegenBonus = 0.7
+KnockbackBonus = 1.2
+AreaUpgradeCap = 5
+RegenUpgradeCap = 5
+KnockbackUpgradeCap = 5

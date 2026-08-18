@@ -108,9 +108,11 @@ public partial class RunGrowth : Node
         _player = GetParent().GetNodeOrNull<Player>("Player");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
-        // Every option that gear does not gate gets its own ceiling here, so a
-        // run cannot stack one rule into the only thing that matters. Gear
-        // overwrites the four it owns in SetCaps.
+        // The baseline, so a run cannot stack one rule into the only thing that
+        // matters. Written into _caps rather than into the gear layer, so a
+        // MetaManager that has already spoken is not overwritten by this — the
+        // two are readied in scene order and this node currently happens to come
+        // first, which is not a thing to depend on.
         foreach (GrowthOption option in System.Enum.GetValues<GrowthOption>())
             _caps[(int)option] = DefaultCap(option);
 
@@ -131,12 +133,50 @@ public partial class RunGrowth : Node
     /// Caps come from the equipped gear, summed. Called by the meta layer once
     /// the loadout is known; until then every character option is unavailable,
     /// which is the honest state rather than a default nobody chose.
-    public void SetCaps(int health, int armour, int speed, int search)
+    /// Everything the equipped set has to say about ceilings, in one call.
+    ///
+    /// It clears first, so this is a complete statement rather than a delta.
+    /// Two calls that each wrote only what they knew about left the previous
+    /// loadout's opinions in place — a bandolier taken off still granted five
+    /// pierce — and the reason that was invisible is that the real caller runs
+    /// exactly once per run. It took a probe wearing two sets in one scene to
+    /// see it, and a save-and-swap feature would have found it the same way.
+    ///
+    /// Only what the gear names is set. Everything else keeps `DefaultCap`,
+    /// which is what makes a piece legible: a bandolier saying pierce goes to
+    /// five and fortune goes to zero is a statement about two options, not a
+    /// silent re-authoring of all eighteen.
+    public void SetCaps(int health, int armour, int speed, int search,
+                        System.Collections.Generic.Dictionary<GrowthOption, int> rules)
     {
-        _caps[(int)GrowthOption.MaxHealth] = health;
-        _caps[(int)GrowthOption.Armour] = armour;
-        _caps[(int)GrowthOption.MoveSpeed] = speed;
-        _caps[(int)GrowthOption.SearchSpeed] = search;
+        System.Array.Fill(_gearCaps, -1);
+
+        _gearCaps[(int)GrowthOption.MaxHealth] = health;
+        _gearCaps[(int)GrowthOption.Armour] = armour;
+        _gearCaps[(int)GrowthOption.MoveSpeed] = speed;
+        _gearCaps[(int)GrowthOption.SearchSpeed] = search;
+
+        foreach (var pair in rules)
+            _gearCaps[(int)pair.Key] = pair.Value;
+    }
+
+    /// What the gear said, where it said anything, and the baseline elsewhere.
+    ///
+    /// A second array rather than overwriting the first, because the two are
+    /// filled by two nodes whose _Ready order is scene order. With one array the
+    /// game is correct only while RunGrowth sits above MetaManager in Main.tscn,
+    /// and the symptom of moving it is every gear ceiling silently reverting to
+    /// the default — a run that plays almost right.
+    public int CapFor(GrowthOption option) =>
+        _gearCaps[(int)option] >= 0 ? _gearCaps[(int)option] : _caps[(int)option];
+
+    private readonly int[] _gearCaps = Filled(-1);
+
+    private static int[] Filled(int value)
+    {
+        var array = new int[OptionCount];
+        System.Array.Fill(array, value);
+        return array;
     }
 
     /// How many times a rule may be stacked.
@@ -268,7 +308,7 @@ public partial class RunGrowth : Node
 
         return option == GrowthOption.WeaponLevel
             ? _weapons is { Weapon: not null } && !_weapons.AtCeiling
-            : _taken[(int)option] < _caps[(int)option];
+            : _taken[(int)option] < CapFor(option);
     }
 
     /// The profile, when there is one. A probe that builds a RunGrowth without a

@@ -212,7 +212,7 @@ public partial class UnlockProbe : SceneTree
         foreach (ShopCatalogue.Entry entry in catalogue.All)
             listed |= entry.Path == path;
 
-        string? reason = UnlockBook.ShopLockReason(profile, path);
+        string? reason = UnlockBook.ShopLockReason(profile, path, 2);
         bool allowed = UnlockBook.ShopAllows(profile, path);
 
         // Something not in the table at all must be freely sellable — the table
@@ -220,7 +220,7 @@ public partial class UnlockProbe : SceneTree
         // without an unlock row has to reach the shelf rather than disappear.
         const string unmentioned = "res://resources/weapons/scavenged_rifle.tres";
         bool unmentionedFree = UnlockBook.ShopAllows(profile, unmentioned)
-                               && UnlockBook.ShopLockReason(profile, unmentioned) == null;
+                               && UnlockBook.ShopLockReason(profile, unmentioned, 1) == null;
 
         GD.Print($"  bow listed={listed} buyable={allowed} reason=\"{reason}\", " +
                  $"an unmentioned weapon is free: {unmentionedFree}");

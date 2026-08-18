@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_p03p8"]
+
+[resource]
+script = ExtResource("1_p03p8")
+GearName = "Bandolier"
+Slot = 1
+Tier = 2
+Price = 1000
+CarryBonus = 2
+SearchUpgradeCap = 1
+PierceBonus = 1
+PierceUpgradeCap = 5
+CritUpgradeCap = 6
+FortuneUpgradeCap = 0

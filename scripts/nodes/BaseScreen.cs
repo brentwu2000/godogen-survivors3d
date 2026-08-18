@@ -83,7 +83,7 @@ public partial class BaseScreen : Control
             // Checked before the price, because a locked entry is not expensive,
             // it is unavailable — and "you cannot afford it" would send the
             // player off to earn credits that will not help.
-            if (UnlockBook.ShopLockReason(_profile, entry.Path) is { } reason)
+            if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
             {
                 _message = $"{entry.Name} is locked — {reason.ToLower()}";
                 return;
@@ -209,9 +209,34 @@ public partial class BaseScreen : Control
         text.AppendLine($"practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
                         $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   (not for sale)");
 
+        // What the cursor is on, in the piece's own numbers.
+        //
+        // Two pieces in a slot at the same price are the whole point of the shop
+        // and the list cannot say that: "Plate Carrier 900 / Stitched Vest 900"
+        // is a coin flip until something says one soaks and the other returns.
+        //
+        // Above the list rather than below it. Fifteen rows already reach the
+        // bottom of a 1080p screen, so a line appended after them is a line
+        // nobody sees — which is how the first version of this shipped its
+        // description into the void.
+        if (_cursor >= 0 && _cursor < _catalogue.All.Count)
+            text.AppendLine($"           {Describe(_catalogue.All[_cursor])}");
+
         text.AppendLine();
 
-        for (int i = 0; i < _catalogue.All.Count; i++)
+        // A window rather than the whole list.
+        //
+        // Fifteen rows already ran off the bottom of a 1080p screen, and the
+        // catalogue only grows — a shop that silently stops listing its last item
+        // is worse than one that admits there is more. The window follows the
+        // cursor and clamps at both ends, so the first and last rows are always
+        // reachable and the count of hidden rows is stated.
+        (int first, int last) = Window(_catalogue.All.Count);
+
+        if (first > 0)
+            text.AppendLine($"     ... {first} above");
+
+        for (int i = first; i < last; i++)
         {
             ShopCatalogue.Entry entry = _catalogue.All[i];
             bool owned = _profile.Owns(entry.Path);
@@ -221,7 +246,7 @@ public partial class BaseScreen : Control
             // them want it; content they can see and cannot have does — and the
             // condition printed where the price would go is the only place the
             // game ever explains how to get it.
-            string? locked = owned ? null : UnlockBook.ShopLockReason(_profile, entry.Path);
+            string? locked = owned ? null : UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier);
 
             string state = locked != null ? "[locked]"
                 : equipped ? "[equipped]"
@@ -236,8 +261,106 @@ public partial class BaseScreen : Control
             text.AppendLine($"{(i == _cursor ? " >" : "  ")} {entry.Name,-18} {state,-12}{note}");
         }
 
+        if (last < _catalogue.All.Count)
+            text.AppendLine($"     ... {_catalogue.All.Count - last} below");
+
         _screen.Text = text.ToString();
         _side.Text = SideColumn();
+    }
+
+    /// The slice of the catalogue to draw, following the cursor.
+    ///
+    /// Twelve rows is what fits under the header at this font size with the two
+    /// "... n more" markers accounted for. Clamped at both ends rather than
+    /// centred unconditionally, so the top of the list is not permanently half a
+    /// screen of empty space when the cursor is on the first item.
+    private (int First, int Last) Window(int count)
+    {
+        const int Rows = 12;
+
+        if (count <= Rows)
+            return (0, count);
+
+        int first = Mathf.Clamp(_cursor - Rows / 2, 0, count - Rows);
+        return (first, first + Rows);
+    }
+
+    /// One line of what a row actually does, read off the resource.
+    ///
+    /// Every non-zero field, and nothing else. A curated sentence per piece would
+    /// read better and would go stale the first time a number changed — and a
+    /// shop that describes equipment it no longer sells is worse than a terse one.
+    private static string Describe(ShopCatalogue.Entry entry)
+    {
+        var parts = new System.Collections.Generic.List<string>();
+
+        // Asked of the entry, not attempted by loading. GD.Load<T> on the wrong
+        // type throws an InvalidCastException rather than returning null, so
+        // "try gear, fall back to weapon" takes the whole screen down on the
+        // first rifle — and the catalogue already knows which is which.
+        if (!entry.IsWeapon && GD.Load<GearResource>(entry.Path) is { } gear)
+        {
+            Add(parts, "health", gear.HealthBonus);
+            Add(parts, "armour", gear.ArmourBonus);
+            Add(parts, "speed", gear.MoveSpeedBonus);
+            Add(parts, "carry", gear.CarryBonus);
+            Add(parts, "safe box", gear.SafeBoxBonus);
+            Add(parts, "pierce", gear.PierceBonus);
+            Add(parts, "area", gear.AreaBonus);
+            Add(parts, "thorns", gear.ThornsBonus);
+            Add(parts, "regen", gear.RegenBonus);
+            Add(parts, "knockback", gear.KnockbackBonus);
+            Add(parts, "dodge", gear.DodgeBonus);
+
+            // The ceilings are half of what a piece is, and the half a player
+            // cannot discover by wearing it for ten seconds.
+            var caps = new System.Collections.Generic.List<string>();
+            Cap(caps, "health", gear.HealthUpgradeCap);
+            Cap(caps, "armour", gear.ArmourUpgradeCap);
+            Cap(caps, "speed", gear.SpeedUpgradeCap);
+            Cap(caps, "search", gear.SearchUpgradeCap);
+            Cap(caps, "pierce", gear.PierceUpgradeCap);
+            Cap(caps, "crit", gear.CritUpgradeCap);
+            Cap(caps, "area", gear.AreaUpgradeCap);
+            Cap(caps, "thorns", gear.ThornsUpgradeCap);
+            Cap(caps, "regen", gear.RegenUpgradeCap);
+            Cap(caps, "knockback", gear.KnockbackUpgradeCap);
+            Cap(caps, "dodge", gear.DodgeUpgradeCap);
+            Cap(caps, "fortune", gear.FortuneUpgradeCap);
+
+            if (caps.Count > 0)
+                parts.Add($"upgrades: {string.Join(" ", caps)}");
+
+            return parts.Count > 0 ? string.Join("   ", parts) : "grants nothing";
+        }
+
+        if (entry.IsWeapon && GD.Load<WeaponResource>(entry.Path) is { } weapon)
+        {
+            parts.Add($"{weapon.BaseDamage:F0} dmg");
+            parts.Add($"{weapon.BaseAttackSpeed:F1}/s");
+            parts.Add($"{weapon.BaseRange:F1} m");
+            if (weapon.Trait != WeaponTrait.None)
+                parts.Add(weapon.Trait.ToString().ToLower());
+
+            return string.Join("   ", parts);
+        }
+
+        return "";
+    }
+
+    private static void Add(System.Collections.Generic.List<string> parts, string name, float amount)
+    {
+        if (amount != 0.0f)
+            parts.Add($"{(amount > 0.0f ? "+" : "")}{amount:0.##} {name}");
+    }
+
+    private static void Cap(System.Collections.Generic.List<string> caps, string name, int value)
+    {
+        // -1 is "no opinion" and 0 is "none allowed". Printing them the same way
+        // would hide the entire cost side of a sidegrade: the bandolier's zero
+        // fortune is the reason its five pierce is a trade.
+        if (value >= 0)
+            caps.Add($"{name} {value}");
     }
 
     /// The right-hand column: what to chase, what to take, and which keys do it.

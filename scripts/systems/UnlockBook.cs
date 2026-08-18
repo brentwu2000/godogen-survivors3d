@@ -161,6 +161,27 @@ public static class UnlockBook
         },
     };
 
+    /// Extractions needed before a shop tier is on the shelf at all.
+    ///
+    /// A second gate, and a blunter one than the unlock table: the conditions
+    /// above ask the player to do something specific, while this only asks them
+    /// to have finished a few runs. It exists so the opening shop is small enough
+    /// to read. Twelve rows on the first screen is a catalogue; five is a choice.
+    ///
+    /// Deliberately counted in extractions rather than in runs. Dying repeatedly
+    /// is not progress toward being ready for better equipment, and a shop that
+    /// opened on attempts would reward exactly the loop everything else here
+    /// discourages.
+    public static int TierOpensAt(int tier) => tier switch
+    {
+        <= 1 => 0,
+        2 => 3,
+        _ => 10,
+    };
+
+    public static bool TierAllows(Profile profile, int tier) =>
+        profile.RunsSurvived >= TierOpensAt(tier);
+
     public static Unlock? Find(string id)
     {
         foreach (Unlock unlock in All)
@@ -190,8 +211,18 @@ public static class UnlockBook
     /// The condition text for a locked shop entry, or null if it is not locked.
     /// The base screen prints this in place of a price: a row the player can see
     /// and cannot buy has to say why, or it reads as a bug.
-    public static string? ShopLockReason(Profile profile, string path)
+    ///
+    /// The tier gate is checked first because it is the coarser statement. An
+    /// entry behind both would otherwise tell the player to go kill a boss, and
+    /// leave them to discover the run count afterwards.
+    public static string? ShopLockReason(Profile profile, string path, int tier)
     {
+        if (!TierAllows(profile, tier))
+        {
+            int needed = TierOpensAt(tier) - profile.RunsSurvived;
+            return $"Extract {needed} more time{(needed == 1 ? "" : "s")}";
+        }
+
         foreach (Unlock unlock in All)
         {
             if (unlock.Kind == UnlockKind.ShopStock

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_knt53"]
+
+[resource]
+script = ExtResource("1_knt53")
+GearName = "Stitched Vest"
+Tier = 2
+Price = 900
+HealthBonus = 10.0
+MoveSpeedBonus = 0.15
+HealthUpgradeCap = 4
+ArmourUpgradeCap = 1
+ThornsBonus = 0.35
+DodgeBonus = 0.06
+ThornsUpgradeCap = 6
+DodgeUpgradeCap = 5

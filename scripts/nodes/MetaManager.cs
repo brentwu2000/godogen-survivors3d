@@ -89,6 +89,15 @@ public partial class MetaManager : Node
         int carry = 0, safeBox = 0;
         int healthCap = 0, armourCap = 0, speedCap = 0, searchCap = 0;
 
+        // Plain locals rather than a RunModifiers to accumulate into. That was
+        // the first shape and it is a trap: RunModifiers.AreaScale is neutral at
+        // 1, so summing three pieces that each grant nothing into one would have
+        // produced a triple-size blast for a player wearing the starting kit.
+        // Each of these is neutral at zero and means "what the gear adds".
+        int pierce = 0;
+        float area = 0.0f, thorns = 0.0f, regen = 0.0f, knockback = 0.0f, dodge = 0.0f;
+        var ruleCaps = new System.Collections.Generic.Dictionary<GrowthOption, int>();
+
         foreach (string path in Profile.EquippedGear)
         {
             if (string.IsNullOrEmpty(path))
@@ -117,10 +126,50 @@ public partial class MetaManager : Node
             armourCap += piece.ArmourUpgradeCap;
             speedCap += piece.SpeedUpgradeCap;
             searchCap += piece.SearchUpgradeCap;
+
+            pierce += piece.PierceBonus;
+            area += piece.AreaBonus;
+            thorns += piece.ThornsBonus;
+            regen += piece.RegenBonus;
+            knockback += piece.KnockbackBonus;
+            dodge += piece.DodgeBonus;
+
+            // Summed like every other cap, but only where a piece has an opinion.
+            // -1 is "no opinion", which is not the same as zero: three pieces
+            // that each say nothing about pierce must leave the default alone,
+            // and summing zeroes would silently forbid it.
+            Opinion(ruleCaps, GrowthOption.Pierce, piece.PierceUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Crit, piece.CritUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Area, piece.AreaUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Thorns, piece.ThornsUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Regen, piece.RegenUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Knockback, piece.KnockbackUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Dodge, piece.DodgeUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Fortune, piece.FortuneUpgradeCap);
         }
 
         _player?.ApplyGear(health, armour, speed, carry, safeBox);
-        _growth?.SetCaps(healthCap, armourCap, speedCap, searchCap);
+        _player?.ApplyGearRules(pierce, area, thorns, regen, knockback, dodge);
+        _growth?.SetCaps(healthCap, armourCap, speedCap, searchCap, ruleCaps);
+    }
+
+    /// Re-reads the equipped set. For probes comparing two loadouts inside one
+    /// scene, which is the only way to hold the seed still while the gear
+    /// changes — two processes would differ in the level layout as well.
+    ///
+    /// The stat half compounds when called twice, because `Player.ApplyGear` adds
+    /// rather than assigns. That is correct for its real caller, which runs once,
+    /// and it means a probe using this must measure rules and ceilings rather
+    /// than health.
+    public void ReapplyGearForTesting() => ApplyGear();
+
+    private static void Opinion(System.Collections.Generic.Dictionary<GrowthOption, int> caps,
+                                GrowthOption option, int value)
+    {
+        if (value < 0)
+            return;
+
+        caps[option] = caps.TryGetValue(option, out int existing) ? existing + value : value;
     }
 
     /// Called before starting a run from the base screen.

@@ -282,6 +282,30 @@ public partial class Player : CharacterBody3D
         SafeBox = new Inventory(SafeBoxCapacity);
     }
 
+    /// The rules the gear grants before the first level-up.
+    ///
+    /// Added to whatever the run already holds rather than assigned, and applied
+    /// in the same pass as the stats. `RunModifiers` has a `Reset()` that nothing
+    /// currently calls; if anything ever does, it has to happen before this and
+    /// not after — the failure mode is a piece of equipment that works until the
+    /// player takes their first upgrade and then quietly stops, which no exit
+    /// code would report.
+    ///
+    /// Every argument is what the gear *adds*, so zero is the neutral value for
+    /// all six — including area, whose modifier is a multiplier neutral at 1.
+    /// Passing a RunModifiers here instead was the first shape and it made three
+    /// pieces granting nothing add up to a triple-size blast.
+    public void ApplyGearRules(int pierce, float area, float thorns, float regen,
+                               float knockback, float dodge)
+    {
+        Mods.Pierce += pierce;
+        Mods.AreaScale += area;
+        Mods.Thorns += thorns;
+        Mods.Regen += regen;
+        Mods.Knockback += knockback;
+        Mods.Dodge += dodge;
+    }
+
     /// In-run upgrades. Health is granted as current as well as maximum: a pick
     /// that only raises the ceiling is worth nothing at the moment it is offered,
     /// which is exactly when the player is deciding whether it saves them.

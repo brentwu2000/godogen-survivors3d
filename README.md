@@ -62,6 +62,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/LoadoutProbe.cs` | yes | No slot has a piece that beats its neighbour everywhere, a piece's rule is live before the first level-up, two sets permit two different decks, and the starting kit grants exactly nothing |
 | `test/UnlockProbe.cs` | yes | A fresh profile is offered less, every condition fires on its own run and nothing else's, opening one moves exactly one card, a locked row is listed and explains itself, and a save from before unlocks keeps what it proved |
 | `test/EliteProbe.cs` | yes | A mark is a different fight — armour soaks, swift outruns, volatile bursts — it survives the swap-remove, and the boss arrives once, announced, and pays |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
@@ -197,6 +198,28 @@ Up and down move, enter buys or equips, `[S]` sells the stash at face value (the
 extraction multiplier was earned by walking out with it and is not paid twice),
 `[L]` launches. Buying and equipping share a key: a shop where they are separate
 is a shop where the player buys something and walks out without it.
+
+**Each slot offers two pieces at one tier, and they are not better and worse.**
+Tier 2 used to be tier 1 plus numbers, which meant every slot had a correct
+answer and the only question was what you could afford — a budget screen wearing
+a shop's clothes. Now the piece that grants a rule pays for it in the stat its
+neighbour is best at:
+
+| Slot | | |
+| :--- | :--- | :--- |
+| armour | **Plate Carrier** soaks: +25 health, +1 armour, **−0.35 speed** | **Stitched Vest** returns: 35% thorns, +6% dodge, armour ceiling 1 |
+| backpack | **Trekking Pack** carries loot: +8 bulk, +2 safe box, fortune to 5 | **Bandolier** carries ammunition: +1 pierce, pierce to 5, crit to 6, **fortune 0** |
+| boots | **Running Shoes** leave: +0.6 speed, speed ceiling 5 | **Tread Boots** stay: regen, knockback, +20% area, **speed ceiling 1** |
+
+Gear grants its rules *before the first level-up*, not as a bonus applied later —
+a piece that appears to do nothing for the first ninety seconds is a piece the
+player judges on those ninety seconds. It also sets the ceiling on the options it
+is built around, so what a loadout decides is **the shape of the deck**, not what
+gets drawn from it: the run is still different every time.
+
+Tiers open on extractions, not attempts. Dying repeatedly is not progress toward
+being ready for better equipment, and a gate counting runs would pay for exactly
+the loop everything else here discourages.
 
 **Everything above starting kit is left behind if you die wearing it.** That is
 what makes the shop a decision rather than a one-time unlock — buying the better
@@ -666,6 +689,33 @@ file rather than in any probe, because the probe's fixtures all had an all-zero 
 stage that was supposed to catch cross-firing had a written-in exemption saying the bow was allowed to
 come along with anything. The record now carries `HitsByCategory`, the condition reads it, every
 fixture fires a gun by default, and the exemption is gone.
+
+**A neutral value of 1 among a dozen neutral values of 0.** Gear rules were first
+accumulated into a `RunModifiers`, which is the obvious container and the wrong
+one: its `AreaScale` is neutral at 1, so three pieces each granting nothing summed
+to a triple-size blast radius for a player in the starting kit. The accumulators
+are now plain locals that all mean "what the gear adds", and `LoadoutProbe` has a
+stage that asserts the starting kit grants exactly nothing.
+
+**Two calls that each wrote only what they knew about.** `SetCaps` and
+`SetRuleCaps` both wrote into one array without clearing, so a loadout's ceilings
+were a delta on the previous one — a bandolier taken off still granted five
+pierce. Invisible in the game, where the real caller runs exactly once per run,
+and immediately obvious to a probe wearing two sets in one scene. They are one
+call now, and it clears first: a complete statement rather than an update.
+
+**The gear ceilings were correct only because of node order.** `RunGrowth._Ready`
+fills the defaults and `MetaManager._Ready` overwrites four of them, so the game
+was right only while RunGrowth sat above MetaManager in `Main.tscn` — and the
+symptom of moving it would have been every ceiling silently reverting, which
+plays *almost* right. Gear caps live in their own array now and are merged at
+read time, so scene order cannot decide the answer.
+
+**Fifteen shop rows ran off the bottom of a 1080p screen**, and the first version
+of the per-item description was appended after them — shipped into the void. The
+description moved above the list and the list became a window that follows the
+cursor and states how many rows are hidden. A shop that silently stops listing
+its last item is worse than one that admits there is more.
 
 **Four of six weapons locked left a new profile with nothing to buy.** Two of the remaining four are
 starting kit, so the shop's weapon section was entirely "owned" or "unbuyable" — a dead screen on day

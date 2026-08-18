@@ -1,13 +1,19 @@
 using Godot;
 
-/// Writes the starting equipment to resources/gear/*.tres.
+/// Writes the equipment table to resources/gear/*.tres.
 ///
 ///   godot --headless --script scripts/tools/BuildGear.cs
 ///
 /// The worn set grants nothing and permits a little. That is deliberate: it is
 /// what the player already had on, so every number it adds is zero and its whole
-/// contribution is the size of the climb it allows. Better sets bought later
-/// move the start as well as the ceiling.
+/// contribution is the size of the climb it allows.
+///
+/// Above it, each slot offers two pieces at one tier and they are **not** better
+/// and worse. Tier 2 used to be tier 1 plus numbers, which meant the shop had one
+/// correct answer per slot and the only question was what you could afford — a
+/// budget screen wearing a shop's clothes. Now each pair trades: the piece that
+/// grants a rule pays for it in the stat its neighbour is best at, so "which one"
+/// is a real question and its answer is what the run is going to be about.
 public partial class BuildGear : SceneTree
 {
     private const string OutputDir = "res://resources/gear";
@@ -25,7 +31,8 @@ public partial class BuildGear : SceneTree
 
         GearResource[] gear =
         {
-            // Armour governs how much punishment the run can learn to take.
+            // --- Tier 1: the shirt on your back ------------------------------
+
             new()
             {
                 GearName = "Worn Jacket",
@@ -35,7 +42,6 @@ public partial class BuildGear : SceneTree
                 ArmourUpgradeCap = 3,
             },
 
-            // The backpack is the only piece that touches what comes home.
             new()
             {
                 GearName = "Canvas Pack",
@@ -44,8 +50,6 @@ public partial class BuildGear : SceneTree
                 SearchUpgradeCap = 2,
             },
 
-            // Boots are the escape axis — speed is what turns a bad position
-            // into a survivable one.
             new()
             {
                 GearName = "Scuffed Boots",
@@ -54,9 +58,12 @@ public partial class BuildGear : SceneTree
                 SpeedUpgradeCap = 3,
             },
 
-            // Tier 2 moves both ends: a little on arrival, and noticeably more
-            // room to climb. Priced so one good run buys one piece, which is
-            // what makes the second run different from the first.
+            // --- Armour: absorb it, or make it cost them ---------------------
+
+            // Soaks. The straightforward one, and the reason it is not simply
+            // best is the speed: everything in this game that goes wrong goes
+            // wrong because the player could not leave, and this piece is the
+            // one that makes leaving slower.
             new()
             {
                 GearName = "Plate Carrier",
@@ -65,9 +72,33 @@ public partial class BuildGear : SceneTree
                 Price = 900,
                 HealthBonus = 25.0f,
                 ArmourBonus = 1.0f,
+                MoveSpeedBonus = -0.35f,
                 HealthUpgradeCap = 7,
                 ArmourUpgradeCap = 5,
+                SpeedUpgradeCap = 0,
             },
+
+            // Does not soak at all — it returns. Worth wearing exactly when the
+            // answer to a crowd is to stand in it, and actively worse than the
+            // jacket when the answer is a brute, because thorns scale with how
+            // many things are touching you and a brute is one thing.
+            new()
+            {
+                GearName = "Stitched Vest",
+                Slot = GearSlot.Armour,
+                Tier = 2,
+                Price = 900,
+                HealthBonus = 10.0f,
+                MoveSpeedBonus = 0.15f,
+                ThornsBonus = 0.35f,
+                DodgeBonus = 0.06f,
+                HealthUpgradeCap = 4,
+                ArmourUpgradeCap = 1,
+                ThornsUpgradeCap = 6,
+                DodgeUpgradeCap = 5,
+            },
+
+            // --- Backpack: carry loot, or carry ammunition -------------------
 
             // The only piece that changes what comes home, and the only one that
             // pays for itself in a single extraction.
@@ -80,7 +111,27 @@ public partial class BuildGear : SceneTree
                 CarryBonus = 8,
                 SafeBoxBonus = 2,
                 SearchUpgradeCap = 4,
+                FortuneUpgradeCap = 5,
             },
+
+            // Carries almost nothing and shoots through people. A run in this
+            // banks less by design; the trade is that a line of walkers is one
+            // shot, which is a different fight rather than a smaller wallet.
+            new()
+            {
+                GearName = "Bandolier",
+                Slot = GearSlot.Backpack,
+                Tier = 2,
+                Price = 1000,
+                CarryBonus = 2,
+                PierceBonus = 1,
+                PierceUpgradeCap = 5,
+                CritUpgradeCap = 6,
+                SearchUpgradeCap = 1,
+                FortuneUpgradeCap = 0,
+            },
+
+            // --- Boots: outrun it, or refuse to move -------------------------
 
             new()
             {
@@ -90,6 +141,25 @@ public partial class BuildGear : SceneTree
                 Price = 700,
                 MoveSpeedBonus = 0.6f,
                 SpeedUpgradeCap = 5,
+            },
+
+            // No speed at all, and everything that makes standing still
+            // survivable: it pushes what it hits, heals continuously, and swings
+            // wider. The piece that makes a melee run possible, and the piece
+            // that makes a kiting run impossible.
+            new()
+            {
+                GearName = "Tread Boots",
+                Slot = GearSlot.Boots,
+                Tier = 2,
+                Price = 700,
+                RegenBonus = 0.7f,
+                KnockbackBonus = 1.2f,
+                AreaBonus = 0.2f,
+                SpeedUpgradeCap = 1,
+                RegenUpgradeCap = 5,
+                KnockbackUpgradeCap = 5,
+                AreaUpgradeCap = 5,
             },
         };
 
