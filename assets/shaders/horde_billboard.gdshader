@@ -23,8 +23,22 @@ uniform float alpha_scissor : hint_range(0.0, 1.0) = 0.5;
 uniform float bob_amplitude = 0.06;
 uniform float bob_speed = 4.0;
 
+// Whether this MultiMesh actually carries a per-instance colour block. It must
+// be, because a MultiMesh with use_colors off still hands the vertex stage an
+// opaque white COLOR — so a shader that trusted COLOR.r unconditionally would
+// draw every projectile at full hit-flash, permanently white. That is exactly
+// what happened, and it is invisible in the horde where the same shader is
+// correct: the bug only shows on the renderer that opted out.
+uniform float flash_enabled : hint_range(0.0, 1.0) = 0.0;
+
 varying flat float v_flip;
 varying flat float v_layer;
+
+// How white this instance is being burned out, 0..1. Carried on the MultiMesh
+// colour block rather than in INSTANCE_CUSTOM because all four of those floats
+// were already spoken for, and bit-packing a fifth value into one of them is a
+// decoding bug waiting for whoever changes the flip flag next.
+varying flat float v_flash;
 
 void vertex() {
     // INSTANCE_CUSTOM.x: 1.0 mirrors the sprite. One drawn facing, mirrored at
@@ -35,6 +49,7 @@ void vertex() {
     // INSTANCE_CUSTOM.w: array layer — which variant this instance draws as.
     v_flip = INSTANCE_CUSTOM.x;
     v_layer = INSTANCE_CUSTOM.w;
+    v_flash = COLOR.r * flash_enabled;
 
     float spin = INSTANCE_CUSTOM.z;
     if (spin != 0.0) {
@@ -74,5 +89,7 @@ void fragment() {
         discard;
     }
 
-    ALBEDO = texel.rgb;
+    // Toward white rather than multiplied by it: a hit has to read on a sprite
+    // that is already dark, and multiplying leaves a black brute black.
+    ALBEDO = mix(texel.rgb, vec3(1.0), v_flash);
 }

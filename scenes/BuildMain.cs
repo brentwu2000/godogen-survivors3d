@@ -21,6 +21,17 @@ public partial class BuildMain : SceneTree
 
     private const float GroundSize = 120.0f;
 
+    /// The design resolution from project.godot. The stretch mode is
+    /// canvas_items, so the readout is laid out once at this size and scaled to
+    /// whatever the window is.
+    private const float ScreenWidth = 1920.0f;
+    private const float ScreenHeight = 1080.0f;
+
+    /// Matches RunGrowth.OfferSize. The cards are built once and shown or hidden,
+    /// because a scene that grows nodes mid-run allocates during the exact moment
+    /// the offer exists to interrupt.
+    private const int OfferCards = 3;
+
     public override void _Initialize() => SceneBuildUtil.Run(this, Build);
 
     private static bool Build()
@@ -77,6 +88,11 @@ public partial class BuildMain : SceneTree
 
         root.AddChild(BuildHud());
 
+        // Last, because it subscribes to everything above it — including the loot
+        // containers the level generator put in the tree during its own _Ready.
+        var sound = new Node { Name = "Sound" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(sound, "res://scripts/nodes/SoundDirector.cs"));
+
         Node scripted = SceneBuildUtil.AttachScriptToRoot(root, "res://scripts/nodes/GameRoot.cs");
         bool ok = SceneBuildUtil.PackAndSave(scripted, "res://scenes/Main.tscn");
         scripted.Free();
@@ -121,23 +137,95 @@ public partial class BuildMain : SceneTree
         return (RunDirector)SceneBuildUtil.AttachScriptToRoot(director, "res://scripts/nodes/RunDirector.cs");
     }
 
+    /// The readout, as structure only. Every colour, string and width lives in
+    /// Hud.cs — a builder that also styled would mean regenerating a scene to
+    /// move a bar two pixels.
+    ///
+    /// Laid out for where the eye already is. Health and the backpack are the two
+    /// things the player is trading against each other, so they share the top
+    /// left corner; the clock and the payout-if-you-leave-now share the top
+    /// centre, because that pair is the decision the whole run is about; the way
+    /// out is top right, on its own, because it answers a different question.
     private static CanvasLayer BuildHud()
     {
         var hud = new CanvasLayer { Name = "Hud" };
 
+        // Behind everything else, and never in the way of a click.
+        hud.AddChild(new ColorRect
+        {
+            Name = "Vignette",
+            Position = Vector2.Zero,
+            Size = new Vector2(ScreenWidth, ScreenHeight),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
+        AddBar(hud, "Health", new Vector2(24.0f, 22.0f), new Vector2(360.0f, 26.0f));
+        AddBar(hud, "Bag", new Vector2(24.0f, 58.0f), new Vector2(360.0f, 18.0f));
+        AddBar(hud, "Level", new Vector2(24.0f, 122.0f), new Vector2(360.0f, 10.0f));
+
         hud.AddChild(new Label
         {
-            Name = "Status",
-            Position = new Vector2(24.0f, 18.0f),
-            Size = new Vector2(680.0f, 150.0f),
+            Name = "Arms",
+            Position = new Vector2(24.0f, 84.0f),
+            Size = new Vector2(560.0f, 36.0f),
         });
 
         hud.AddChild(new Label
         {
-            Name = "Prompt",
-            Position = new Vector2(0.0f, 900.0f),
-            Size = new Vector2(1920.0f, 48.0f),
+            Name = "Keys",
+            Position = new Vector2(24.0f, 140.0f),
+            Size = new Vector2(680.0f, 30.0f),
         });
+
+        hud.AddChild(new Label
+        {
+            Name = "Clock",
+            Position = new Vector2(ScreenWidth * 0.5f - 300.0f, 16.0f),
+            Size = new Vector2(600.0f, 52.0f),
+        });
+
+        hud.AddChild(new Label
+        {
+            Name = "Payout",
+            Position = new Vector2(ScreenWidth * 0.5f - 300.0f, 66.0f),
+            Size = new Vector2(600.0f, 34.0f),
+        });
+
+        hud.AddChild(new Label
+        {
+            Name = "Exit",
+            Position = new Vector2(ScreenWidth - 500.0f - 24.0f, 22.0f),
+            Size = new Vector2(500.0f, 90.0f),
+        });
+
+        // Bottom centre, above the offer: a hold bar is the one thing on screen
+        // that is counting while the player stands still, so it sits where they
+        // are already looking — at their own character.
+        AddBar(hud, "Hold", new Vector2(ScreenWidth * 0.5f - 240.0f, ScreenHeight - 108.0f),
+               new Vector2(480.0f, 22.0f));
+
+        for (int i = 0; i < OfferCards; i++)
+        {
+            const float cardWidth = 300.0f;
+            const float gap = 18.0f;
+            float total = OfferCards * cardWidth + (OfferCards - 1) * gap;
+            float x = ScreenWidth * 0.5f - total * 0.5f + i * (cardWidth + gap);
+
+            hud.AddChild(new ColorRect
+            {
+                Name = $"Card{i}",
+                Position = new Vector2(x, ScreenHeight - 226.0f),
+                Size = new Vector2(cardWidth, 96.0f),
+                MouseFilter = Control.MouseFilterEnum.Ignore,
+            });
+
+            hud.AddChild(new Label
+            {
+                Name = $"Card{i}Text",
+                Position = new Vector2(x, ScreenHeight - 210.0f),
+                Size = new Vector2(cardWidth, 70.0f),
+            });
+        }
 
         hud.AddChild(new Label
         {
@@ -146,10 +234,40 @@ public partial class BuildMain : SceneTree
             // Upper third, not centre: the player sprite sits dead centre, and a
             // banner over it hides the moment it is announcing.
             Position = new Vector2(0.0f, 170.0f),
-            Size = new Vector2(1920.0f, 200.0f),
+            Size = new Vector2(ScreenWidth, 200.0f),
         });
 
         return (Hud)SceneBuildUtil.AttachScriptToRoot(hud, "res://scripts/nodes/Hud.cs");
+    }
+
+    /// A bar is a track, a fill and a caption over the top. Three nodes rather
+    /// than a ProgressBar because the fill has to change colour with its own
+    /// meaning — health goes red, the backpack goes amber as it closes on full —
+    /// and theming a ProgressBar per state is more code than moving a rectangle.
+    private static void AddBar(CanvasLayer hud, string name, Vector2 position, Vector2 size)
+    {
+        hud.AddChild(new ColorRect
+        {
+            Name = $"{name}Back",
+            Position = position,
+            Size = size,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
+        hud.AddChild(new ColorRect
+        {
+            Name = $"{name}Fill",
+            Position = position + new Vector2(2.0f, 2.0f),
+            Size = size - new Vector2(4.0f, 4.0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+        });
+
+        hud.AddChild(new Label
+        {
+            Name = $"{name}Text",
+            Position = position + new Vector2(8.0f, -1.0f),
+            Size = size,
+        });
     }
 
     private static StaticBody3D BuildGround(float size)

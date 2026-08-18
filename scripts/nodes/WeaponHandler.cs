@@ -37,6 +37,15 @@ public partial class WeaponHandler : Node3D
     private readonly Slot[] _slots = { new(), new() };
     private int _active;
 
+    /// Raised once per shot or swing, and once per enemy the shot reached. Plain
+    /// C# events rather than Godot signals for the same reason Horde.EnemyKilled
+    /// is one: both ends are C#, and these fire several times a second.
+    ///
+    /// Two events rather than one, because a swing that hits nothing still has to
+    /// be audible while five hits from one swing must not be five times as loud.
+    public event System.Action<WeaponCategory>? Fired;
+    public event System.Action? Hit;
+
     public WeaponResource? Weapon => _slots[_active].Weapon;
     public int Ammo => _slots[_active].Ammo;
     public int Reserve => _slots[_active].Reserve;
@@ -307,6 +316,8 @@ public partial class WeaponHandler : Node3D
         float range = weapon.GetEffectiveRange(level);
         float damage = weapon.GetEffectiveDamage(level);
 
+        Fired?.Invoke(weapon.Category);
+
         if (weapon.IsMelee)
         {
             // SwingArcDegrees is the full sweep; the query wants the half-angle.
@@ -410,7 +421,11 @@ public partial class WeaponHandler : Node3D
         _projectileRenderer?.Sync(Projectiles, ProjectileHeight);
     }
 
-    private void RecordHit(WeaponCategory category) => _hits[(int)category]++;
+    private void RecordHit(WeaponCategory category)
+    {
+        _hits[(int)category]++;
+        Hit?.Invoke();
+    }
 
     /// Rotates the shot by a uniform angle inside the cone. Deterministic and
     /// allocation-free, so a capture run reproduces exactly.

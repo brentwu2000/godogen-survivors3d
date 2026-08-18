@@ -1,31 +1,65 @@
 using Godot;
 
-/// Writes placeholder variant sprites to assets/sprites/enemies/*.png.
+/// Fits each matted variant painting into the one frame size the horde's
+/// Texture2DArray allows, and writes assets/sprites/enemies/*.png.
 ///
 ///   godot --headless --script scripts/tools/BuildEnemySprites.cs
 ///
-/// These are tinted, downscaled copies of the one real zombie sprite. They exist
-/// so the variant system can be built and seen before the art does — replace any
-/// file here with a generated sprite and nothing in code changes.
+/// Three constraints decide everything here, and they conflict:
 ///
-/// Two things a replacement has to honour, both enforced by Texture2DArray:
+///   Every layer must be the same pixels. Texture2DArray refuses a mismatch —
+///   which is the good failure. The alternative, an atlas, would accept anything
+///   and then bleed neighbouring cells together through mipmaps, but only once
+///   instances get far enough away to drop a level.
 ///
-///   Same size, every layer. A mismatched layer fails the array outright, which
-///   is the good failure — the alternative, an atlas, bleeds neighbouring cells
-///   into each other through mipmaps only at distance.
+///   The creatures are not the same shape. A brute is nearly as wide as it is
+///   tall and a runner is half that; there is no single frame that is tight
+///   around both. So the frame is sized for the narrow majority and the wide
+///   ones are fitted by width, which leaves empty space above their heads.
 ///
-///   256px tall is the target. A 2m sprite in an 18m orthographic view covers
-///   about 120px on a 1080p viewport, so the source only needs headroom for the
-///   1.5x brute and for mips — the original 1051px sprite is 8x oversampled, and
-///   in an array that waste is multiplied by the layer count.
+///   The quad is anchored at the feet. HordeRenderer lifts the mesh so the
+///   instance position is ground level, so a creature centred in its frame would
+///   hover. Everything is anchored to the bottom of the frame instead, and the
+///   empty space goes above the head where it costs nothing but discarded
+///   fragments.
+///
+/// Because a fitted-by-width creature does not fill its frame, its drawn height
+/// is a fraction of the quad — so its SpriteScale has to make up the difference.
+/// This tool prints the number each variant needs; `BuildEnemyTypes.cs` holds it,
+/// and `EnemyTypeProbe` asserts the two still agree. Nothing keeps them in step
+/// automatically, and a silent drift here is a brute that is quietly the wrong
+/// size, so the assertion is the point.
 public partial class BuildEnemySprites : SceneTree
 {
-    // In art-src rather than assets: the full-resolution original is an input to
-    // this tool and never loaded by the running game, which is the line assets/
-    // draws (godot.md:9).
-    private const string SourcePath = "res://art-src/zombie.png";
+    /// Wide enough for the standing variants with a little slack for outstretched
+    /// arms, and no wider. Every extra column is discarded fragments on every
+    /// instance of every variant — which is the whole horde, on the platform with
+    /// the tightest budget.
+    private const int FrameWidth = 176;
+    private const int FrameHeight = 256;
+
+    /// A 2 m sprite covers about 120 px in an 18 m orthographic view at 1080p, so
+    /// 256 leaves headroom for the biggest variant and for mips. The paintings are
+    /// 1254 px square; keeping that would be an eightfold oversample, multiplied
+    /// by the layer count.
+    private const string SourceDir = "res://art-src";
     private const string OutputDir = "res://assets/sprites/enemies";
-    private const int TargetHeight = 256;
+
+    /// Layer order, the matted painting each layer comes from, and how tall that
+    /// creature is meant to stand. The design height is duplicated in
+    /// `BuildEnemyTypes.cs` on purpose — it is what the printed SpriteScale is
+    /// computed from here, and what `EnemyTypeProbe` measures against there.
+    private static readonly (string Variant, string Source, float DesignHeight)[] Layers =
+    {
+        ("walker", "walker", 2.0f),
+        ("runner", "runner", 1.8f),
+        ("brute", "brute", 3.0f),
+        ("bloater", "bloater", 2.4f),
+        ("spitter", "spitter", 2.0f),
+    };
+
+    /// The quad height a scale of 1.0 draws, matching Horde.SpriteHeight.
+    private const float QuadHeightMeters = 2.0f;
 
     public override void _Initialize() => SceneBuildUtil.Run(this, Build);
 
@@ -38,75 +72,64 @@ public partial class BuildEnemySprites : SceneTree
             return false;
         }
 
-        var source = GD.Load<Texture2D>(SourcePath);
-        if (source == null)
+        foreach ((string variant, string source, float designHeight) in Layers)
         {
-            GD.PushError($"Missing {SourcePath}");
-            return false;
-        }
+            Image? art = SpriteFit.LoadMatted($"{SourceDir}/{source}.png");
+            if (art == null)
+                return false;
 
-        Image original = source.GetImage();
-        if (original == null)
-        {
-            GD.PushError($"{SourcePath} has no readable image");
-            return false;
-        }
+            Rect2I content = SpriteFit.VisibleRect(art);
+            if (content.Size.X <= 0 || content.Size.Y <= 0)
+            {
+                GD.PushError($"{source}.png is fully transparent — the matte removed the subject");
+                return false;
+            }
 
-        // A VRAM-compressed import hands back a block format that GetPixel cannot
-        // read and the array cannot stack. Decompressing here means the tool does
-        // not silently depend on an import setting staying where it is.
-        if (original.IsCompressed())
-            original.Decompress();
-        original.Convert(Image.Format.Rgba8);
+            Image framed = Fit(art, content, out float fillFraction);
+            string path = $"{OutputDir}/{variant}.png";
 
-        int width = Mathf.RoundToInt(TargetHeight * (float)original.GetWidth() / original.GetHeight());
-        original.Resize(width, TargetHeight, Image.Interpolation.Lanczos);
-
-        (string Name, Color Tint)[] variants =
-        {
-            ("walker", new Color(1.00f, 1.00f, 1.00f)),
-            ("runner", new Color(1.25f, 1.15f, 0.60f)),
-            ("brute", new Color(0.85f, 0.35f, 0.30f)),
-            ("bloater", new Color(0.55f, 1.05f, 0.45f)),
-            ("spitter", new Color(0.80f, 0.55f, 1.15f)),
-        };
-
-        foreach ((string name, Color tint) in variants)
-        {
-            Image tinted = Tinted(original, tint);
-            string path = $"{OutputDir}/{name}.png";
-
-            Error err = tinted.SavePng(path);
+            Error err = framed.SavePng(path);
             if (err != Error.Ok)
             {
                 GD.PushError($"Save failed for {path}: {err}");
                 return false;
             }
-            GD.Print($"Saved {path} ({width}x{TargetHeight})");
+
+            float scale = designHeight / (QuadHeightMeters * fillFraction);
+            GD.Print($"Saved {path}: content {content.Size.X}x{content.Size.Y} fills " +
+                     $"{fillFraction * 100.0f:F1}% of the frame height → " +
+                     $"SpriteScale {scale:F3} for {designHeight:F1} m");
         }
 
         return true;
     }
 
-    /// Multiplies colour and leaves alpha alone. Alpha is what the scissor cuts
-    /// on, so scaling it would move the silhouette rather than recolour it.
-    private static Image Tinted(Image source, Color tint)
+    /// Contain-fit into the frame, centred across and sat on the bottom edge.
+    /// Reports what fraction of the frame's height the art ended up occupying,
+    /// because that fraction is what the variant's SpriteScale has to cancel.
+    private static Image Fit(Image art, Rect2I content, out float fillFraction)
     {
-        var result = Image.CreateEmpty(source.GetWidth(), source.GetHeight(), false, Image.Format.Rgba8);
+        // Crop first: scaling the whole painting would spend resolution on the
+        // transparent margin the matte left behind, and the margin is not the
+        // same size in every one of them.
+        Image cropped = art.GetRegion(content);
 
-        for (int y = 0; y < source.GetHeight(); y++)
-        {
-            for (int x = 0; x < source.GetWidth(); x++)
-            {
-                Color pixel = source.GetPixel(x, y);
-                result.SetPixel(x, y, new Color(
-                    Mathf.Min(1.0f, pixel.R * tint.R),
-                    Mathf.Min(1.0f, pixel.G * tint.G),
-                    Mathf.Min(1.0f, pixel.B * tint.B),
-                    pixel.A));
-            }
-        }
+        float scale = Mathf.Min(FrameWidth / (float)content.Size.X, FrameHeight / (float)content.Size.Y);
+        int width = Mathf.Max(1, Mathf.FloorToInt(content.Size.X * scale));
+        int height = Mathf.Max(1, Mathf.FloorToInt(content.Size.Y * scale));
+        cropped.Resize(width, height, Image.Interpolation.Lanczos);
 
-        return result;
+        var framed = Image.CreateEmpty(FrameWidth, FrameHeight, false, Image.Format.Rgba8);
+
+        // Explicitly cleared: an uninitialised frame would leave whatever the
+        // allocator had in the columns the art does not cover, and the scissor
+        // only discards on alpha.
+        framed.Fill(new Color(0.0f, 0.0f, 0.0f, 0.0f));
+        framed.BlitRect(cropped, new Rect2I(Vector2I.Zero, cropped.GetSize()),
+                        new Vector2I((FrameWidth - width) / 2, FrameHeight - height));
+
+        fillFraction = height / (float)FrameHeight;
+        return framed;
     }
+
 }

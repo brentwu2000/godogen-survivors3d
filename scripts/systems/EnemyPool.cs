@@ -31,6 +31,15 @@ public sealed class EnemyPool
     /// is cheaper than a second pool for the handful that do shoot.
     public readonly float[] AttackCooldown;
 
+    /// How brightly this enemy is still lit from being hit, 1 down to 0.
+    ///
+    /// Purely cosmetic, and the only confirmation the player gets that a shot
+    /// connected with something that did not die. Without it a rifle emptying
+    /// into a brute is indistinguishable from a rifle missing it — the brute
+    /// keeps walking either way, and sixty rounds later the player has learned
+    /// nothing about whether the weapon works.
+    public readonly float[] HitFlash;
+
     public int Count { get; private set; }
 
     public EnemyPool(int capacity)
@@ -42,6 +51,7 @@ public sealed class EnemyPool
         Phase = new float[capacity];
         Type = new byte[capacity];
         AttackCooldown = new float[capacity];
+        HitFlash = new float[capacity];
     }
 
     public bool TrySpawn(Vector3 position, byte type, float health, float phase)
@@ -56,6 +66,7 @@ public sealed class EnemyPool
         Phase[i] = phase;
         Type[i] = type;
         AttackCooldown[i] = 0.0f;
+        HitFlash[i] = 0.0f;
         return true;
     }
 
@@ -72,6 +83,7 @@ public sealed class EnemyPool
             Phase[index] = Phase[last];
             Type[index] = Type[last];
             AttackCooldown[index] = AttackCooldown[last];
+            HitFlash[index] = HitFlash[last];
         }
     }
 

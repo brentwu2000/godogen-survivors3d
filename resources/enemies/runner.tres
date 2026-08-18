@@ -9,6 +9,7 @@ MaxHealth = 4.0
 MoveSpeed = 4.6
 ContactDamagePerSecond = 4.0
 SpriteScale = 0.9
+DesignHeightMeters = 1.8
 SpriteLayer = 1
 SpawnWeight = 0.8
 UnlockIntensity = 0.2

@@ -29,6 +29,7 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "walker",
                 SpriteLayer = 0,
+                DesignHeightMeters = 2.0f,
                 MaxHealth = 10.0f,
                 MoveSpeed = 2.4f,
                 ContactDamagePerSecond = 6.0f,
@@ -44,6 +45,7 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "runner",
                 SpriteLayer = 1,
+                DesignHeightMeters = 1.8f,
                 MaxHealth = 4.0f,
                 MoveSpeed = 4.6f,
                 ContactDamagePerSecond = 4.0f,
@@ -59,10 +61,11 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "brute",
                 SpriteLayer = 2,
+                DesignHeightMeters = 3.0f,
                 MaxHealth = 60.0f,
                 MoveSpeed = 1.4f,
                 ContactDamagePerSecond = 14.0f,
-                SpriteScale = 1.5f,
+                SpriteScale = 2.098f,
                 KnockbackScale = 0.2f,
                 SpawnWeight = 0.35f,
                 UnlockIntensity = 0.45f,
@@ -76,10 +79,11 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "bloater",
                 SpriteLayer = 3,
+                DesignHeightMeters = 2.4f,
                 MaxHealth = 25.0f,
                 MoveSpeed = 1.8f,
                 ContactDamagePerSecond = 6.0f,
-                SpriteScale = 1.2f,
+                SpriteScale = 1.592f,
                 DeathBlastRadius = 3.0f,
                 DeathBlastDamage = 25.0f,
                 SpawnWeight = 0.4f,
@@ -94,6 +98,7 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "spitter",
                 SpriteLayer = 4,
+                DesignHeightMeters = 2.0f,
                 MaxHealth = 8.0f,
                 MoveSpeed = 2.0f,
                 ContactDamagePerSecond = 0.0f,

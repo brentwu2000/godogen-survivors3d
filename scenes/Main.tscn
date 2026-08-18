@@ -1,87 +1,234 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_lhr70"]
-[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2_wp0k4"]
-[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="3_bjd11"]
-[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="4_qmy6f"]
-[ext_resource type="Script" path="res://scripts/nodes/LevelGenerator.cs" id="5_mwfav"]
-[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="6_3p2gp"]
-[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="7_cvmbd"]
-[ext_resource type="Script" path="res://scripts/nodes/RunGrowth.cs" id="8_ft6cd"]
-[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="9_bb450"]
-[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="10_nfivy"]
+[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_wp0k4"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2_bjd11"]
+[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="3_qmy6f"]
+[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="4_mwfav"]
+[ext_resource type="Script" path="res://scripts/nodes/LevelGenerator.cs" id="5_3p2gp"]
+[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="6_cvmbd"]
+[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="7_ft6cd"]
+[ext_resource type="Script" path="res://scripts/nodes/RunGrowth.cs" id="8_bb450"]
+[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="9_nfivy"]
+[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="10_1nqs0"]
+[ext_resource type="Script" path="res://scripts/nodes/SoundDirector.cs" id="11_1iba3"]
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_1nqs0"]
+[sub_resource type="PlaneMesh" id="PlaneMesh_yxlcp"]
 size = Vector2(120, 120)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_1iba3"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_ebg2g"]
 size = Vector3(120, 1, 120)
 
-[node name="Main" type="Node3D" unique_id=1804568053]
-script = ExtResource("1_lhr70")
+[node name="Main" type="Node3D" unique_id=856598595]
+script = ExtResource("1_wp0k4")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=777615716]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=736108463]
 transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81915206, 0.57357645, -0.6710101, 0.46984634, 0, 0, 0)
 shadow_enabled = true
 
-[node name="Ground" type="StaticBody3D" parent="." unique_id=966067834]
+[node name="Ground" type="StaticBody3D" parent="." unique_id=1059947679]
 
-[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=968989061]
-mesh = SubResource("PlaneMesh_1nqs0")
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=864538382]
+mesh = SubResource("PlaneMesh_yxlcp")
 
-[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=14539507]
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=81459400]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-shape = SubResource("BoxShape3D_1iba3")
+shape = SubResource("BoxShape3D_ebg2g")
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=80809806 instance=ExtResource("2_wp0k4")]
-script = ExtResource("3_bjd11")
+[node name="Player" type="CharacterBody3D" parent="." unique_id=578818177 instance=ExtResource("2_bjd11")]
+script = ExtResource("3_qmy6f")
 
-[node name="CameraRig" type="Node3D" parent="." unique_id=189780760]
-script = ExtResource("4_qmy6f")
+[node name="CameraRig" type="Node3D" parent="." unique_id=1595112889]
+script = ExtResource("4_mwfav")
 TargetPath = NodePath("../Player")
 
-[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=1075028494]
+[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=1675169658]
 transform = Transform3D(1, 0, 0, 0, 0.6156615, 0.7880107, 0, -0.7880107, 0.6156615, 0, 18.912258, 14.775876)
 projection = 1
 size = 18.0
 
-[node name="Obstacles" type="Node3D" parent="." unique_id=683057872]
+[node name="Obstacles" type="Node3D" parent="." unique_id=204086795]
 
-[node name="LootContainers" type="Node3D" parent="." unique_id=1907104051]
+[node name="LootContainers" type="Node3D" parent="." unique_id=1122500280]
 
-[node name="ExtractionZones" type="Node3D" parent="." unique_id=1387495471]
+[node name="ExtractionZones" type="Node3D" parent="." unique_id=388504636]
 
-[node name="Level" type="Node3D" parent="." unique_id=169903981]
-script = ExtResource("5_mwfav")
+[node name="Level" type="Node3D" parent="." unique_id=1782433981]
+script = ExtResource("5_3p2gp")
 
-[node name="Horde" type="Node3D" parent="." unique_id=1891993613]
-script = ExtResource("6_3p2gp")
+[node name="Horde" type="Node3D" parent="." unique_id=1756055905]
+script = ExtResource("6_cvmbd")
 InitialSpawn = 24
 
-[node name="RunDirector" type="Node3D" parent="." unique_id=176395382]
-script = ExtResource("7_cvmbd")
+[node name="RunDirector" type="Node3D" parent="." unique_id=2043699699]
+script = ExtResource("7_ft6cd")
 
-[node name="RunGrowth" type="Node" parent="." unique_id=653948782]
-script = ExtResource("8_ft6cd")
+[node name="RunGrowth" type="Node" parent="." unique_id=1248935954]
+script = ExtResource("8_bb450")
 
-[node name="MetaManager" type="Node" parent="." unique_id=17648651]
-script = ExtResource("9_bb450")
+[node name="MetaManager" type="Node" parent="." unique_id=371302229]
+script = ExtResource("9_nfivy")
 
-[node name="Hud" type="CanvasLayer" parent="." unique_id=1601240410]
-script = ExtResource("10_nfivy")
+[node name="Hud" type="CanvasLayer" parent="." unique_id=1395862110]
+script = ExtResource("10_1nqs0")
 
-[node name="Status" type="Label" parent="Hud" unique_id=818010669]
-offset_left = 24.0
-offset_top = 18.0
-offset_right = 704.0
-offset_bottom = 168.0
-
-[node name="Prompt" type="Label" parent="Hud" unique_id=521662750]
-offset_top = 900.0
+[node name="Vignette" type="ColorRect" parent="Hud" unique_id=199375112]
 offset_right = 1920.0
-offset_bottom = 948.0
+offset_bottom = 1080.0
+mouse_filter = 2
 
-[node name="Banner" type="Label" parent="Hud" unique_id=1970596792]
+[node name="HealthBack" type="ColorRect" parent="Hud" unique_id=1519753537]
+offset_left = 24.0
+offset_top = 22.0
+offset_right = 384.0
+offset_bottom = 48.0
+mouse_filter = 2
+
+[node name="HealthFill" type="ColorRect" parent="Hud" unique_id=1070447044]
+offset_left = 26.0
+offset_top = 24.0
+offset_right = 382.0
+offset_bottom = 46.0
+mouse_filter = 2
+
+[node name="HealthText" type="Label" parent="Hud" unique_id=1164123958]
+offset_left = 32.0
+offset_top = 21.0
+offset_right = 392.0
+offset_bottom = 47.0
+
+[node name="BagBack" type="ColorRect" parent="Hud" unique_id=487128689]
+offset_left = 24.0
+offset_top = 58.0
+offset_right = 384.0
+offset_bottom = 76.0
+mouse_filter = 2
+
+[node name="BagFill" type="ColorRect" parent="Hud" unique_id=1803659734]
+offset_left = 26.0
+offset_top = 60.0
+offset_right = 382.0
+offset_bottom = 74.0
+mouse_filter = 2
+
+[node name="BagText" type="Label" parent="Hud" unique_id=115427541]
+offset_left = 32.0
+offset_top = 57.0
+offset_right = 392.0
+offset_bottom = 80.0
+
+[node name="LevelBack" type="ColorRect" parent="Hud" unique_id=1476638349]
+offset_left = 24.0
+offset_top = 122.0
+offset_right = 384.0
+offset_bottom = 132.0
+mouse_filter = 2
+
+[node name="LevelFill" type="ColorRect" parent="Hud" unique_id=1881429105]
+offset_left = 26.0
+offset_top = 124.0
+offset_right = 382.0
+offset_bottom = 130.0
+mouse_filter = 2
+
+[node name="LevelText" type="Label" parent="Hud" unique_id=642731120]
+offset_left = 32.0
+offset_top = 121.0
+offset_right = 392.0
+offset_bottom = 144.0
+
+[node name="Arms" type="Label" parent="Hud" unique_id=1311331235]
+offset_left = 24.0
+offset_top = 84.0
+offset_right = 584.0
+offset_bottom = 120.0
+
+[node name="Keys" type="Label" parent="Hud" unique_id=1809423560]
+offset_left = 24.0
+offset_top = 140.0
+offset_right = 704.0
+offset_bottom = 170.0
+
+[node name="Clock" type="Label" parent="Hud" unique_id=1455031039]
+offset_left = 660.0
+offset_top = 16.0
+offset_right = 1260.0
+offset_bottom = 68.0
+
+[node name="Payout" type="Label" parent="Hud" unique_id=20865741]
+offset_left = 660.0
+offset_top = 66.0
+offset_right = 1260.0
+offset_bottom = 100.0
+
+[node name="Exit" type="Label" parent="Hud" unique_id=1151507182]
+offset_left = 1396.0
+offset_top = 22.0
+offset_right = 1896.0
+offset_bottom = 112.0
+
+[node name="HoldBack" type="ColorRect" parent="Hud" unique_id=1614444170]
+offset_left = 720.0
+offset_top = 972.0
+offset_right = 1200.0
+offset_bottom = 994.0
+mouse_filter = 2
+
+[node name="HoldFill" type="ColorRect" parent="Hud" unique_id=1967553590]
+offset_left = 722.0
+offset_top = 974.0
+offset_right = 1198.0
+offset_bottom = 992.0
+mouse_filter = 2
+
+[node name="HoldText" type="Label" parent="Hud" unique_id=281100046]
+offset_left = 728.0
+offset_top = 971.0
+offset_right = 1208.0
+offset_bottom = 994.0
+
+[node name="Card0" type="ColorRect" parent="Hud" unique_id=392315748]
+offset_left = 492.0
+offset_top = 854.0
+offset_right = 792.0
+offset_bottom = 950.0
+mouse_filter = 2
+
+[node name="Card0Text" type="Label" parent="Hud" unique_id=1775638270]
+offset_left = 492.0
+offset_top = 870.0
+offset_right = 792.0
+offset_bottom = 940.0
+
+[node name="Card1" type="ColorRect" parent="Hud" unique_id=100174313]
+offset_left = 810.0
+offset_top = 854.0
+offset_right = 1110.0
+offset_bottom = 950.0
+mouse_filter = 2
+
+[node name="Card1Text" type="Label" parent="Hud" unique_id=1032804127]
+offset_left = 810.0
+offset_top = 870.0
+offset_right = 1110.0
+offset_bottom = 940.0
+
+[node name="Card2" type="ColorRect" parent="Hud" unique_id=1150611713]
+offset_left = 1128.0
+offset_top = 854.0
+offset_right = 1428.0
+offset_bottom = 950.0
+mouse_filter = 2
+
+[node name="Card2Text" type="Label" parent="Hud" unique_id=992109744]
+offset_left = 1128.0
+offset_top = 870.0
+offset_right = 1428.0
+offset_bottom = 940.0
+
+[node name="Banner" type="Label" parent="Hud" unique_id=52446422]
 offset_top = 170.0
 offset_right = 1920.0
 offset_bottom = 370.0
+
+[node name="Sound" type="Node" parent="." unique_id=4202977]
+script = ExtResource("11_1iba3")

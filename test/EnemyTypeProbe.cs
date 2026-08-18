@@ -85,6 +85,8 @@ public partial class EnemyTypeProbe : SceneTree
             case 3: return RunStage(StageBlast, "bloater blast, one level deep");
             case 4: return RunStage(StageSpitter, "spitter stands off and shoots");
             case 5: return RunStage(StageComposition, "composition follows intensity");
+            case 6: return RunStage(StageDrawnHeight, "each variant stands at its designed height");
+            case 7: return RunStage(StageHitFlash, "a hit that does not kill lights the target, briefly");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -96,6 +98,108 @@ public partial class EnemyTypeProbe : SceneTree
     {
         _kills++;
         _lastKilledType = type;
+    }
+
+    /// How tall each variant actually draws, measured from the sprite rather than
+    /// assumed from the scale.
+    ///
+    /// The quad is one size for every layer, so a variant that does not fill its
+    /// frame draws shorter than its scale suggests, and the scale is expected to
+    /// have paid that back. Nothing enforces that: re-fitting the art changes the
+    /// fill, `BuildEnemyTypes.cs` holds a number written by hand, and a brute that
+    /// quietly became 2.4 m tall looks exactly like a brute. This is the only
+    /// place the two halves are compared.
+    private bool? StageDrawnHeight(int tick)
+    {
+        bool ok = true;
+        float quad = _horde!.SpriteHeight;
+
+        foreach (EnemyTypeResource type in _horde.Types)
+        {
+            Image? sprite = GD.Load<Texture2D>($"res://assets/sprites/enemies/{type.TypeName}.png")?.GetImage();
+            if (sprite == null)
+            {
+                GD.PushError($"  {type.TypeName}.png did not load");
+                ok = false;
+                continue;
+            }
+
+            float fill = VisibleFraction(sprite);
+            float drawn = quad * type.SpriteScale * fill;
+            bool matches = Mathf.Abs(drawn - type.DesignHeightMeters) <= 0.05f;
+
+            GD.Print($"  {type.TypeName,-8} fills {fill * 100.0f:F1}% x scale {type.SpriteScale:F3} " +
+                     $"= {drawn:F2} m, designed {type.DesignHeightMeters:F1} m {(matches ? "" : "<-- off")}");
+            ok &= matches;
+        }
+
+        return ok;
+    }
+
+    /// Hit feedback is the one thing here nothing else can check: it is invisible
+    /// to every other assertion, it is the difference between a weapon that feels
+    /// broken and one that does not, and the decay is on a separate loop from the
+    /// movement one specifically so that a distant target does not stay lit. That
+    /// separation is exactly the kind of thing a later refactor folds back in.
+    private bool? StageHitFlash(int tick)
+    {
+        const float damage = 1.0f;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+
+            // Far enough out to be on the reduced update stride, which is where a
+            // flash decayed inside the movement loop would get stuck.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(30.0f, 0.0f, 0.0f), Brute);
+            return null;
+        }
+
+        if (tick == 2)
+        {
+            _horde!.Damage(0, damage, Vector2.Zero);
+            _lit = _horde.Pool.Count > 0 ? _horde.Pool.HitFlash[0] : -1.0f;
+            return null;
+        }
+
+        // Long enough for the fade to finish, short enough that a fade an order
+        // of magnitude slower would still be caught.
+        if (tick < 20)
+            return null;
+
+        float faded = _horde!.Pool.Count > 0 ? _horde.Pool.HitFlash[0] : -1.0f;
+        GD.Print($"  brute at 30 m: flash {_lit:F2} on the hit, {faded:F2} after {(tick - 2) / 60.0f:F2}s");
+
+        return Mathf.IsEqualApprox(_lit, 1.0f) && faded <= 0.0f;
+    }
+
+    private float _lit;
+
+    /// Fraction of the sprite's height occupied by pixels the shader will keep.
+    /// The scissor threshold, not "any alpha at all" — a matte leaves the whole
+    /// background at a nonzero alpha that draws nothing.
+    private static float VisibleFraction(Image sprite)
+    {
+        if (sprite.IsCompressed())
+            sprite.Decompress();
+        sprite.Convert(Image.Format.Rgba8);
+
+        int top = -1, bottom = -1;
+        for (int y = 0; y < sprite.GetHeight(); y++)
+        {
+            for (int x = 0; x < sprite.GetWidth(); x++)
+            {
+                if (sprite.GetPixel(x, y).A < 0.5f)
+                    continue;
+
+                if (top < 0)
+                    top = y;
+                bottom = y;
+                break;
+            }
+        }
+
+        return top < 0 ? 0.0f : (bottom - top + 1) / (float)sprite.GetHeight();
     }
 
     private bool RunStage(System.Func<int, bool?> stage, string label)

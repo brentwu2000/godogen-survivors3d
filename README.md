@@ -4,10 +4,11 @@ A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Braw
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
-Status: both loops close. A run is fight, loot, grow, extract on an arena generated fresh each time;
-between runs a base screen turns what came back into gear that changes the next one, and dying in
-that gear loses it. Five enemy variants, finite ammo, items you can use or throw. Every probe below
-passes. Build gate re-verified 2026-08-17.
+Status: both loops close, and the surface is on. A run is fight, loot, grow, extract on an arena
+generated fresh each time; between runs a base screen turns what came back into gear that changes the
+next one, and dying in that gear loses it. Five enemy variants with their own art, finite ammo, items
+you can use or throw, synthesised audio, a HUD of bars rather than labels, and hit feedback. Every
+probe below passes. Build gate re-verified 2026-08-18.
 
 ## Running it
 
@@ -38,11 +39,12 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/ShopProbe.cs` | yes | A v1 save migrates, a newer one is refused, buying is all-or-nothing, and dying costs the kit but not the practice |
 | `test/BaseLoopProbe.cs` | yes | Base → launch → die → back at the base, driven from the keys |
 | `test/MetaProbe.cs` | yes | Profile round-trip, malformed/future files rejected, safe box keeps only what was secured |
+| `test/AudioProbe.cs` | yes | Every clip exists and carries signal, one-shots end on zero, the horde loop meets itself, and repeats are gated |
 | `test/AutoPlay.cs` | yes | A whole run driven through the real input layer at real speed — the only balance signal |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
-| `test/Screenshot.cs` | no | Still of the main scene |
+| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` lights alternate instances to check the hit-flash channel) |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
 
 Probes are exit-code judged, so they can all be chained. The ones marked "no" need a real rendering
@@ -50,28 +52,42 @@ driver — the null driver has nothing to capture and no draw calls to count.
 
 Scenes are not hand-written. `scenes/Build*.cs` emit `.tscn` at build time
 (`godot --headless --script scenes/BuildMain.cs`), and
-`scripts/tools/Build{InputMap,Weapons,Items,Gear,EnemyTypes,EnemySprites}.cs` emit the input map, the
-`.tres` data and the placeholder variant sprites the same way.
+`scripts/tools/Build{InputMap,Weapons,Items,Gear,EnemyTypes,EnemySprites,PlayerSprite,Audio}.cs` emit
+the input map, the `.tres` data, the fitted sprites and every sound the same way. Nothing under
+`assets/` or `resources/` is edited by hand; all of it is the output of a script that can be re-run.
 
 ### Capture
 
 ```bash
-godot --write-movie screenshots/result/frame.png --fixed-fps 30 --quit-after 700 \
+godot --write-movie screenshots/result/frame.png --fixed-fps 30 --quit-after 800 \
       --script test/Presentation.cs
-ffmpeg -y -framerate 30 -pattern_type glob -i 'screenshots/result/frame*.png' \
-      -c:v libx264 -pix_fmt yuv420p -movflags +faststart screenshots/result/survivors3d.mp4
+ffmpeg -y -framerate 30 -i screenshots/result/frame%08d.png -i screenshots/result/frame.wav \
+      -c:v libx264 -pix_fmt yuv420p -crf 20 -c:a aac -b:a 128k -shortest \
+      -movflags +faststart screenshots/result/survivors3d.mp4
 ```
 
-`--quit-after N` writes exactly N frames, so that number *is* the length: 700 @ 30 fps = 23.3 s.
-`screenshots/` is not versioned; re-run the above to regenerate it.
+The movie writer emits `frame.wav` beside the frames, so the clip can carry the game's own audio; mux
+it in rather than shipping a silent film of a phase that was mostly about sound. That wav is **32-bit
+integer PCM** — read as 16-bit it looks like a wall of full-scale clipping, which is entirely an
+artefact of the wrong sample width and cost one wrong tuning pass to work out.
 
-`Presentation.cs` injects compressed values into `_Initialize` — 70 enemies at open, a 110 s run,
-extraction open from t=0, spawn 6→16/s — and does not touch `RunDirector`'s own defaults. Shot at
-shipping numbers the first minute is an empty field: correct by design, and nothing to film.
+`--quit-after N` writes exactly N frames, so that number *is* the edit: 800 @ 30 fps = 26.7 s. The
+extraction hold completes around frame 735, so 700 ends on a nearly-full bar and cuts the payoff the
+whole clip walks toward. `screenshots/` is not versioned; re-run the above to regenerate it.
 
-It also still expects two crates on opposite corners, which a hand-placed arena promised and a
-generated one does not. The seed is pinned so the shot is at least repeatable, but this has not been
-re-cut since the map stopped being fixed — see the end of this file.
+`Presentation.cs` injects compressed values into `_Initialize` — 70 enemies at open, a 40 s run,
+extraction open from t=0, spawn 6→11/s, and an opening crowd drawn from mid-run intensity — and does
+not touch `RunDirector`'s own defaults. Shot at shipping numbers the first minute is an empty field:
+correct by design, and nothing to film.
+
+Three of those numbers were found by watching the result rather than by reasoning about it. A 110 s
+run only reaches intensity 0.2 inside the clip, so the brute, bloater and spitter never appeared —
+the three variants the art was drawn for. The bot never pressed a level-up key, so three cards sat
+over the lower third for the whole film, which reads as a stuck interface rather than as a choice
+nobody made. And seeding the opening crowd at intensity 0.65 killed the bot 8 frames after the old
+cut, meaning the take that looked like it was about to extract was in fact about to end in a death.
+All three are the same class of defect as the stale hold bar in Phase 6: invisible to every
+exit-code probe, obvious in one frame of video.
 
 The camera's `Position` and `RotationDegrees` are set in `BuildMain.BuildCameraRig`, because the first
 movie frame renders before `_Process` and `CameraRig`'s lerp has not run yet.
@@ -217,6 +233,43 @@ was still free, so five variants are still one draw call and one 16-float instan
 120 px at 1080p, so the original art was 8x oversampled — waste that an array multiplies by its layer
 count. Downscaling took 500 enemies from 5.67 ms to 1.09 ms median on the same machine, measured
 against the previous commit back to back.
+
+**Hit flash rides the MultiMesh colour block, not a fifth `INSTANCE_CUSTOM` float.** All four were
+already spoken for — flip, bob phase, in-plane spin, array layer — and bit-packing a fifth value into
+one of them is a decoding bug waiting for whoever next changes the flip flag. The colour block costs
+four floats per instance (a 16-float stride becomes 20) and is the channel the engine provides for
+exactly this. One catch, which bit: a MultiMesh with `use_colors` **off** still hands the vertex stage
+an opaque white `COLOR`, so the same shader drew every projectile at full flash, permanently white. A
+`flash_enabled` uniform turns the channel off explicitly. The bug appeared only on the renderer that
+opted out, while the horde it was written for was correct throughout.
+
+**One audio bus, fourteen voices, one ambience layer.** The rule that shaped the renderer shapes the
+mix: the cost of a crowd must not scale with the crowd. Kills are gated to one death sound per 70 ms
+and hits to one per 50 ms, because a wide melee arc lands five in a frame and the late horde dies in
+double figures a second — ungated that is one loud smear that says nothing about how many, and gated
+it still reads as "lots" while staying a sound. The horde itself is a single looping layer mixed by
+how many enemies are within 26 m, not N copies of one voice; a crowd does not sound like N of
+anything, it sounds like a low mass that swells.
+
+**Sound is synthesised, not sourced.** Same reason the scenes are generated: a recipe in code can be
+re-tuned and re-run, and it carries no licence to track. `BuildAudio.cs` writes `AudioStreamWav`
+resources as `.tres` rather than `.wav` — a `.wav` goes through the importer, whose loop flag lives
+in a generated `.import` file the tool does not own, and the ambience is ruined if that silently
+comes back disabled. Rebuilds are byte-identical, so a diff means someone changed a recipe.
+
+**The damage accumulator has exactly one owner.** Contact damage arrives as a per-tick slice of a
+rate, so "was I hit" is not a question the player character can answer — only "how much, lately".
+`Player.ConsumeDamageTaken()` clears on read, which makes a second consumer a bug that presents as
+feedback that sometimes works. The HUD and the camera both watch `Health` instead; the accumulator
+belongs to `SoundDirector`.
+
+**Design height and sprite scale are separate fields.** The horde's frame is 176×256, sized for the
+narrow variants, so the brute and bloater fit by width and do not fill it vertically — their
+`SpriteScale` has to cancel the empty space above their heads as well as set their size. That makes
+the scale a number nobody can read as "how big is a brute", so `EnemyTypeResource.DesignHeightMeters`
+records the intent and `EnemyTypeProbe` measures quad × scale × the sprite's actual fill against it.
+Re-fitting the art moves the scale, and without something to compare it to a 3 m brute quietly
+becoming 2.4 m looks exactly like a brute.
 
 **Enemies are not physics bodies.** The game asks one question about an enemy — who is near me — and
 a uniform `SpatialGrid` answers it with an O(n) counting sort per tick, so separation is a single
@@ -391,21 +444,34 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 
 | File | Source | Pixels | In-game size |
 | :--- | :--- | :--- | :--- |
-| `assets/sprites/player.png` | generated → matted → cropped | 606×1308 | 2.2 m tall |
-| `assets/sprites/enemies/walker.png` | **placeholder** — downscaled from `art-src/zombie.png` | 140×256 | 2.0 m tall |
-| `assets/sprites/enemies/runner.png` | **placeholder** — tinted copy | 140×256 | 1.8 m tall |
-| `assets/sprites/enemies/brute.png` | **placeholder** — tinted copy | 140×256 | 3.0 m tall |
-| `assets/sprites/enemies/bloater.png` | **placeholder** — tinted copy | 140×256 | 2.4 m tall |
-| `assets/sprites/enemies/spitter.png` | **placeholder** — tinted copy | 140×256 | 2.0 m tall |
+| `assets/sprites/player.png` | `art-src/survivor.png` via `BuildPlayerSprite.cs` | 339×512 | 2.2 m tall |
+| `assets/sprites/enemies/walker.png` | `art-src/walker.png` via `BuildEnemySprites.cs` | 176×256 | 2.0 m tall |
+| `assets/sprites/enemies/runner.png` | `art-src/runner.png` | 176×256 | 1.8 m tall |
+| `assets/sprites/enemies/brute.png` | `art-src/brute.png` | 176×256 | 3.0 m tall |
+| `assets/sprites/enemies/bloater.png` | `art-src/bloater.png` | 176×256 | 2.4 m tall |
+| `assets/sprites/enemies/spitter.png` | `art-src/spitter.png` | 176×256 | 2.0 m tall |
 | `assets/sprites/bolt.png` | generated | 160×40 | projectile quad |
 | `assets/sprites/blob_shadow.png` | generated | 128×128 | ground decal |
 | `assets/shaders/horde_billboard.gdshader` | hand-written | — | horde + projectiles |
+| `assets/shaders/vignette.gdshader` | hand-written | — | full-screen damage tint |
+| `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
 
-**Four of those are placeholders and want replacing.** `scripts/tools/BuildEnemySprites.cs` writes
-them as tinted, downscaled copies of the one real zombie so the variant system could be built and
-seen before the art existed. Drop a generated sprite in over any of them and nothing in code changes,
-subject to one rule the array enforces: **every layer must be exactly 140×256**. Generate at whatever
-size, then unify — the same step the pipeline already has for mixed sources.
+**Every layer of the horde array must be exactly 176×256.** That is the array format's rule, not a
+preference, and it is a build-time failure rather than a visual one. `BuildEnemySprites.cs` enforces
+it: drop a new matted painting into `art-src/` and re-run, and it crops to the visible pixels, fits
+the frame, and sits the result on the bottom edge so the feet land on the ground.
+
+The frame is sized for the narrow variants, so the wide ones (brute, bloater) fit by width and do not
+fill it vertically. Their `SpriteScale` in `BuildEnemyTypes.cs` has to make up the shortfall, and
+nothing keeps the two in step automatically — the tool prints the scale each sprite needs, and
+`EnemyTypeProbe` measures the drawn height against `DesignHeightMeters` so a re-fit cannot quietly
+turn a 3 m brute into a 2.4 m one.
+
+Sound is generated, not sourced. `BuildAudio.cs` synthesises every clip from a recipe and saves
+`AudioStreamWav` resources directly, so a rebuild is byte-identical and a diff means someone changed
+a recipe. They are `.tres` rather than `.wav` because a `.wav` goes through the importer, whose loop
+setting lives in a generated `.import` file the tool does not own — and the horde ambience is ruined
+if that flag silently comes back disabled.
 
 `art-src/` holds what the pipeline consumed and produced on the way — `*_ref.png` (the generated
 originals, background intact) and `*_qa.png` (matted, pre-crop, for checking the cut). Nothing there
@@ -418,19 +484,17 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-The loop closes now: a run pays for gear, the gear changes the next run, and dying takes it back.
-What is left is the surface. There is no audio at all, the HUD is three bare labels and a wall of
-text, the base screen is a monospace list, the cover is untextured boxes, and four of the five enemy
-sprites are tinted placeholders. None of that is a system — it is the part a player would notice
-first and the part that has been deferred longest.
+The loop closes and the surface is on: audio, a HUD of bars, hit flash, camera shake, damage
+vignette, and real art for every creature and for the player.
 
-Also open: mobile is still unmeasured, the 300 s clock is unvalidated at human skill, and
-`physics_ticks_per_second` is not pinned in `project.godot`.
+What is missing now is the **handover between the two loops**. A run ends on a banner and three and a
+half seconds later the scene is the shop — so everything the run produced (kills by variant, practice
+gained, what was lost, whether it beat the last one) exists only as `GD.Print`. A three-hundred-second
+run collapses into one number, and there is nothing to chase that is not credits. That is Phase 13:
+a debrief screen, personal records, and per-run contracts. See the roadmap.
 
-**The proof video is stale.** `Presentation.cs` still frames two crates it expects on opposite
-corners, which a generated map does not promise, and it has not been re-shot since the arena stopped
-being hand-placed — or since anything in the last four phases landed. It runs on a pinned seed, so it
-is at least reproducible.
+Still cosmetic and still deferred: the base screen is a monospace list, the ground is an untextured
+plane, and the cover is grey boxes. The boxes are now the weakest thing on screen, which is progress.
 
 Engineering gaps, separately:
 
@@ -439,7 +503,9 @@ Engineering gaps, separately:
 - **The 300 s clock is unvalidated by a human.** See Balance.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
   it. Behaviour is correct today, but moving to 30 Hz means re-checking every damping constant.
-- **No audio and no export presets.** Neither is wired up; the game runs from the editor and from
-  headless capture only.
+- **No export presets.** The game runs from the editor and from headless capture only.
+- **The audio bus has no limiter.** The mix keeps its headroom by the master volume alone, set
+  against a captured run; a louder moment than any capture happened to catch would clip rather than
+  compress.
 - Third-party CC0 sources (Kenney, Quaternius) are safe to use directly; aggregators like Poly Pizza
   license per item and would need checking per file. Nothing from either is currently in the repo.

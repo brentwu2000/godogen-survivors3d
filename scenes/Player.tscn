@@ -20,27 +20,27 @@ albedo_texture = ExtResource("3_70d11")
 [sub_resource type="QuadMesh" id="QuadMesh_6eyey"]
 size = Vector2(0.84000003, 0.84000003)
 
-[node name="Player" type="CharacterBody3D" unique_id=80809806]
+[node name="Player" type="CharacterBody3D" unique_id=578818177]
 script = ExtResource("1_mdl7e")
 
-[node name="Collision" type="CollisionShape3D" parent="." unique_id=1941121267]
+[node name="Collision" type="CollisionShape3D" parent="." unique_id=1138322190]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.8, 0)
 shape = SubResource("CapsuleShape3D_khinc")
 
-[node name="Sprite" type="Sprite3D" parent="." unique_id=1526476608]
+[node name="Sprite" type="Sprite3D" parent="." unique_id=1460089773]
 cast_shadow = 0
-offset = Vector2(0, 654)
-pixel_size = 0.0016819573
+offset = Vector2(0, 256)
+pixel_size = 0.004296875
 billboard = 1
 alpha_cut = 1
 texture = ExtResource("2_qu4a1")
 
-[node name="BlobShadow" type="MeshInstance3D" parent="." unique_id=1039389015]
+[node name="BlobShadow" type="MeshInstance3D" parent="." unique_id=731637037]
 transform = Transform3D(1, 0, 0, 0, -4.371139e-08, 1, 0, -1, -4.371139e-08, 0, 0.02, 0)
 material_override = SubResource("StandardMaterial3D_bruh7")
 cast_shadow = 0
 mesh = SubResource("QuadMesh_6eyey")
 
-[node name="WeaponHandler" type="Node3D" parent="." unique_id=1005093908]
+[node name="WeaponHandler" type="Node3D" parent="." unique_id=2022560154]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 script = ExtResource("4_cw2d6")

@@ -8,9 +8,17 @@ using Godot;
 /// billboard sprites need anyway.
 public sealed class HordeRenderer
 {
-    /// 12 floats of transform plus 4 of custom data, matching MultiMesh's buffer
-    /// layout when colours are off and custom data is on.
-    private const int FloatsPerInstance = 16;
+    /// MultiMesh packs each instance as transform, then colour if colours are
+    /// on, then custom data. 12 + 4, or 12 + 4 + 4 with colours.
+    private readonly int _floatsPerInstance;
+
+    /// Whether the colour block is present, and therefore where custom data
+    /// starts. Only the horde turns it on: all four custom floats were already
+    /// spoken for (flip, bob phase, spin, array layer) before hit flash needed
+    /// somewhere to live, and the colour block is the channel the engine already
+    /// provides for exactly this rather than a fifth value bit-packed into one of
+    /// the four. Projectiles leave it off — nothing flashes a tracer.
+    private readonly bool _useColours;
 
     private readonly MultiMesh _multiMesh;
     private readonly float[] _buffer;
@@ -30,13 +38,17 @@ public sealed class HordeRenderer
     /// </param>
     public HordeRenderer(Texture2DArray texture, Shader shader, float heightMeters, int capacity,
                          float arenaExtent, bool groundAnchored = true, float bobAmplitude = 0.06f,
-                         float maxScale = 1.0f)
+                         float maxScale = 1.0f, bool useColours = false)
     {
+        _useColours = useColours;
+        _floatsPerInstance = useColours ? 20 : 16;
+
         float aspect = (float)texture.GetWidth() / texture.GetHeight();
 
         var material = new ShaderMaterial { Shader = shader };
         material.SetShaderParameter("albedo", texture);
         material.SetShaderParameter("bob_amplitude", bobAmplitude);
+        material.SetShaderParameter("flash_enabled", useColours ? 1.0f : 0.0f);
 
         var quad = new QuadMesh
         {
@@ -50,13 +62,14 @@ public sealed class HordeRenderer
         _multiMesh = new MultiMesh
         {
             TransformFormat = MultiMesh.TransformFormatEnum.Transform3D,
+            UseColors = useColours,
             UseCustomData = true,
             Mesh = quad,
             InstanceCount = capacity,
             VisibleInstanceCount = 0,
         };
 
-        _buffer = new float[capacity * FloatsPerInstance];
+        _buffer = new float[capacity * _floatsPerInstance];
 
         Node = new MultiMeshInstance3D
         {
@@ -135,7 +148,8 @@ public sealed class HordeRenderer
         {
             EnemyTypeResource type = types[pool.Type[i]];
             Write(i, pool.Position[i], type.SpriteScale,
-                  pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer);
+                  pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer,
+                  pool.HitFlash[i]);
         }
 
         Upload(pool.Count);
@@ -161,9 +175,10 @@ public sealed class HordeRenderer
         Upload(pool.Count);
     }
 
-    private void Write(int index, Vector3 position, float scale, float flip, float phase, float spin, int layer)
+    private void Write(int index, Vector3 position, float scale, float flip, float phase, float spin,
+                       int layer, float flash = 0.0f)
     {
-        int b = index * FloatsPerInstance;
+        int b = index * _floatsPerInstance;
 
         // Scaled identity basis: the shader rebuilds orientation from the camera
         // and reads the scale back off column 0, so the basis carries size and
@@ -173,10 +188,24 @@ public sealed class HordeRenderer
         _buffer[b + 4] = 0.0f; _buffer[b + 5] = scale; _buffer[b + 6] = 0.0f; _buffer[b + 7] = position.Y;
         _buffer[b + 8] = 0.0f; _buffer[b + 9] = 0.0f; _buffer[b + 10] = scale; _buffer[b + 11] = position.Z;
 
-        _buffer[b + 12] = flip;
-        _buffer[b + 13] = phase;
-        _buffer[b + 14] = spin;
-        _buffer[b + 15] = layer;
+        // The colour block, when present, sits between the transform and the
+        // custom data — so writing custom data at a fixed offset of 12 is the
+        // silent corruption waiting to happen if colours are ever turned on for
+        // a renderer that assumed they were off.
+        int c = b + 12;
+        if (_useColours)
+        {
+            _buffer[c + 0] = flash;
+            _buffer[c + 1] = 0.0f;
+            _buffer[c + 2] = 0.0f;
+            _buffer[c + 3] = 1.0f;
+            c += 4;
+        }
+
+        _buffer[c + 0] = flip;
+        _buffer[c + 1] = phase;
+        _buffer[c + 2] = spin;
+        _buffer[c + 3] = layer;
     }
 
     private void Upload(int count)

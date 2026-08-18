@@ -258,12 +258,36 @@ public partial class Player : CharacterBody3D
     private float Mitigate(float amount) =>
         amount <= 0.0f ? 0.0f : Mathf.Max(amount - Armour, amount * 0.2f);
 
+    /// Damage taken since somebody last asked, cleared by asking.
+    ///
+    /// A signal per application would fire sixty times a second: contact damage
+    /// arrives as a per-tick slice of a rate, so "was I hit" is not an event the
+    /// player character can answer — only "how much, lately". The reader decides
+    /// what is worth reacting to, which keeps the threshold next to the feedback
+    /// rather than buried in here.
+    ///
+    /// Reading clears it, so it has exactly one owner: `SoundDirector`. Anything
+    /// else that wants to react to damage watches Health instead — a second
+    /// consumer would take turns with the first and each would see about half of
+    /// what happened, which is a bug that presents as feedback that sometimes
+    /// works.
+    private float _damageSincePoll;
+
+    public float ConsumeDamageTaken()
+    {
+        float taken = _damageSincePoll;
+        _damageSincePoll = 0.0f;
+        return taken;
+    }
+
     private void ApplyDamage(float amount)
     {
         if (!IsAlive || amount <= 0.0f)
             return;
 
         Health = Mathf.Max(0.0f, Health - amount);
+        _damageSincePoll += amount;
+
         if (Health <= 0.0f)
             EmitSignal(SignalName.Died);
     }

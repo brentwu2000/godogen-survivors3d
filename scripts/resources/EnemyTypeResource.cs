@@ -32,7 +32,18 @@ public partial class EnemyTypeResource : Resource
 
     /// Multiplies the sprite's world size. The shader re-applies per-instance
     /// scale, so this costs nothing extra to vary (horde_billboard.gdshader:52).
+    ///
+    /// It is not the same number as the design height below, and cannot be: the
+    /// wide variants do not fill their frame vertically, so part of this scale is
+    /// spent cancelling the empty space above their heads rather than making them
+    /// big. `BuildEnemySprites.cs` prints the value each sprite needs.
     [Export] public float SpriteScale { get; set; } = 1.0f;
+
+    /// How tall this variant is meant to stand, in metres. The design intent, kept
+    /// separate from the scale that achieves it so the two can be checked against
+    /// each other — re-fitting the art moves the scale, and without something to
+    /// compare it to a brute quietly becoming 2.4 m looks exactly like a brute.
+    [Export] public float DesignHeightMeters { get; set; } = 2.0f;
 
     /// Layer in the horde's Texture2DArray. Layers are stacked in the order the
     /// types are listed, so this is an index into that list.

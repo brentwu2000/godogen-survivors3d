@@ -27,6 +27,7 @@ public partial class Screenshot : SceneTree
     private Vector3? _teleport;
     private bool _mixed;
     private bool _throw;
+    private bool _flash;
     private Node? _scene;
 
     public override void _Initialize()
@@ -63,6 +64,7 @@ public partial class Screenshot : SceneTree
         {
             _mixed |= arg == "mixed";
             _throw |= arg == "throw";
+            _flash |= arg == "flash";
             if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
                 _warmup = Mathf.Max(1, frames);
         }
@@ -108,6 +110,22 @@ public partial class Screenshot : SceneTree
                 thrower.TryThrow();
                 thrower.TryThrow();
             }
+        }
+
+        // Hit feedback lasts about a tenth of a second, so photographing it by
+        // firing and hoping is not a plan. Lighting alternate instances is the
+        // only way to check that the flash channel survives a change to the
+        // instance buffer — and getting that layout wrong shows up as sprites
+        // that are subtly, permanently the wrong colour rather than as an error.
+        //
+        // Every frame, not just the last one: the horde uploads its buffer from
+        // _PhysicsProcess and the viewport this reads is the frame already drawn,
+        // so a value written on the capture frame is a value nothing has rendered
+        // yet.
+        if (_flash && _scene?.GetNodeOrNull<Horde>("Horde") is { } lit)
+        {
+            for (int i = 0; i < lit.Pool.Count; i++)
+                lit.Pool.HitFlash[i] = i % 2 == 0 ? 1.0f : 0.0f;
         }
 
         if (++_frame < _warmup)

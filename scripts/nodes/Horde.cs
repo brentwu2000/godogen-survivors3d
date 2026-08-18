@@ -62,6 +62,11 @@ public partial class Horde : Node3D
     /// architecture spent five phases avoiding.
     public event System.Action<int, Vector3>? EnemyKilled;
 
+    /// Something went off, and where. A bloater bursting and a thrown charge are
+    /// the same event to anything watching — both are a radius of damage the
+    /// player has to read off the screen in the moment it happens.
+    public event System.Action<Vector3>? Exploded;
+
     public EnemyPool Pool { get; private set; } = null!;
     public EnemyTypeResource[] Types { get; private set; } = System.Array.Empty<EnemyTypeResource>();
 
@@ -119,7 +124,7 @@ public partial class Horde : Node3D
             maxScale = Mathf.Max(maxScale, type.SpriteScale);
 
         _renderer = new HordeRenderer(texture, shader, SpriteHeight, Capacity, ArenaExtent,
-                                      maxScale: maxScale);
+                                      maxScale: maxScale, useColours: true);
         AddChild(_renderer.Node);
 
         Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
@@ -336,9 +341,26 @@ public partial class Horde : Node3D
         return Spawn(position, 0);
     }
 
+    /// How fast a hit flash fades, in units per second. About a tenth of a second
+    /// of white: long enough to register at sixty frames, short enough that a
+    /// weapon firing three times a second does not leave the target permanently
+    /// lit and therefore permanently uninformative.
+    [Export] public float HitFlashFade { get; set; } = 9.0f;
+
     public override void _PhysicsProcess(double delta)
     {
         float step = (float)delta;
+
+        // Every enemy, not only the near ones. The movement loop below skips
+        // distant instances on a stride, and a flash that decayed on the same
+        // schedule would leave anything shot at range glowing until it wandered
+        // close enough to be updated.
+        float fade = HitFlashFade * step;
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (Pool.HitFlash[i] > 0.0f)
+                Pool.HitFlash[i] = Mathf.Max(0.0f, Pool.HitFlash[i] - fade);
+        }
 
         if (_player == null || Pool.Count == 0)
         {
@@ -588,6 +610,11 @@ public partial class Horde : Node3D
         Pool.Health[index] -= amount;
         if (Pool.Health[index] > 0.0f)
         {
+            // The only confirmation a shot landed on something that lived. A
+            // brute absorbing a magazine and a rifle missing it look identical
+            // without this, because the brute keeps walking either way.
+            Pool.HitFlash[index] = 1.0f;
+
             // Resistance is a multiplier on displacement, not a threshold: a
             // knockback weapon should always do something to a brute, just far
             // less than it does to a walker.
@@ -620,6 +647,7 @@ public partial class Horde : Node3D
     public int Detonate(Vector3 center, float radius, float damage)
     {
         int killed = 0;
+        Exploded?.Invoke(center);
 
         for (int i = Pool.Count - 1; i >= 0; i--)
         {
@@ -642,6 +670,8 @@ public partial class Horde : Node3D
     /// balance number nobody chose.
     private void Blast(Vector3 center, float radius, float damage)
     {
+        Exploded?.Invoke(center);
+
         if (_player is Player player)
         {
             float toPlayerSqr = FlatDistanceSquared(player.GlobalPosition, center);
