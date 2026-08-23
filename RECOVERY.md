@@ -26,8 +26,9 @@ Read this before starting work. Update it as phases land.
 | ✅ A7 | `Minimap` — explored, not revealed | `22a5004` |
 | ✅ B5 | Spread, Charge and Blast; three weapons that resolve differently | `82ac068` |
 | ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
+| ✅ B3 | `RunKit` — Orbit, Shockwave, Chain and Chill; cards that fight on their own | `4d93557` |
 
-**Next: B3** (a third kind of growth card), then B4 (trinkets), B7 (curiosities), B2, B9–B12, B14.
+**Next: B4** (trinkets), then B7 (curiosities), B2, B9–B12, B14, and A4 last.
 
 **Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
 bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
@@ -46,6 +47,22 @@ Every one of these has now bitten more than once in a single session, all silent
    `ScaleProbe` processes and one hung `ZoneProbe`. Never `!` in a probe; fail the stage.
 3. **`ProjectSettings.Save()` writes and never removes.** A setting this repo stops defining stays in
    `project.godot`, bound and pollable. Clear it with `default`.
+
+### The rule that keeps producing bugs
+
+**Any hand-written list of a growing thing's members goes stale in the direction that hides the bug.**
+The list omits the new item, the check skips it, and the result is a pass. Three instances in one
+phase:
+
+| Where | What it silently missed |
+| :--- | :--- |
+| `RunModifiers.Reset()` | Orbit blades survived into the *next run* |
+| `ModifierProbe.Fingerprint()` | Four correctly-wired cards reported as changing nothing |
+| `TraitProbe` | Three new weapons never loaded at all |
+
+All three were green. Read the type by reflection, or the directory by listing. And note the second
+one: a hand-written list *in the test* has exactly the same hole as the one in the code, so the test
+written to catch it fails the same way on the same day.
 
 ### Probes that pass by testing nothing
 
@@ -70,11 +87,12 @@ Five seeds, both arms, `lingers:0`:
 
 | arm | survived | median banked | median seconds | median lowest HP | worst peak |
 | :--- | :--- | ---: | ---: | ---: | ---: |
-| past | 5/5 | 485 | 37s | 98 | 65 |
-| zone | 4/5 | 1289 | 60s | 95 | 136 |
+| past | 5/5 | 485 | 37s | 98 | 66 |
+| zone | 4/5 | 1314 | 60s | 94 | 127 |
 
-Unchanged by B6 in survival, time and peak. The zone arm's median rose from 1120 because on one seed
-the bag filled and the loot that used to be destroyed now reaches the player.
+Stable across B6 and B3. B6 raised the zone median from 1120 to 1289 because on one seed the bag
+filled and the loot that used to be destroyed now reaches the player; B3 moved it to 1314 and dropped
+the zone arm's worst peak from 136 to 127, which is the kit killing some of the crowd.
 
 The one death is seed `1374015655`, whose nearest zone is the tier-1 Deep Holdout. It has died since
 A5d raised the pressure 30%; it is not a regression from anything after that. **Check the table in
