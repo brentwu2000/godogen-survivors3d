@@ -21,11 +21,30 @@ Read this before starting work. Update it as phases land.
 | ✅ A5b | Zone readout, and `zone_marker.gdshader` so the edge is visible | `debadab` |
 | ✅ A5c | `AutoPlay --zone`, and three balance corrections it found | `8871b4c` |
 | ✅ A5d | `BalanceSweep zones:both`, and the zone tuned against the table | `ac006d1` |
+| ✅ A6 | `Shelter` — the base is a walkable room; the input map is repaired | `188f64b` |
 
-**Next: A6** (walkable shelter), then A9/A10 (ground and props), A7 (minimap), A4 (blob shadows).
+**Next: A9/A10** (ground shader and scatter props), then A7 (minimap), A4 (blob shadows).
 
 A4 matters least now — shadows were the billboard path's only ground contact and solid bodies cast
 real ones, so it is a fallback-path fix rather than a visual one.
+
+**Half A is nearly done.** A1 A2 A3 A5 A6 A8 A10 A11 are in; A4, A7 and A9 remain. After those the
+queue is Half B: B2 (emerge + fog is partly done by A8), B3–B7 (growth cards, trinkets, weapons,
+carry, curiosities), B9–B12, B14.
+
+### The three bugs that repeat
+
+Every one of these has now bitten more than once in a single session, all silent, none an error:
+
+1. **`add_child()` from `_Ready` is refused.** Godot prints "Parent node is busy setting up children"
+   and carries on; the subtree is built correctly into a node that is not in the tree. Cost the
+   player body, then the danger zones. Declare containers in the scene builder, or `CallDeferred`.
+2. **An exception out of `_PhysicsProcess` does not stop a `SceneTree` script.** The frame is
+   abandoned and the next one starts, so a null dereference is not a crash — it is a process pinned
+   at 100% of a core, printing a stack trace sixty times a second, forever. Cost four zombie
+   `ScaleProbe` processes and one hung `ZoneProbe`. Never `!` in a probe; fail the stage.
+3. **`ProjectSettings.Save()` writes and never removes.** A setting this repo stops defining stays in
+   `project.godot`, bound and pollable. Clear it with `default`.
 
 ### Where the balance stands
 
