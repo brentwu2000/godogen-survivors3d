@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_kispr"]
+
+[resource]
+script = ExtResource("1_kispr")
+GearName = "Frost Cell"
+Slot = 3
+Tier = 3
+Price = 900
+ChillBonus = 0.17
+ChillUpgradeCap = 5

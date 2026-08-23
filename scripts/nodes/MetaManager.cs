@@ -96,6 +96,8 @@ public partial class MetaManager : Node
         // Each of these is neutral at zero and means "what the gear adds".
         int pierce = 0;
         float area = 0.0f, thorns = 0.0f, regen = 0.0f, knockback = 0.0f, dodge = 0.0f;
+        int orbit = 0, shockwave = 0;
+        float chain = 0.0f, chill = 0.0f;
         var ruleCaps = new System.Collections.Generic.Dictionary<GrowthOption, int>();
 
         foreach (string path in Profile.EquippedGear)
@@ -134,6 +136,16 @@ public partial class MetaManager : Node
             knockback += piece.KnockbackBonus;
             dodge += piece.DodgeBonus;
 
+            orbit += piece.OrbitBonus;
+            shockwave += piece.ShockwaveBonus;
+            chain += piece.ChainBonus;
+
+            // Compounded, not summed, so two chill sources land on the same curve
+            // the growth card uses. Summed, a trinket and two picks could exceed
+            // one between them and stop the horde dead.
+            if (piece.ChillBonus > 0.0f)
+                chill = 1.0f - (1.0f - chill) * (1.0f - piece.ChillBonus);
+
             // Summed like every other cap, but only where a piece has an opinion.
             // -1 is "no opinion", which is not the same as zero: three pieces
             // that each say nothing about pierce must leave the default alone,
@@ -146,10 +158,16 @@ public partial class MetaManager : Node
             Opinion(ruleCaps, GrowthOption.Knockback, piece.KnockbackUpgradeCap);
             Opinion(ruleCaps, GrowthOption.Dodge, piece.DodgeUpgradeCap);
             Opinion(ruleCaps, GrowthOption.Fortune, piece.FortuneUpgradeCap);
+
+            Opinion(ruleCaps, GrowthOption.Orbit, piece.OrbitUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Shockwave, piece.ShockwaveUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Chain, piece.ChainUpgradeCap);
+            Opinion(ruleCaps, GrowthOption.Chill, piece.ChillUpgradeCap);
         }
 
         _player?.ApplyGear(health, armour, speed, carry, safeBox);
         _player?.ApplyGearRules(pierce, area, thorns, regen, knockback, dodge);
+        _player?.ApplyGearKit(orbit, shockwave, chain, chill);
         _growth?.SetCaps(healthCap, armourCap, speedCap, searchCap, ruleCaps);
     }
 

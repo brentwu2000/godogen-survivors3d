@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_yh7fx"]
+
+[resource]
+script = ExtResource("1_yh7fx")
+GearName = "Copper Coil"
+Slot = 3
+Tier = 2
+Price = 650
+ChainBonus = 0.18
+ChainUpgradeCap = 6

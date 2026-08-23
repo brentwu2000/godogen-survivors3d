@@ -360,6 +360,27 @@ public partial class Player : CharacterBody3D
     /// all six — including area, whose modifier is a multiplier neutral at 1.
     /// Passing a RunModifiers here instead was the first shape and it made three
     /// pieces granting nothing add up to a triple-size blast.
+    /// What the equipped trinket starts the run holding.
+    ///
+    /// Its own call rather than four more arguments on `ApplyGearRules`, which
+    /// already takes six and whose six are all rules about the weapon. These are
+    /// objects in the world; mixing them in would make the longer signature the
+    /// place where somebody eventually passes `regen` where `chill` goes.
+    ///
+    /// Chill compounds rather than sums, matching how the card stacks — a
+    /// trinket granting 17% on top of a run that has taken two chill picks has to
+    /// land on the same curve, or gear and growth would disagree about what a
+    /// stack is worth.
+    public void ApplyGearKit(int orbit, int shockwave, float chain, float chill)
+    {
+        Mods.OrbitBlades += orbit;
+        Mods.PulseStacks += shockwave;
+        Mods.ChainChance += chain;
+
+        if (chill > 0.0f)
+            Mods.Chill = 1.0f - (1.0f - Mods.Chill) * (1.0f - chill);
+    }
+
     public void ApplyGearRules(int pierce, float area, float thorns, float regen,
                                float knockback, float dodge)
     {

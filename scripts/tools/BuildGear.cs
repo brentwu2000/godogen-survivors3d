@@ -58,6 +58,88 @@ public partial class BuildGear : SceneTree
                 SpeedUpgradeCap = 3,
             },
 
+            // --- Trinkets: a run that starts with something in the air -------
+            //
+            // The fourth slot, and the only one that is not about the body. Every
+            // other piece of gear moves a number the player already had; these
+            // start the run holding a piece of kit, which means a build can be
+            // decided at the shop rather than discovered in the deck.
+            //
+            // Filenames come from the name lowercased, so none of these has an
+            // apostrophe in it. "Rabbit's Foot" becomes `rabbit's_foot.tres`,
+            // which is a path that works until something quotes it.
+
+            // One more blade, and room for two more from the deck.
+            new()
+            {
+                GearName = "Whetstone",
+                Slot = GearSlot.Trinket,
+                Tier = 2,
+                Price = 550,
+                OrbitBonus = 1,
+                OrbitUpgradeCap = 7,
+            },
+
+            // A pulse to start with — and a smaller player. The shockwave is the
+            // strongest of the four in a crowd, so the one that hands it over
+            // early is the one that takes something back.
+            new()
+            {
+                GearName = "Cracked Capacitor",
+                Slot = GearSlot.Trinket,
+                Tier = 2,
+                Price = 550,
+                HealthBonus = -25.0f,
+                ShockwaveBonus = 1,
+                ShockwaveUpgradeCap = 6,
+            },
+
+            new()
+            {
+                GearName = "Copper Coil",
+                Slot = GearSlot.Trinket,
+                Tier = 2,
+                Price = 650,
+                ChainBonus = 0.18f,
+                ChainUpgradeCap = 6,
+            },
+
+            // Tier 3 and the dearest, because chill is the one that changes where
+            // the player can afford to stand rather than how fast things die.
+            new()
+            {
+                GearName = "Frost Cell",
+                Slot = GearSlot.Trinket,
+                Tier = 3,
+                Price = 900,
+                ChillBonus = 0.17f,
+                ChillUpgradeCap = 5,
+            },
+
+            // No kit at all. A trinket that competes with the kit trinkets on
+            // their own terms would make the slot a single decision with four
+            // wrong answers; this one is for a player who would rather come home
+            // richer than fight differently.
+            new()
+            {
+                GearName = "Lucky Bone",
+                Slot = GearSlot.Trinket,
+                Tier = 2,
+                Price = 700,
+                SafeBoxBonus = 1,
+                FortuneUpgradeCap = 6,
+            },
+
+            new()
+            {
+                GearName = "Tourniquet",
+                Slot = GearSlot.Trinket,
+                Tier = 2,
+                Price = 600,
+                RegenBonus = 0.6f,
+                RegenUpgradeCap = 6,
+            },
+
             // --- Armour: absorb it, or make it cost them ---------------------
 
             // Soaks. The straightforward one, and the reason it is not simply

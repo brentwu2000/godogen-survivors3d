@@ -38,7 +38,14 @@ public sealed class Profile
     /// Equipped gear by slot: armour, backpack, boots. An empty entry falls back
     /// to the starting piece, so a player can never arrive at a run with no
     /// backpack because the last one was lost.
-    public string[] EquippedGear { get; } = new string[3];
+    /// One entry per `GearSlot`, indexed by it.
+    ///
+    /// Grown from three to four with **no save version bump**. The reader stops
+    /// at whichever of the file and the array is shorter, so a three-entry save
+    /// loads with an empty trinket slot and everything else where it was — which
+    /// is exactly right, because a player who has never owned a trinket has an
+    /// empty trinket slot.
+    public string[] EquippedGear { get; } = new string[System.Enum.GetValues<GearSlot>().Length];
 
     public int RunsSurvived { get; set; }
     public int RunsLost { get; set; }

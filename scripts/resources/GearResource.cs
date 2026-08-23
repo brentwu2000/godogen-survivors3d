@@ -5,6 +5,13 @@ public enum GearSlot
     Armour,
     Backpack,
     Boots,
+
+    /// The slot that is about the kit rather than about the body.
+    ///
+    /// Appended, never inserted: the equipped-gear array is indexed by this enum
+    /// and saved by index, so a value in the middle would silently move every
+    /// existing player's boots into their backpack slot.
+    Trinket,
 }
 
 /// A piece of equipment: where a run starts, and how far it can climb.
@@ -83,9 +90,24 @@ public partial class GearResource : Resource
     /// Chance to take nothing from an incoming tick.
     [Export] public float DodgeBonus { get; set; }
 
+    /// What a trinket adds to the kit a run starts with.
+    ///
+    /// Separate from the rule bonuses above because these are not rules — a
+    /// blade is an object in the world, and starting a run with one is a
+    /// different kind of head start from starting with more pierce.
+    [Export] public int OrbitBonus { get; set; }
+    [Export] public int ShockwaveBonus { get; set; }
+    [Export] public float ChainBonus { get; set; }
+    [Export] public float ChillBonus { get; set; }
+
     /// Named for the growth option each one raises, because the pairing is the
     /// point: a piece that grants a rule the run cannot then stack is a piece
     /// whose identity stops mattering after the first minute.
+    [Export] public int OrbitUpgradeCap { get; set; } = -1;
+    [Export] public int ShockwaveUpgradeCap { get; set; } = -1;
+    [Export] public int ChainUpgradeCap { get; set; } = -1;
+    [Export] public int ChillUpgradeCap { get; set; } = -1;
+
     [Export] public int PierceUpgradeCap { get; set; } = -1;
     [Export] public int CritUpgradeCap { get; set; } = -1;
     [Export] public int AreaUpgradeCap { get; set; } = -1;
