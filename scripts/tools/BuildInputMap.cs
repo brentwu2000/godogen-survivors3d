@@ -23,6 +23,13 @@ public partial class BuildInputMap : SceneTree
         Define("move_left", Keys(Key.A, Key.Left));
         Define("move_right", Keys(Key.D, Key.Right));
 
+        // Turning the view without moving. `[A]`/`[D]` already turn — these exist
+        // for the player who wants to look around while walking straight, and for
+        // a left hand that is busy. Z and X because they are under the same hand
+        // as the movement keys and neither is a verb.
+        Define("view_left", Keys(Key.Z));
+        Define("view_right", Keys(Key.X));
+
         Define("fire", new Array<InputEvent>
         {
             new InputEventMouseButton { ButtonIndex = MouseButton.Left },
@@ -64,6 +71,20 @@ public partial class BuildInputMap : SceneTree
         // this file is generated, and a hand-edit to it is a change nothing
         // records the reason for.
         ProjectSettings.SetSetting("display/window/handheld/orientation", "landscape");
+
+        // The tick rate, pinned — and pinned through `SetInitialValue` first,
+        // which is not decoration. `ProjectSettings.Save()` omits any setting
+        // whose value equals its default, so writing 60 over a default of 60
+        // writes nothing and a line hand-added to project.godot disappears the
+        // next time this tool runs. Telling the settings system that the default
+        // is something else is the only way to make it serialize the value.
+        //
+        // It matters because every balance number this project has came out of a
+        // fixed-step simulation. A machine that ran at a different tick rate
+        // would produce different damage totals from the same seed, and the
+        // difference would look like a design change.
+        ProjectSettings.SetInitialValue("physics/common/physics_ticks_per_second", 30);
+        ProjectSettings.SetSetting("physics/common/physics_ticks_per_second", 60);
 
         Error err = ProjectSettings.Save();
         if (err != Error.Ok)

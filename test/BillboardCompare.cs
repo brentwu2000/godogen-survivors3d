@@ -21,6 +21,12 @@ public partial class BillboardCompare : SceneTree
 
     public override void _Initialize()
     {
+        // A comment saying "not headless" is not a check. See test/Display.cs:
+        // without one, running this headless does not fail — it spins a core
+        // forever, silently, and looks from outside exactly like a slow test.
+        if (!Display.Required(this, "BillboardCompare"))
+            return;
+
         var texture = GD.Load<Texture2D>("res://assets/sprites/player.png");
         if (texture == null)
         {

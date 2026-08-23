@@ -11,8 +11,29 @@ public partial class BuildMain : SceneTree
 {
     // Orthographic framing: the camera sits on a 24m arc and tilts down 52°,
     // which puts the horizon out of frame and keeps ground distances readable.
-    private const float CameraTiltDegrees = -52.0f;
-    private const float CameraDistance = 24.0f;
+    /// How far the camera looks down, in degrees. Negative is downward.
+    ///
+    /// Was −52°, which is most of the way to overhead and reads as a map. At −26°
+    /// the horizon is in frame, walls occlude each other, and something twenty
+    /// metres away is visibly twenty metres away. The cost is real and was paid
+    /// knowingly: less of the ground around the player is visible, so what is
+    /// behind you is genuinely hidden — which is the reason the camera turns.
+    private const float CameraTiltDegrees = -26.0f;
+
+    /// Metres back along the view axis. At the tilt above this puts the eye
+    /// 5.7 m up and 11.7 m behind, which frames the player in the lower third
+    /// with the direction of travel filling the rest.
+    private const float CameraDistance = 13.0f;
+
+    /// Vertical field of view. Wide enough that the periphery still carries
+    /// information, narrow enough not to bend straight walls at the edges.
+    private const float CameraFov = 52.0f;
+
+    /// Near plane close enough that a wall the player is against does not clip
+    /// away, far plane past the fog — see the depth fog in the environment, which
+    /// is what actually ends the view.
+    private const float CameraNear = 0.15f;
+    private const float CameraFar = 260.0f;
 
     /// Vertical extent of the view in world units. 18 keeps a 2.2m character
     /// around 130px on a 1080p viewport while still showing roughly 32x18m of
@@ -188,12 +209,17 @@ public partial class BuildMain : SceneTree
     {
         var rig = new Node3D { Name = "CameraRig" };
 
+        // Local to the rig, so the rig's yaw carries it. The camera itself is
+        // never rotated about Y and never moved — every bit of "where am I
+        // looking" lives in one place, on the parent.
         float tilt = Mathf.DegToRad(-CameraTiltDegrees);
         rig.AddChild(new Camera3D
         {
             Name = "Camera",
-            Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = OrthoSize,
+            Projection = Camera3D.ProjectionType.Perspective,
+            Fov = CameraFov,
+            Near = CameraNear,
+            Far = CameraFar,
             Position = new Vector3(0.0f, CameraDistance * Mathf.Sin(tilt), CameraDistance * Mathf.Cos(tilt)),
             RotationDegrees = new Vector3(CameraTiltDegrees, 0.0f, 0.0f),
         });

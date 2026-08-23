@@ -34,6 +34,12 @@ public partial class Screenshot : SceneTree
 
     public override void _Initialize()
     {
+        // A comment saying "not headless" is not a check. See test/Display.cs:
+        // without one, running this headless does not fail — it spins a core
+        // forever, silently, and looks from outside exactly like a slow test.
+        if (!Display.Required(this, "Screenshot"))
+            return;
+
         var scene = GD.Load<PackedScene>(ScenePath)?.Instantiate();
         if (scene == null)
         {

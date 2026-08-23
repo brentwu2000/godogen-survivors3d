@@ -29,6 +29,12 @@ public partial class DebriefShot : SceneTree
 
     public override void _Initialize()
     {
+        // A comment saying "not headless" is not a check. See test/Display.cs:
+        // without one, running this headless does not fail — it spins a core
+        // forever, silently, and looks from outside exactly like a slow test.
+        if (!Display.Required(this, "DebriefShot"))
+            return;
+
         var scene = GD.Load<PackedScene>("res://scenes/Main.tscn")?.Instantiate();
         if (scene == null)
         {

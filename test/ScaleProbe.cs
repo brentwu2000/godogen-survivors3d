@@ -5,11 +5,22 @@ using Godot;
 /// instead of guessed from a screenshot.
 ///
 ///   godot --script test/ScaleProbe.cs
+///
+/// Needs a real display — it exists to be looked at.
 public partial class ScaleProbe : SceneTree
 {
-    private const float CameraTiltDegrees = -52.0f;
-    private const float CameraDistance = 24.0f;
-    private const float OrthoSize = 8.0f;
+    /// The game camera, copied. Kept in step with `BuildMain` by hand, which is
+    /// tolerable only because being *wrong* here is self-announcing: the whole
+    /// point of the tool is that the poles are known to be 2 m, so a camera that
+    /// does not match the game's produces a picture that visibly disagrees with
+    /// the game.
+    ///
+    /// Closer than the game's 13 m because this is three objects on an empty
+    /// plane rather than an arena, and the tilt is the game's so foreshortening
+    /// reads the same.
+    private const float CameraTiltDegrees = -26.0f;
+    private const float CameraDistance = 7.0f;
+    private const float CameraFov = 52.0f;
     private const float ReferenceHeight = 2.0f;
 
     private const int WarmupFrames = 5;
@@ -18,6 +29,19 @@ public partial class ScaleProbe : SceneTree
 
     public override void _Initialize()
     {
+        // Headless is not slow here, it is fatal, and it fails in the worst
+        // available way. With no display there is no root viewport texture, so
+        // `GetImage()` below throws; Godot prints the exception and carries on to
+        // the next frame, which means `return true` — the only thing that ever
+        // quits this script — is never reached. The result is a process pinned at
+        // 100% of a core forever, printing nothing.
+        //
+        // Four of them were found running at once on this machine, from sweeps
+        // going back two days, and between them they were holding four cores. The
+        // sweep that started them looked like it was still working.
+        if (!Display.Required(this, "ScaleProbe"))
+            return;
+
         Texture2DArray? zombie = HordeRenderer.LoadArray(new[] { "res://assets/sprites/enemies/walker.png" });
         var walker = GD.Load<EnemyTypeResource>("res://resources/enemies/walker.tres");
         var player = GD.Load<Texture2D>("res://assets/sprites/player.png");
@@ -34,8 +58,8 @@ public partial class ScaleProbe : SceneTree
         float tilt = Mathf.DegToRad(-CameraTiltDegrees);
         root.AddChild(new Camera3D
         {
-            Projection = Camera3D.ProjectionType.Orthogonal,
-            Size = OrthoSize,
+            Projection = Camera3D.ProjectionType.Perspective,
+            Fov = CameraFov,
             Position = new Vector3(0.0f, CameraDistance * Mathf.Sin(tilt), CameraDistance * Mathf.Cos(tilt)),
             RotationDegrees = new Vector3(CameraTiltDegrees, 0.0f, 0.0f),
         });
@@ -100,9 +124,24 @@ public partial class ScaleProbe : SceneTree
         if (++_frame < WarmupFrames)
             return false;
 
-        Image image = GetRoot().GetTexture().GetImage();
-        image.SavePng(ProjectSettings.GlobalizePath("res://screenshots/scale_probe.png"));
-        GD.Print("Wrote screenshots/scale_probe.png");
+        // Wrapped, and the catch quits rather than rethrowing. An exception on
+        // the way out of a `SceneTree` script does not stop the script — the
+        // frame is abandoned and the next one starts — so any failure between
+        // here and the `return true` below is a failure that runs forever. The
+        // guard in `_Initialize` covers the one cause known to happen; this
+        // covers the ones that are not known yet.
+        try
+        {
+            Image image = GetRoot().GetTexture().GetImage();
+            image.SavePng(ProjectSettings.GlobalizePath("res://screenshots/scale_probe.png"));
+            GD.Print("Wrote screenshots/scale_probe.png");
+        }
+        catch (System.Exception e)
+        {
+            GD.PushError($"ScaleProbe could not write its picture: {e.Message}");
+            Quit(1);
+        }
+
         return true;
     }
 }

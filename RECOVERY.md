@@ -6,6 +6,20 @@ precisely because the knowledge of *what* was lost lives in a chat session that 
 
 Read this before starting work. Update it as phases land.
 
+### Rebuilt so far
+
+| Done | What | Commit |
+| :--- | :--- | :--- |
+| ✅ B1 | Export that reads the build back | `2245607` |
+| ✅ B13 | Limiter on the master bus | `d8fd10f` |
+| ✅ A1 A2 B8 | Turnable third-person camera, turn-and-advance, `BotDrive` | this one |
+
+**Next: A3** (solid low-poly bodies), then A5 A6 A8, then B2 onward.
+
+A1, A2 and B8 had to land together. A2 is what breaks every automated driver and B8 is the repair,
+so shipping either alone leaves the repository with no working balance signal — which is the state
+that made the last measurement worthless.
+
 ---
 
 ## What happened
@@ -380,4 +394,8 @@ dotnet build && godot --headless --import && godot --headless --quit
 Then the probes named in each entry, then the full sweep. `AutoPlay` and `BalanceSweep` are the only
 balance signal and are worthless until B8.
 
-`TouchProbe` needs a real display and never runs headless.
+`TouchProbe` needs a real display and never runs headless. So do the five capture scripts —
+`ScaleProbe`, `Screenshot`, `BaseShot`, `DebriefShot`, `BillboardCompare`. They used to say so in a
+comment and then **hang forever** when run headless anyway, spinning a core and printing nothing; a
+sweep that started one looked like it was still working. Four were found alive at once, from runs two
+days apart. They refuse now — see `test/Display.cs`.

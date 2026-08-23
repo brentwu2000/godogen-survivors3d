@@ -16,7 +16,6 @@ using Godot;
 public partial class Presentation : SceneTree
 {
     private const float ArriveDistance = 1.2f;
-    private const float AxisDeadzone = 0.25f;
 
     // Compressed pacing, for the camera only.
     private const int OpeningHorde = 44;
@@ -49,6 +48,7 @@ public partial class Presentation : SceneTree
     private const float OpeningIntensity = 0.4f;
 
     private Player _player = null!;
+    private CameraRig? _rig;
     private Horde _horde = null!;
     private RunDirector _director = null!;
     private ExtractionZone _extraction = null!;
@@ -115,6 +115,7 @@ public partial class Presentation : SceneTree
         {
             Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
             _player = scene.GetNode<Player>("Player");
+            _rig = scene.GetNodeOrNull<CameraRig>("CameraRig");
             _horde = scene.GetNode<Horde>("Horde");
             _director = scene.GetNode<RunDirector>("RunDirector");
             _extraction = scene.GetNode<RunDirector>("RunDirector").PrimaryPad!;
@@ -225,25 +226,10 @@ public partial class Presentation : SceneTree
             return true;
         }
 
-        Vector2 direction = Navigate(target);
-        Set("move_right", direction.X > AxisDeadzone);
-        Set("move_left", direction.X < -AxisDeadzone);
-        Set("move_down", direction.Y > AxisDeadzone);
-        Set("move_up", direction.Y < -AxisDeadzone);
+        // See `BotDrive`: the horizontal keys turn the view now, so the old
+        // four-key decomposition steered this straight into a spin.
+        BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f);
         return false;
-    }
-
-    private static void Set(string action, bool pressed)
-    {
-        if (pressed)
-        {
-            if (!Input.IsActionPressed(action))
-                Input.ActionPress(action);
-        }
-        else if (Input.IsActionPressed(action))
-        {
-            Input.ActionRelease(action);
-        }
     }
 
     /// Direction to walk toward `target`, routed around cover.
@@ -301,12 +287,5 @@ public partial class Presentation : SceneTree
     private FlowField? _navField;
     private Vector3 _navTarget = new(float.MaxValue, 0.0f, float.MaxValue);
 
-    private static void Release()
-    {
-        foreach (string action in new[] { "move_up", "move_down", "move_left", "move_right" })
-        {
-            if (Input.IsActionPressed(action))
-                Input.ActionRelease(action);
-        }
-    }
+    private static void Release() => BotDrive.Release();
 }

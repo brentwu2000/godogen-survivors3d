@@ -17,10 +17,10 @@ using Godot;
 public partial class AutoPlay : SceneTree
 {
     private const float ArriveDistance = 1.2f;
-    private const float AxisDeadzone = 0.25f;
     private const int LegTimeoutTicks = 60 * 60;   // one minute per leg
 
     private Player _player = null!;
+    private CameraRig? _rig;
     private Horde _horde = null!;
     private RunDirector _director = null!;
     private ExtractionZone _extraction = null!;
@@ -552,6 +552,7 @@ public partial class AutoPlay : SceneTree
         }
 
         _player = player;
+        _rig = scene.GetNodeOrNull<CameraRig>("CameraRig");
         _horde = horde;
         _director = director;
         _extraction = director.PrimaryPad!;
@@ -856,33 +857,18 @@ public partial class AutoPlay : SceneTree
     /// the first wall between it and the crate and reports the route as blocked.
     /// A player looks at the screen and goes around, and the closest thing to
     /// that this project already owns is the field.
-    private void Steer(Vector3 target)
-    {
-        Vector2 direction = Navigate(target);
-
-        Set("move_right", direction.X > AxisDeadzone);
-        Set("move_left", direction.X < -AxisDeadzone);
-        Set("move_down", direction.Y > AxisDeadzone);
-        Set("move_up", direction.Y < -AxisDeadzone);
-    }
-
-    private static void Set(string action, bool pressed)
-    {
-        if (pressed)
-        {
-            if (!Input.IsActionPressed(action))
-                Input.ActionPress(action);
-        }
-        else if (Input.IsActionPressed(action))
-        {
-            Input.ActionRelease(action);
-        }
-    }
+    ///
+    /// The four-key decomposition that used to live here is gone: under
+    /// turn-and-advance the horizontal keys turn the view rather than strafing,
+    /// so a direction no longer decomposes into independent axes. `BotDrive`
+    /// owns the conversion and the reason.
+    private void Steer(Vector3 target) => BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f);
 
     private static void Release()
     {
-        foreach (string action in new[]
-                 { "move_up", "move_down", "move_left", "move_right", "pick_1", "pick_2", "pick_3" })
+        BotDrive.Release();
+
+        foreach (string action in new[] { "pick_1", "pick_2", "pick_3" })
         {
             if (Input.IsActionPressed(action))
                 Input.ActionRelease(action);

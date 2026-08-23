@@ -4,6 +4,19 @@ public partial class Player : CharacterBody3D
 {
     [Export] public float MoveSpeed { get; set; } = 6.0f;
 
+    /// Whether the horizontal stick turns the view instead of strafing.
+    ///
+    /// True is the game. False is the eight-way scheme this project had for
+    /// twenty-nine phases, kept working rather than deleted — it is the only way
+    /// to answer "is this the controls or is this the thing I just changed" when
+    /// a movement bug shows up, and a scheme that has rotted in a branch nobody
+    /// runs cannot answer anything.
+    [Export] public bool TurnToSteer { get; set; } = true;
+
+    /// Degrees per second `[A]`/`[D]` turn the view. Read off the rig so the
+    /// movement keys and the view keys cannot end up at different rates.
+    private float TurnRateDegrees => _rig?.TurnRateDegrees ?? 150.0f;
+
     /// Higher settles onto the target velocity faster. This is a rate, not a
     /// per-tick fraction — see the damping note in _PhysicsProcess.
     [Export] public float AccelerationRate { get; set; } = 14.0f;
@@ -63,6 +76,7 @@ public partial class Player : CharacterBody3D
     // Both are assigned in _Ready, which always runs before anything reads them.
     private IInputSource _input = null!;
     private Sprite3D _sprite = null!;
+    private CameraRig? _rig;
     private WeaponHandler? _weapons;
     private Horde? _horde;
 
@@ -80,6 +94,7 @@ public partial class Player : CharacterBody3D
         _sprite = GetNode<Sprite3D>("Sprite");
         _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
+        _rig = GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
         Health = MaxHealth;
         Backpack = new Inventory(CarryCapacity);
@@ -400,7 +415,7 @@ public partial class Player : CharacterBody3D
         if (Mods.Regen > 0.0f && IsAlive)
             Heal(Mods.Regen * (float)delta);
 
-        Vector2 move = _input.Move;
+        Vector2 move = Steer(_input.Move, (float)delta);
         float speed = AdrenalineActive ? MoveSpeed * (1.0f + AdrenalineBoost) : MoveSpeed;
         var desired = new Vector3(move.X, 0.0f, move.Y) * speed;
 
@@ -429,11 +444,60 @@ public partial class Player : CharacterBody3D
             _weapons?.SwapWeapon();
     }
 
+    /// Turns the stick into a world-space direction to travel in.
+    ///
+    /// Under `TurnToSteer` the horizontal axis is not movement at all: it spends
+    /// itself on the camera rig, and the vertical axis advances along whatever
+    /// direction that leaves the view pointing. Two keys, one heading — which is
+    /// why the scheme is worth the disruption. Under the old scheme the player
+    /// could be running north while looking east, and every piece of art in the
+    /// game had to work from every angle at once because any angle was reachable
+    /// without turning.
+    ///
+    /// **This breaks every automated driver in the repository**, and that is not
+    /// a side effect to be worked around — it is the same break a player feels.
+    /// A driver that decomposes a world direction into four keys will hold the
+    /// turn key forever and never advance. See `test/BotDrive.cs`, which is the
+    /// one place the conversion back is written.
+    ///
+    /// Returns the XZ direction to move in, unnormalised — the stick's magnitude
+    /// is a throttle and a virtual stick pushed halfway should walk.
+    public Vector2 Steer(Vector2 stick, float step)
+    {
+        if (!TurnToSteer || _rig == null)
+            return stick;
+
+        // Negated: pushing right turns the view clockwise seen from above, which
+        // is the direction the world appears to swing left. Getting this backwards
+        // is not subtle and is also not caught by any test that only checks
+        // whether the player moved.
+        if (stick.X != 0.0f)
+            _rig.Turn(-stick.X * Mathf.DegToRad(TurnRateDegrees) * step);
+
+        // Negated for the same reason `move_up` is −Y: the stick's vertical axis
+        // is screen-space and points down.
+        return _rig.Forward() * -stick.Y;
+    }
+
     /// One sprite direction, mirrored at runtime. Generators cannot reliably draw
     /// a specific facing (SKILL.md:109), so paying for a mirrored set buys
     /// nothing a flip does not.
+    ///
+    /// Under `TurnToSteer` the facing is the view, full stop — not the stick and
+    /// not the mouse. It has to be: the player standing still and turning is
+    /// aiming, and a facing that only updated while moving would leave a swing at
+    /// empty air going wherever the last step went. The mouse gave up aiming for
+    /// this and got turning instead; `CameraRig._UnhandledInput` says why.
     private void UpdateFacing()
     {
+        if (TurnToSteer && _rig != null)
+        {
+            Facing = _rig.Forward();
+            if (Mathf.Abs(Facing.X) > 0.05f)
+                _sprite.FlipH = Facing.X < 0.0f;
+            return;
+        }
+
         Vector2 facing = _input.Aim != Vector2.Zero ? _input.Aim : _input.Move;
         if (facing == Vector2.Zero)
             return;
