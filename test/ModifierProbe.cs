@@ -354,13 +354,33 @@ public partial class ModifierProbe : SceneTree
 
     /// Everything an upgrade could have moved, as one string. Cheap, and it does
     /// not need to know which field any given card touches.
+    /// Everything a card could move, as one string.
+    ///
+    /// The modifier fields come from reflection, not from a list. This method
+    /// used to name all eighteen by hand — and four new ones were added, wired up
+    /// correctly, and reported as changing nothing, because the *fingerprint* had
+    /// not been updated. The stage exists to catch a card wired to nothing and it
+    /// failed by being wired to nothing itself.
+    ///
+    /// That is the same hole `RunModifiers.Reset` had on the same day. Any place
+    /// that enumerates the fields of a growing type by hand will eventually be
+    /// out of date, and a test written that way goes stale in exactly the
+    /// direction that hides the bug.
     private string Fingerprint()
     {
-        RunModifiers m = _player!.Mods;
-        return $"{_player.MaxHealth:F2}|{_player.Armour:F2}|{_player.MoveSpeed:F3}|{_player.SearchSpeed:F3}|" +
-               $"{_weapons!.RunUpgrades}|{m.Pierce}|{m.CritChance:F3}|{m.AttackDelayScale:F3}|" +
-               $"{m.AreaScale:F3}|{m.Knockback:F2}|{m.IgniteChance:F3}|{m.DetonateChance:F3}|" +
-               $"{m.Lifesteal:F2}|{m.Regen:F2}|{m.Dodge:F3}|{m.Thorns:F2}|" +
-               $"{m.SearchRadiusBonus:F2}|{m.LootValueScale:F3}";
+        var text = new System.Text.StringBuilder();
+
+        // The four the player owns rather than the modifier block.
+        text.Append($"{_player!.MaxHealth:F2}|{_player.Armour:F2}|");
+        text.Append($"{_player.MoveSpeed:F3}|{_player.SearchSpeed:F3}|{_weapons!.RunUpgrades}|");
+
+        RunModifiers m = _player.Mods;
+        foreach (System.Reflection.FieldInfo field in typeof(RunModifiers).GetFields(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            text.Append(field.GetValue(m)).Append('|');
+        }
+
+        return text.ToString();
     }
 }

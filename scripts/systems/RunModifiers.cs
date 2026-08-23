@@ -67,9 +67,37 @@ public sealed class RunModifiers
     /// Multiplies the value of everything pulled out of a crate.
     public float LootValueScale = 1.0f;
 
+    /// Blades circling the player. Each one is a real object with a reach of its
+    /// own; see `RunKit`.
+    public int OrbitBlades;
+
+    /// Stacks of the shockwave, which is a pulse rather than a number — more
+    /// stacks means a shorter wait, a wider ring and a harder push.
+    public int PulseStacks;
+
+    /// Chance a hit arcs to a second enemy nearby, and the fraction of the
+    /// damage that arrives there.
+    public float ChainChance;
+
+    /// How much slower an enemy moves near the player, 0 to just under 1.
+    ///
+    /// Never reaches 1. Compounds multiplicatively per stack so it approaches a
+    /// limit rather than crossing it — an enemy stopped dead is not a threat
+    /// managed, it is a free kill standing still.
+    public float Chill;
+
     /// Rolls each contract, record and payout untouched — this is the one thing
     /// a run upgrade may not reach, for the same reason practice is not for
     /// sale: what is earned outside the run stays outside it.
+    /// Back to a fresh run.
+    ///
+    /// Every field named explicitly, which is the readable way to write it and
+    /// the one that silently misses anything added later. The four kit fields
+    /// below were added and not listed, and the symptom was not a compile error
+    /// or a warning — it was three orbiting blades surviving into a run that had
+    /// not bought any, killing an enemy in a test that had switched them off.
+    ///
+    /// `KitProbe` walks this by reflection now, so a fifth field cannot repeat it.
     public void Reset()
     {
         Pierce = 0;
@@ -86,5 +114,10 @@ public sealed class RunModifiers
         Thorns = 0.0f;
         SearchRadiusBonus = 0.0f;
         LootValueScale = 1.0f;
+
+        OrbitBlades = 0;
+        PulseStacks = 0;
+        ChainChance = 0.0f;
+        Chill = 0.0f;
     }
 }

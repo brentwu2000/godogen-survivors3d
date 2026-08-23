@@ -122,6 +122,16 @@ public partial class BuildMain : SceneTree
         root.AddChild(BuildHorde());
         root.AddChild(BuildRunDirector());
 
+        // Beside the player, never under it.
+        //
+        // A child inherits the body's yaw, and the player's body turns to face
+        // the view — so a parented ring would spin with the character and the
+        // blades would appear to hang motionless relative to whatever the player
+        // was looking at. The ring belongs to the world; it follows the player's
+        // position and ignores their rotation.
+        var kit = new Node3D { Name = "RunKit" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(kit, "res://scripts/nodes/RunKit.cs"));
+
         // After the horde, whose kill event it subscribes to, and before the meta
         // manager, which hands it the caps the equipped gear allows.
         var growth = new Node { Name = "RunGrowth" };

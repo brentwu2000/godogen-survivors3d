@@ -26,6 +26,16 @@ public enum GrowthOption
     Thorns,
     Reach,
     Fortune,
+
+    // Kit rather than numbers or rules. The deck had two kinds of card: a bigger
+    // number, or a rule about how the weapon resolves — and both of them were
+    // still the weapon. These four fight on their own, so a run can be built
+    // around something the weapon does not do, and a dry magazine stops being
+    // the end of the run.
+    Orbit,
+    Shockwave,
+    Chain,
+    Chill,
 }
 
 /// How common a pick is in the deck, and therefore how much it is allowed to do.
@@ -33,6 +43,12 @@ public enum GrowthRarity
 {
     Common,
     Rare,
+
+    /// A piece of kit. Rarer than a rule, because one of these changes what the
+    /// run *is* rather than how well it does the same thing — and because four
+    /// new entries at common weight would have quietly halved how often the
+    /// weapon itself came up.
+    Kit,
 }
 
 /// In-run growth: kills buy levels, levels buy a choice, and gear decides how
@@ -71,6 +87,18 @@ public partial class RunGrowth : Node
     /// per stack, so seeing one is the run's good news rather than its baseline.
     [Export] public float CommonWeight { get; set; } = 1.0f;
     [Export] public float RareWeight { get; set; } = 0.34f;
+
+    /// Kit is rarer than a rule and much rarer than a number.
+    [Export] public float KitWeight { get; set; } = 0.9f;
+
+    /// The weapon draws heavily, and has to.
+    ///
+    /// Every other option is a modifier on top of a weapon that has to be able to
+    /// kill things; a deck where the weapon is one row of twenty-one produces
+    /// runs with eight rules and a starting rifle. At 4.8 against eighteen other
+    /// entries it is about a fifth of draws, which is where it was before the kit
+    /// cards diluted it.
+    [Export] public float WeaponWeight { get; set; } = 4.8f;
 
     public int Level { get; private set; }
     public float Experience { get; private set; }
@@ -203,15 +231,46 @@ public partial class RunGrowth : Node
         GrowthOption.Thorns => 3,
         GrowthOption.Reach => 3,
         GrowthOption.Fortune => 3,
+
+        // Kit caps are low. Each stack is a visible object in the world doing
+        // something on its own, and five blades already draw a ring the player
+        // fights inside — a tenth would be a build with no decisions left in it.
+        GrowthOption.Orbit => 5,
+        GrowthOption.Shockwave => 4,
+        GrowthOption.Chain => 4,
+
+        // Three, because chill compounds. A fourth stack would be most of the way
+        // to stopping a walker dead, and an enemy that cannot move is not a
+        // threat that has been managed, it is a free kill standing still.
+        GrowthOption.Chill => 3,
+
         _ => 3,
     };
 
     public static GrowthRarity RarityOf(GrowthOption option) => option switch
     {
+        GrowthOption.Orbit or GrowthOption.Shockwave
+            or GrowthOption.Chain or GrowthOption.Chill => GrowthRarity.Kit,
+
         GrowthOption.Crit or GrowthOption.Ignite or GrowthOption.Detonate
             or GrowthOption.Lifesteal or GrowthOption.Dodge or GrowthOption.Fortune => GrowthRarity.Rare,
+
         _ => GrowthRarity.Common,
     };
+
+    /// How heavily an option is drawn.
+    ///
+    /// The weapon is named separately rather than given a rarity of its own,
+    /// because rarity here means "how much is this allowed to do" and the weapon
+    /// is not allowed to do more than the others — it just has to keep turning up.
+    public float WeightOf(GrowthOption option) => option == GrowthOption.WeaponLevel
+        ? WeaponWeight
+        : RarityOf(option) switch
+        {
+            GrowthRarity.Kit => KitWeight,
+            GrowthRarity.Rare => RareWeight,
+            _ => CommonWeight,
+        };
 
     private void OnEnemyKilled(int type, byte elite, Vector3 position)
     {
@@ -290,6 +349,21 @@ public partial class RunGrowth : Node
             case GrowthOption.Thorns: if (mods != null) mods.Thorns += 4.0f; break;
             case GrowthOption.Reach: if (mods != null) mods.SearchRadiusBonus += 0.8f; break;
             case GrowthOption.Fortune: if (mods != null) mods.LootValueScale += 0.15f; break;
+
+            case GrowthOption.Orbit: if (mods != null) mods.OrbitBlades += 1; break;
+            case GrowthOption.Shockwave: if (mods != null) mods.PulseStacks += 1; break;
+            case GrowthOption.Chain: if (mods != null) mods.ChainChance += 0.18f; break;
+
+            // Multiplicative, so stacking approaches a limit instead of crossing
+            // it. Additive at 17% a stack, three stacks is 51% and a fourth would
+            // be most of the way to stopping a walker dead — and an enemy that
+            // cannot move is not a threat managed, it is a free kill standing
+            // still.
+            case GrowthOption.Chill:
+                if (mods != null)
+                    mods.Chill = 1.0f - (1.0f - mods.Chill) * 0.83f;
+
+                break;
         }
     }
 
@@ -348,7 +422,7 @@ public partial class RunGrowth : Node
             if (!IsAvailable(option))
                 continue;
 
-            float weight = RarityOf(option) == GrowthRarity.Rare ? RareWeight : CommonWeight;
+            float weight = WeightOf(option);
             pool[count] = option;
             weights[count] = weight;
             total += weight;
@@ -398,6 +472,10 @@ public partial class RunGrowth : Node
     public string Describe(GrowthOption option) => option switch
     {
         GrowthOption.WeaponLevel => $"weapon +1 ({_weapons?.Level ?? 0}/{_weapons?.MaxLevel ?? 0})",
+        GrowthOption.Orbit => "+1 orbiting blade",
+        GrowthOption.Shockwave => "+1 shockwave stack",
+        GrowthOption.Chain => "+18% chance a hit arcs",
+        GrowthOption.Chill => "enemies near you slow down",
         GrowthOption.MaxHealth => $"+{HealthPerPick:F0} max HP",
         GrowthOption.Armour => $"+{ArmourPerPick:F0} armour",
         GrowthOption.MoveSpeed => $"+{MoveSpeedPerPick * 100.0f:F0}% speed",

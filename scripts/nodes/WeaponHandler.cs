@@ -463,7 +463,7 @@ public partial class WeaponHandler : Node3D
                 Vector3 where = _horde.Pool.Position[index];
                 _horde.Damage(index, damage, direction * knockback);
                 ApplyBleed(weapon, index);
-                RecordHit(weapon.Category, where);
+                RecordHit(weapon.Category, where, damage);
             }
 
             // Cleave: the same reach, behind as well, for a fraction of the
@@ -554,7 +554,7 @@ public partial class WeaponHandler : Node3D
             Vector3 where = _horde.Pool.Position[index];
             _horde.Damage(index, damage, shot * knockback);
             ApplyBleed(weapon, index);
-            RecordHit(weapon.Category, where);
+            RecordHit(weapon.Category, where, damage);
             remaining--;
         }
     }
@@ -610,7 +610,7 @@ public partial class WeaponHandler : Node3D
             Vector3 nextPosition = next >= 0 ? _horde.Pool.Position[next] : Vector3.Zero;
 
             _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
-            RecordHit(WeaponCategory.BowCrossbow, position);
+            RecordHit(WeaponCategory.BowCrossbow, position, Projectiles.Damage[i]);
 
             // Detonate where it connected, and stop.
             //
@@ -664,11 +664,55 @@ public partial class WeaponHandler : Node3D
             _horde!.ApplyBleed(index, weapon.TraitAmount, weapon.TraitCount);
     }
 
-    private void RecordHit(WeaponCategory category, Vector3 where)
+    private void RecordHit(WeaponCategory category, Vector3 where) =>
+        RecordHit(category, where, 0.0f);
+
+    /// A hit landed, and possibly a second one nearby.
+    ///
+    /// `damage` is what the original hit did, so the arc can be a fraction of it
+    /// rather than a flat number that is enormous early and irrelevant late.
+    /// Passed as zero from the paths that have no meaningful figure — a swing
+    /// that already resolved, a tracer — and the arc simply does not fire.
+    private void RecordHit(WeaponCategory category, Vector3 where, float damage)
     {
         _hits[(int)category]++;
         Hit?.Invoke(where);
+
+        if (damage <= 0.0f || Mods.ChainChance <= 0.0f || _horde == null)
+            return;
+
+        if (NextFloat() >= Mods.ChainChance)
+            return;
+
+        // Excluded by *distance*, not by index. A kill swap-removes the last
+        // enemy into the dead one's slot, so passing "the index just hit" to an
+        // exclusion excludes whoever took its place — and with two enemies on
+        // the field that is reliably the only candidate, so the arc silently
+        // never fires. Same family of bug as the ricochet's stale index.
+        int next = _horde.NearestOutside(where, ChainRange, ChainMinimumGap);
+        if (next < 0)
+            return;
+
+        // One jump, never two. The arc damages through `Horde.Damage` and
+        // announces itself here rather than calling back into `RecordHit`, which
+        // would let a chain chain — a chance-based effect that can re-trigger
+        // itself has a tail nobody chose and a frame cost nobody measured.
+        Vector3 to = _horde.Pool.Position[next];
+        _horde.Damage(next, damage * ChainFraction, Vector2.Zero);
+        _hits[(int)category]++;
+        Hit?.Invoke(to);
     }
+
+    /// How far an arc will reach. Short, like the ricochet: this is a crowd
+    /// effect, and one that can cross the arena is a second weapon.
+    private const float ChainRange = 4.5f;
+
+    /// How much of the original hit arrives at the second target.
+    private const float ChainFraction = 0.45f;
+
+    /// How far away the second target has to be. Enough to be a different enemy
+    /// rather than the same one measured from a slightly different point.
+    private const float ChainMinimumGap = 0.6f;
 
     /// Rotates the shot by a uniform angle inside the cone. Deterministic and
     /// allocation-free, so a capture run reproduces exactly.

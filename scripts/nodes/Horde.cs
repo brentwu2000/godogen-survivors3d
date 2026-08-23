@@ -50,6 +50,14 @@ public partial class Horde : Node3D
     /// How close a spitter's shot has to pass to count as a hit.
     [Export] public float EnemyProjectileRadius { get; set; } = 0.6f;
 
+    /// How close to the player chill has any effect, in metres.
+    ///
+    /// A radius rather than the whole arena. Chill is a card about controlling
+    /// the space you are standing in — applied everywhere it would be a global
+    /// speed debuff, which is the same thing as making every enemy slower and
+    /// has no positioning in it at all.
+    [Export] public float ChillRadius { get; set; } = 7.5f;
+
     [Export] public float SeparationRadius { get; set; } = 0.75f;
     [Export] public float SeparationStrength { get; set; } = 8.0f;
 
@@ -585,6 +593,20 @@ public partial class Horde : Node3D
 
             Vector2 velocity = desired * type.MoveSpeed * SpeedScale * Elites.SpeedScale(Pool.Elite[i]);
 
+            // Chill, strongest at the player and gone at the edge of its radius.
+            //
+            // A gradient rather than a circle with a hard edge: the card is about
+            // the ground immediately around the player getting sticky, and a step
+            // change would let an enemy cross from full speed to a crawl between
+            // two frames, which reads as the game stuttering rather than as
+            // something the player did.
+            if (_player is Player { Mods.Chill: > 0.0f } chilled)
+            {
+                float toPlayer = Mathf.Sqrt(FlatDistanceSquared(position, chilled.GlobalPosition));
+                float strength = 1.0f - Mathf.Clamp(toPlayer / Mathf.Max(0.01f, ChillRadius), 0.0f, 1.0f);
+                velocity *= 1.0f - chilled.Mods.Chill * strength;
+            }
+
             if (near)
                 velocity += Separation(i, position) * SeparationStrength;
 
@@ -878,6 +900,53 @@ public partial class Horde : Node3D
     /// The nearest enemy to a point that is not `except`. For a ricochet picking
     /// its next target — it has to be somebody new, or the arrow bounces between
     /// the corpse it just made and itself.
+    /// Every enemy inside a radius, written into `result`. Returns how many.
+    ///
+    /// Flat, like every other query here — an enemy's Y is always zero and a
+    /// three-dimensional distance would be the same number with a square root
+    /// nobody needs.
+    public int Within(Vector3 centre, float radius, int[] result)
+    {
+        int count = 0;
+        float radiusSqr = radius * radius;
+
+        for (int i = 0; i < Pool.Count && count < result.Length; i++)
+        {
+            if (FlatDistanceSquared(Pool.Position[i], centre) <= radiusSqr)
+                result[count++] = i;
+        }
+
+        return count;
+    }
+
+    /// The nearest enemy inside `radius` but at least `minDistance` away.
+    ///
+    /// By distance rather than by excluding an index, and that distinction is
+    /// load-bearing. A chain arc wants "somebody other than the one just hit",
+    /// and the obvious way to write it is to pass that index to
+    /// `NearestExcept` — which is wrong the moment the hit was a kill, because a
+    /// kill swap-removes the last enemy into the dead one's slot and the index
+    /// now names whoever took its place. With two enemies on the field that is
+    /// reliably the only remaining candidate, so the arc silently never fires.
+    public int NearestOutside(Vector3 point, float radius, float minDistance)
+    {
+        int best = -1;
+        float bestSqr = radius * radius;
+        float floorSqr = minDistance * minDistance;
+
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            float d = FlatDistanceSquared(Pool.Position[i], point);
+            if (d < floorSqr || d >= bestSqr)
+                continue;
+
+            bestSqr = d;
+            best = i;
+        }
+
+        return best;
+    }
+
     public int NearestExcept(Vector3 point, float radius, int except)
     {
         int best = -1;
