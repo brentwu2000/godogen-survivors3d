@@ -23,8 +23,8 @@ Set-Location $root
 # at all. Display is the guard itself.
 $skip = @(
     'Display', 'TouchProbe', 'ScaleProbe', 'Screenshot', 'BaseShot',
-    'DebriefShot', 'BillboardCompare', 'Presentation',
-    'AutoPlay', 'BalanceSweep', 'HordePerf', 'BotDrive'
+    'DebriefShot', 'BillboardCompare', 'Presentation', 'BodyShot',
+    'AutoPlay', 'BalanceSweep', 'HordePerf', 'BotDrive', 'Fresh'
 )
 
 $names = Get-ChildItem "$root\test\*.cs" |

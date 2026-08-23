@@ -44,6 +44,9 @@ public partial class ShadowProbe : SceneTree
         if (horde != null)
             horde.SolidBodies = false;
 
+        // Not the developer's save file. See `Fresh`.
+        Fresh.Profile(scene);
+
         GetRoot().AddChild(scene);
     }
 

@@ -37,6 +37,9 @@ public partial class DustProbe : SceneTree
         if (level != null)
             level.Seed = 0x51E5D0A7UL;
 
+        // Not the developer's save file. See `Fresh`.
+        Fresh.Profile(scene);
+
         GetRoot().AddChild(scene);
     }
 

@@ -154,6 +154,12 @@ public static class BodyMeshLibrary
 
         float lean = Mathf.DegToRad(spec.LeanDegrees);
         float half = spec.ShoulderWidth * 0.5f;
+        float legX = half * 0.43f;
+        float kneeY = hipY * 0.52f;
+        float armRadius = spec.LimbRadius * 0.9f;
+        float chestHeight = shoulderY - hipY;
+        Color trousers = Darken(spec.Limb, 0.72f);
+        Color shadow = Darken(spec.Head, 0.34f);
 
         // Bob is on every part, including the legs. Applying it to the torso
         // alone would lift the hips off the thighs on every footfall, and a body
@@ -162,21 +168,25 @@ public static class BodyMeshLibrary
         // centimetre gap at the hip is not.
 
         // --- legs ------------------------------------------------------------
-        // Opposite phases, which is the whole of a walk. Both pivot at the hip.
         for (int side = 0; side < 2; side++)
         {
-            float x = side == 0 ? -half * 0.45f : half * 0.45f;
-            mesh.SetRig(spec.LegSwing, hipY, side * 0.5f, spec.Bob);
+            float x = side == 0 ? -legX : legX;
+            float phase = side * 0.5f;
+            Vector3 ankle = new(x, 0.07f, -spec.LimbRadius * 0.28f);
+            Vector3 knee = new(x, kneeY, -spec.LimbRadius * 0.38f);
+            Vector3 hip = new(x, hipY, 0.0f);
 
-            mesh.Tube(new Vector3(x, 0.02f, 0.0f), new Vector3(x, hipY, 0.0f),
-                      spec.LimbRadius, spec.Limb);
+            mesh.SetRig(spec.LegSwing, hipY, phase, spec.Bob);
+            mesh.Tube(knee, hip, spec.LimbRadius * 1.05f, trousers);
 
-            // A foot, so the silhouette has a direction at ground level. Without
-            // one a body reads as standing on stilts from any distance where the
-            // legs are two pixels wide.
-            mesh.Box(new Vector3(x, 0.03f, -spec.LimbRadius * 0.8f),
-                     new Vector3(spec.LimbRadius * 2.2f, 0.06f, spec.LimbRadius * 4.0f),
-                     spec.Limb);
+            // An eighth of a turn makes the lower leg lag visibly without making
+            // the knee pop apart at full stride; a quarter-turn looked jointed in
+            // profile but opened a hand-wide gap on the runner's fastest frame.
+            mesh.SetRig(spec.LegSwing * 0.72f, kneeY, phase + 0.08f, spec.Bob);
+            mesh.Tube(ankle, knee, spec.LimbRadius * 0.88f, spec.Limb);
+            mesh.Box(new Vector3(x, 0.04f, -spec.LimbRadius * 1.25f),
+                     new Vector3(spec.LimbRadius * 2.15f, 0.08f, spec.LimbRadius * 3.9f),
+                     Darken(spec.Limb, 0.62f));
         }
 
         // --- torso -----------------------------------------------------------
@@ -188,33 +198,47 @@ public static class BodyMeshLibrary
         if (spec.Belly)
         {
             mesh.Ball(Lean(new Vector3(0.0f, (hipY + shoulderY) * 0.5f, 0.0f), lean, hipY),
-                      (shoulderY - hipY) * 0.62f, spec.Torso, 9, 6);
+                      chestHeight * 0.62f, spec.Torso, 6, 4);
         }
         else
         {
-            // A tapered chest would need two rings and this builder makes prisms,
-            // so the chest is a box: flat planes catch the directional light in a
-            // way a six-sided tube does not, and the shoulders want a hard edge.
-            float chestHeight = shoulderY - hipY;
-            mesh.Box(Lean(new Vector3(0.0f, hipY + chestHeight * 0.5f, 0.0f), lean, hipY),
-                     new Vector3(spec.ShoulderWidth, chestHeight, spec.TorsoDepth),
+            mesh.Box(Lean(new Vector3(0.0f, hipY + chestHeight * 0.60f, 0.0f), lean, hipY),
+                     new Vector3(spec.ShoulderWidth * 0.82f, chestHeight * 0.72f, spec.TorsoDepth),
                      spec.Torso);
         }
+
+        // Separating hips, ribs and shoulder line costs two boxes but removes the
+        // wardrobe silhouette: the waist can now pinch while the brute keeps the
+        // full width which is its warning at fog distance.
+        mesh.Box(Lean(new Vector3(0.0f, hipY + chestHeight * 0.10f, 0.0f), lean, hipY),
+                 new Vector3(spec.ShoulderWidth * 0.58f, chestHeight * 0.25f,
+                             spec.TorsoDepth * 0.92f), trousers);
+        mesh.Box(Lean(new Vector3(0.0f, shoulderY - chestHeight * 0.06f, 0.0f), lean, hipY),
+                 new Vector3(spec.ShoulderWidth, chestHeight * 0.20f,
+                             spec.TorsoDepth * 1.04f), Darken(spec.Torso, 0.86f));
 
         // --- head ------------------------------------------------------------
         mesh.Tube(Lean(new Vector3(0.0f, shoulderY, 0.0f), lean, hipY),
                   Lean(new Vector3(0.0f, neckY, 0.0f), lean, hipY),
                   spec.LimbRadius * 1.1f, spec.Limb);
 
-        mesh.Ball(Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY), headRadius, spec.Head, 8, 5);
+        Vector3 head = Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY);
+        mesh.Ball(head, headRadius, spec.Head, 6, 4);
+
+        // These project beyond the sphere rather than being decoration painted
+        // onto it. The jaw survives as a profile from the side; the brow makes a
+        // dark eye socket from the front when the face is only three pixels tall.
+        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.48f, -headRadius * 0.50f),
+                 new Vector3(headRadius * 1.18f, headRadius * 0.62f, headRadius * 0.72f),
+                 Darken(spec.Head, 0.78f));
+        mesh.Box(head + new Vector3(0.0f, headRadius * 0.12f, -headRadius * 0.82f),
+                 new Vector3(headRadius * 1.48f, headRadius * 0.24f, headRadius * 0.22f), shadow);
 
         // --- arms ------------------------------------------------------------
         // Counter-phased against the leg on the same side, which is what stops a
         // walk reading as a march. The pivot is the shoulder, after the lean has
         // moved it — an arm swinging about where the shoulder would have been
         // upright detaches from a leaning body at the top of every stride.
-        float armRadius = spec.LimbRadius * 0.9f;
-
         for (int side = 0; side < 2; side++)
         {
             // Clear of the torso, not flush with it. At exactly `half` the arm
@@ -225,10 +249,23 @@ public static class BodyMeshLibrary
             // arm that is not in the silhouette may as well not have been built.
             float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius);
             Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
+            // Width alone also selects the runner, whose swept-back compact arms
+            // are part of its arrowhead outline. The modest lean cutoff leaves
+            // the narrow, stooped spitter as the only body reaching below its hip.
+            float armLength = chestHeight *
+                (spec.ShoulderWidth < 0.40f && spec.LeanDegrees < 20.0f ? 1.34f : 1.16f);
+            Vector3 elbow = shoulder + new Vector3(0.0f, -armLength * 0.52f, -armRadius * 0.30f);
+            Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, armRadius * 0.18f);
+            float phase = side * 0.5f + 0.5f;
 
-            mesh.SetRig(spec.ArmSwing, shoulder.Y, side * 0.5f + 0.5f, spec.Bob);
-            mesh.Tube(shoulder, shoulder + new Vector3(0.0f, -(shoulderY - hipY) * 1.15f, 0.0f),
-                      armRadius, spec.Limb);
+            mesh.SetRig(spec.ArmSwing, shoulder.Y, phase, spec.Bob);
+            mesh.Tube(shoulder, elbow, armRadius, spec.Limb);
+
+            mesh.SetRig(spec.ArmSwing * 0.68f, elbow.Y, phase + 0.08f, spec.Bob);
+            mesh.Tube(elbow, wrist, armRadius * 0.82f, spec.Head);
+            mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.75f, -armRadius * 0.10f),
+                     new Vector3(armRadius * 1.65f, armRadius * 1.75f, armRadius * 1.25f),
+                     spec.Head);
         }
 
         mesh.ClearRig();
@@ -248,4 +285,7 @@ public static class BodyMeshLibrary
         float c = Mathf.Cos(radians), s = Mathf.Sin(radians);
         return new Vector3(point.X, y * c + hipY, -y * s);
     }
+
+    private static Color Darken(Color colour, float amount) =>
+        new(colour.R * amount, colour.G * amount, colour.B * amount, colour.A);
 }

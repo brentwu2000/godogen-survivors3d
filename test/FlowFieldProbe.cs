@@ -38,6 +38,9 @@ public partial class FlowFieldProbe : SceneTree
             return;
         }
 
+        // Not the developer's save file. See `Fresh`.
+        Fresh.Profile(scene);
+
         GetRoot().AddChild(scene);
     }
 

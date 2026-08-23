@@ -48,6 +48,9 @@ public partial class BaseShot : SceneTree
             return;
         }
 
+        // Not the developer's save file. See `Fresh`.
+        Fresh.Profile(scene);
+
         GetRoot().AddChild(scene);
     }
 
