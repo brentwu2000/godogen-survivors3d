@@ -341,14 +341,48 @@ public sealed class Profile
     }
 
     /// Returns whether anything was actually taken. Starting kit never is.
+    ///
+    /// Anything equipped falls back to the starting kit for its slot. Without
+    /// this a sold piece stays equipped: the profile carries a path it no longer
+    /// owns, the run loads it anyway, and the player has sold something and kept
+    /// wearing it. Selling and losing a run are the two ways a profile can stop
+    /// owning something, and only one of them used to have to think about it.
     public bool Revoke(string path)
     {
         if (IsStartingKit(path) || !Owns(path))
             return false;
 
         Owned.Remove(path);
+        Unequip(path);
         return true;
     }
+
+    /// Puts the starting kit back in whichever slot held `path`.
+    public void Unequip(string path)
+    {
+        for (int slot = 0; slot < EquippedGear.Length; slot++)
+        {
+            if (EquippedGear[slot] == path)
+                EquippedGear[slot] = StartingGearFor(slot);
+        }
+
+        if (LoadoutWeapon == path)
+            LoadoutWeapon = "res://resources/weapons/scavenged_rifle.tres";
+
+        if (LoadoutSecondary == path)
+            LoadoutSecondary = "res://resources/weapons/combat_knife.tres";
+    }
+
+    /// The starting piece for a gear slot, or empty for a slot the starting kit
+    /// does not fill — a sold trinket leaves the slot bare, which is correct:
+    /// there was nothing there before it was bought.
+    private static string StartingGearFor(int slot) => slot switch
+    {
+        0 => "res://resources/gear/worn_jacket.tres",
+        1 => "res://resources/gear/canvas_pack.tres",
+        2 => "res://resources/gear/scuffed_boots.tres",
+        _ => "",
+    };
 
     public void AddToStash(string itemName, int count)
     {

@@ -6,8 +6,30 @@ using Godot;
 /// sale moves where a run starts and how far it can climb, and everything above
 /// starting kit is left behind if the player dies wearing it — so the screen's
 /// real question is not "can I afford this" but "am I willing to lose it".
+///
+/// **The screen is now a panel on a room.** It used to show all of it at once
+/// and answer eight verb keys from anywhere, which made every decision cost the
+/// same: selling the stash, changing terrain and launching the run were three
+/// keys on one page. What it draws is now decided by where the player is
+/// standing in `Shelter`, and there are two verbs — `[E]` and `[C]` — that mean
+/// whatever the fitting under the player means.
+///
+/// The logic below is unchanged. Buying, equipping, contracts, rerolls, selling,
+/// terrain and the daily are the same methods they have always been; the room
+/// chooses which of them a keypress reaches, and nothing about what they do had
+/// any reason to move.
 public partial class BaseScreen : Control
 {
+    /// The room, when there is one.
+    ///
+    /// Optional so the screen still works with no shelter around it — which is
+    /// what `BaseLoopProbe` has always driven, and a probe that has to build a
+    /// room to test a purchase is a probe testing two things.
+    private Shelter? _shelter;
+
+    /// What the player is standing at. `None` when there is no room, which shows
+    /// everything — the flat screen, unchanged, as a fallback.
+    private Fitting Focus => _shelter?.Focus ?? Fitting.None;
     private Label _screen = null!;
     private Label _side = null!;
     private Profile _profile = null!;
@@ -28,6 +50,10 @@ public partial class BaseScreen : Control
 
         _profile = SaveSystem.Load();
         _catalogue = new ShopCatalogue();
+        _shelter = GetParent()?.GetNodeOrNull<Shelter>("Shelter");
+
+        if (_shelter != null)
+            _shelter.FocusChanged += _ => Redraw();
 
         // A player who has never played goes straight into a run.
         //
@@ -60,32 +86,74 @@ public partial class BaseScreen : Control
             Move(1);
         else if (Input.IsActionJustPressed("ui_up"))
             Move(-1);
-        else if (Input.IsActionJustPressed("ui_accept"))
-            Choose();
-        else if (Input.IsActionJustPressed("menu_sell"))
-            SellStash();
-        else if (Input.IsActionJustPressed("menu_launch"))
-            Launch();
         else if (Input.IsActionJustPressed("pick_1"))
             TakeContract(0);
         else if (Input.IsActionJustPressed("pick_2"))
             TakeContract(1);
         else if (Input.IsActionJustPressed("pick_3"))
             TakeContract(2);
-        else if (Input.IsActionJustPressed("menu_reroll"))
-            Reroll();
-        else if (Input.IsActionJustPressed("menu_biome"))
-            CycleBiome();
-        else if (Input.IsActionJustPressed("menu_daily"))
-            LaunchDaily();
+        else if (Input.IsActionJustPressed("interact"))
+            First();
+        else if (Input.IsActionJustPressed("interact_second"))
+            Second();
         else
             return;
 
         Redraw();
     }
 
+    /// `[E]`, meaning whatever the fitting under the player means.
+    ///
+    /// With no room the fallback is the shop, which is what the flat screen's
+    /// `ui_accept` did — so a probe driving the screen without a shelter still
+    /// buys things by pressing one key.
+    private void First()
+    {
+        switch (Focus)
+        {
+            case Fitting.Armoury: Choose(); break;
+            case Fitting.Locker: SellStash(); break;
+            case Fitting.Board: TakeContract(_contractCursor); break;
+            case Fitting.Map: CycleBiome(); break;
+            case Fitting.Gate: Launch(); break;
+
+            // Records has nothing to press. Saying so is better than a key that
+            // silently does nothing, which the player reads as a bug in the key.
+            case Fitting.Records: _message = "nothing to do here — this is the record book"; break;
+
+            default: Choose(); break;
+        }
+    }
+
+    /// `[C]`, for the three fittings that have a second thing to do.
+    private void Second()
+    {
+        switch (Focus)
+        {
+            case Fitting.Armoury: SellOne(); break;
+            case Fitting.Board: Reroll(); break;
+            case Fitting.Map: LaunchDaily(); break;
+
+            default:
+                (_, _, string second) = Shelter.Prompt(Focus);
+                if (second.Length == 0)
+                    _message = "nothing else to do here";
+
+                break;
+        }
+    }
+
     private void Move(int delta)
     {
+        if (Focus == Fitting.Board)
+        {
+            int contracts = _profile.ContractOffer().Length;
+            if (contracts > 0)
+                _contractCursor = Mathf.PosMod(_contractCursor + delta, contracts);
+
+            return;
+        }
+
         int count = _catalogue.All.Count;
         if (count > 0)
             _cursor = Mathf.PosMod(_cursor + delta, count);
@@ -134,6 +202,54 @@ public partial class BaseScreen : Control
         Equip(entry);
         Persist();
     }
+
+    /// Sells the selected piece back at half what it cost.
+    ///
+    /// This is the armoury's second verb, and until now it had **no key bound to
+    /// it at all** — a verb the screen described and the player could not press.
+    /// Half rather than full, because a shop that buys back at cost turns every
+    /// purchase into a free trial and removes the only question the screen asks.
+    ///
+    /// Starting kit cannot be sold. It is the floor a dead run comes back to, and
+    /// a player who sold it would have no way to start the next one.
+    private void SellOne()
+    {
+        if (_cursor < 0 || _cursor >= _catalogue.All.Count)
+            return;
+
+        ShopCatalogue.Entry entry = _catalogue.All[_cursor];
+
+        if (!_profile.Owns(entry.Path))
+        {
+            _message = $"you do not own {entry.Name}";
+            return;
+        }
+
+        if (Profile.IsStartingKit(entry.Path))
+        {
+            _message = $"{entry.Name} is starting kit — it is what a dead run comes back to";
+            return;
+        }
+
+        bool wasEquipped = IsEquipped(entry);
+        int refund = entry.Price / 2;
+
+        if (!_profile.Revoke(entry.Path))
+        {
+            _message = $"{entry.Name} cannot be sold";
+            return;
+        }
+
+        _profile.Credits += refund;
+        _message = $"sold {entry.Name} back for {refund}" +
+                   (wasEquipped ? " — back to starting kit in that slot" : "");
+        Persist();
+    }
+
+    /// Which contract `[E]` takes at the board. Moved by the same up/down as the
+    /// shop list, because the board is a list too and two cursors that behave
+    /// differently is one more thing to learn than the room needs.
+    private int _contractCursor;
 
     private void Equip(ShopCatalogue.Entry entry)
     {
@@ -367,11 +483,198 @@ public partial class BaseScreen : Control
         // double-spaced since the first screen was built. It reads as a design
         // choice rather than as a bug, which is why it survived four phases of
         // "the list runs off the bottom" being treated as a content problem.
-        _screen.Text = Unix(text.ToString());
-        _side.Text = Unix(SideColumn());
+        // With a room, each fitting draws its own page and nothing else. The
+        // flat screen showed all of it at once, which is why every decision on it
+        // cost the same — a shop, a contract board, a record book and a launch
+        // button competing for one reader.
+        _screen.Text = Unix(_shelter == null ? text.ToString() : Page(text.ToString()));
+        _side.Text = Unix(_shelter == null ? SideColumn() : PromptColumn());
     }
 
     private static string Unix(string text) => text.Replace("\r\n", "\n");
+
+    /// The page for whatever the player is standing at.
+    ///
+    /// `shopPage` is passed in rather than rebuilt because it is the expensive
+    /// one — a windowed list over the whole catalogue with an unlock reason per
+    /// row — and building it to throw it away at five of the six fittings is work
+    /// nobody sees.
+    private string Page(string shopPage) => Focus switch
+    {
+        Fitting.Armoury => shopPage,
+        Fitting.Locker => LockerPage(),
+        Fitting.Records => RecordsPage(),
+        Fitting.Board => BoardPage(),
+        Fitting.Map => MapPage(),
+        Fitting.Gate => GatePage(),
+        _ => WalkingPage(),
+    };
+
+    /// What the room says when the player is not standing at anything.
+    ///
+    /// Deliberately almost empty. This is the state the player is in while
+    /// walking across the room, and a page of text during it would be read as
+    /// something they are supposed to act on.
+    private string WalkingPage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine($"credits {_profile.Credits}      stash worth {ShopCatalogue.StashValue(_profile)}" +
+                        $"      runs {_profile.RunsSurvived} out / {_profile.RunsLost} lost");
+        text.AppendLine();
+        text.AppendLine("  walk to a fitting");
+        return text.ToString();
+    }
+
+    private string LockerPage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("LOCKER");
+        text.AppendLine();
+
+        int worth = ShopCatalogue.StashValue(_profile);
+        text.AppendLine($"  everything carried out of a run and not spent: {worth} credits");
+        text.AppendLine();
+
+        if (_profile.Stash.Count == 0)
+        {
+            text.AppendLine("  empty — nothing has come back yet");
+            return text.ToString();
+        }
+
+        foreach (var entry in _profile.Stash)
+            text.AppendLine($"  {entry.Value,3} x {entry.Key}");
+
+        return text.ToString();
+    }
+
+    private string RecordsPage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("RECORDS");
+        text.AppendLine();
+        text.AppendLine($"  banked {_profile.BestBank}      killed {_profile.BestKills}      " +
+                        $"lasted {_profile.BestSeconds:F0}s");
+        text.AppendLine($"  multiplier x{_profile.BestMultiplier:F2}      " +
+                        $"streak {_profile.BestStreak} (now {_profile.Streak})");
+        text.AppendLine($"  crates {_profile.MostCrates}      best throw {_profile.BestThrow}      " +
+                        $"bosses {_profile.BestBossKills}");
+        text.AppendLine($"  narrowest escape {(_profile.HasNarrowEscape ? $"{_profile.NarrowestEscape:F0} HP" : "—")}" +
+                        $"      fastest out {(_profile.HasFastExtraction ? $"{_profile.FastestExtraction:F0}s" : "—")}");
+        text.AppendLine();
+        text.AppendLine($"  practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
+                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}");
+        return text.ToString();
+    }
+
+    private string BoardPage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("CONTRACT BOARD");
+        text.AppendLine();
+
+        Contract[] offer = _profile.ContractOffer();
+        for (int i = 0; i < offer.Length; i++)
+        {
+            bool taken = _profile.ContractIndex == i;
+            text.AppendLine($"{(i == _contractCursor ? " >" : "  ")} {offer[i].Describe(),-34} " +
+                            $"{offer[i].Reward,4} cr" + (taken ? "   <- taking this" : ""));
+        }
+
+        text.AppendLine();
+        text.AppendLine(_profile.HasContract
+            ? "  a contract is a promise about how you play, not a bonus"
+            : "  none taken — a run without one still pays,\n  it just does not ask anything of you");
+
+        return text.ToString();
+    }
+
+    private string MapPage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("MAP TABLE");
+        text.AppendLine();
+
+        BiomeResource here = BiomeBook.Load(_profile.Biome);
+        text.AppendLine($"  heading for  {here.BiomeName}");
+        text.AppendLine($"  {here.Blurb}");
+
+        if (BiomeBook.All.Length > 1 && !BiomeBook.Allows(_profile, _profile.Biome + 1))
+            text.AppendLine($"  the next opens after {BiomeBook.OpensAt(_profile.Biome + 1)} extractions");
+
+        text.AppendLine();
+
+        DailyRun.Setup today = DailyRun.Today();
+        bool done = _profile.DailyDone(today.DateKey);
+        int streak = _profile.DailyStreak(today.DateKey);
+
+        text.AppendLine($"  TODAY  {today.DateKey}");
+        text.AppendLine($"    {BiomeBook.Load(today.Biome).BiomeName} — {today.Job.Describe()}");
+        text.AppendLine(done
+            ? $"    done: {_profile.Daily[today.DateKey]} points" +
+              (streak > 1 ? $"      {streak} days running" : "")
+            : "    one attempt, no credits, no risk");
+
+        return text.ToString();
+    }
+
+    private string GatePage()
+    {
+        var text = new System.Text.StringBuilder();
+        text.AppendLine("GATE");
+        text.AppendLine();
+
+        BiomeResource here = BiomeBook.Load(_profile.Biome);
+        text.AppendLine($"  {here.BiomeName}");
+        text.AppendLine(_profile.HasContract
+            ? $"  carrying a contract: {_profile.ContractOffer()[_profile.ContractIndex].Describe()}"
+            : "  no contract");
+        text.AppendLine();
+        text.AppendLine("  everything above starting kit is lost if you do not come back");
+
+        return text.ToString();
+    }
+
+    /// The right-hand column: what the two keys do here, and nothing else.
+    ///
+    /// The flat screen listed eight keys permanently, which is a reference card
+    /// rather than a prompt — the player read it once and then ignored a fifth of
+    /// the screen forever. Two lines that change as you walk get read.
+    private string PromptColumn()
+    {
+        var text = new System.Text.StringBuilder();
+        (string title, string first, string second) = Shelter.Prompt(Focus);
+
+        text.AppendLine($"credits {_profile.Credits}");
+        text.AppendLine($"stash   {ShopCatalogue.StashValue(_profile)}");
+        text.AppendLine();
+
+        if (title.Length == 0)
+        {
+            text.AppendLine("[W][S] walk   [A][D] turn");
+            text.AppendLine();
+            text.AppendLine("armoury, locker, records,");
+            text.AppendLine("board, map table, gate");
+        }
+        else
+        {
+            text.AppendLine(title);
+            if (first.Length > 0)
+                text.AppendLine($"  [E] {first}");
+            if (second.Length > 0)
+                text.AppendLine($"  [C] {second}");
+
+            if (Focus is Fitting.Armoury or Fitting.Board)
+                text.AppendLine("  up/down choose");
+        }
+
+        if (_message.Length > 0)
+        {
+            text.AppendLine();
+            text.AppendLine(_message);
+        }
+
+        return text.ToString();
+    }
 
     /// The slice of the catalogue to draw, following the cursor.
     ///

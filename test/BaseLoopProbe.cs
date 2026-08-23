@@ -92,21 +92,55 @@ public partial class BaseLoopProbe : SceneTree
 
     private bool? StageLaunch(int tick)
     {
-        // Through the key, not the method: the launch has to work from the
-        // input layer or it does not work.
+        // Stand at the gate, then press the one verb key.
+        //
+        // This used to press `menu_launch`, which was a key that launched a run
+        // from anywhere in the base. There is no such key now — the shelter's
+        // whole design is that the verb is `[E]` and what it applies to is
+        // wherever the player is standing, so a probe that launched without
+        // walking to the gate would be testing a path the game does not have.
+        //
+        // The player is teleported rather than driven. Walking there is
+        // `ShelterProbe`'s job; this one is about whether the loop closes.
         if (tick == 2)
         {
-            Input.ActionPress("menu_launch");
+            var shelter = CurrentScene?.GetNodeOrNull<Shelter>("Shelter");
+            var player = CurrentScene?.GetNodeOrNull<Player>("Player");
+
+            if (shelter == null || player == null)
+            {
+                GD.PushError($"  no shelter={shelter == null} or player={player == null} in the base");
+                return false;
+            }
+
+            player.GlobalPosition = shelter.Stations[Fitting.Gate];
             return null;
         }
 
-        if (tick == 3)
+        // A physics tick has to pass for the shelter to notice, and the screen
+        // reads the focus rather than being told it.
+        if (tick == 4)
         {
-            Input.ActionRelease("menu_launch");
+            var shelter = CurrentScene?.GetNodeOrNull<Shelter>("Shelter");
+            GD.Print($"  standing at {shelter?.Focus}");
+
+            if (shelter?.Focus != Fitting.Gate)
+            {
+                GD.PushError($"  standing on the gate reads as {shelter?.Focus}");
+                return false;
+            }
+
+            Input.ActionPress("interact");
             return null;
         }
 
-        if (tick < 30)
+        if (tick == 5)
+        {
+            Input.ActionRelease("interact");
+            return null;
+        }
+
+        if (tick < 32)
             return null;
 
         var director = CurrentScene?.GetNodeOrNull<RunDirector>("RunDirector");
@@ -178,9 +212,14 @@ public partial class BaseLoopProbe : SceneTree
             return null;
         }
 
-        // The base screen is a Control; the run is a Node3D. Either name would
-        // do, but the type is what the next thing to touch it cares about.
-        if (CurrentScene is Control)
+        // The shelter is what makes a scene the base.
+        //
+        // This used to be `CurrentScene is Control`, with a comment explaining
+        // that the base screen is a Control and the run is a Node3D. Both are
+        // Node3D now — the base is a room — so that test quietly became "is this
+        // scene not the base", and the stage failed while the loop it checks was
+        // working perfectly.
+        if (CurrentScene?.GetNodeOrNull<Shelter>("Shelter") != null)
         {
             Profile after = SaveSystem.Load();
             GD.Print($"  back at {CurrentScene.Name} after {tick / 60.0f:F1}s, " +

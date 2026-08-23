@@ -181,7 +181,11 @@ public partial class FirstRunProbe : SceneTree
         GetRoot().AddChild(scene);
         CurrentScene = scene;
 
-        bool onTheScreen = scene.GetNodeOrNull<Label>("Screen") is { Text.Length: > 0 };
+        // "Panel/Screen", not "Screen". The base root used to be the Control
+        // holding the labels; it is a Node3D room now, and the panel is a child
+        // of it. The lookup returned null and the stage read that as the base
+        // having failed to draw.
+        bool onTheScreen = scene.GetNodeOrNull<Label>("Panel/Screen") is { Text.Length: > 0 };
 
         GD.Print($"  opening it again with the flag set: the shop drew = {onTheScreen}");
         return onTheScreen;

@@ -1,30 +1,87 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/nodes/BaseScreen.cs" id="1_c07sk"]
+[ext_resource type="Script" path="res://scripts/nodes/Shelter.cs" id="1_nroc6"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="2_yy5yb"]
+[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="3_2m82e"]
+[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="4_cby3y"]
+[ext_resource type="Script" path="res://scripts/nodes/BaseScreen.cs" id="5_5ur46"]
 
-[node name="Base" type="Control" unique_id=2047475754]
+[sub_resource type="Environment" id="Environment_ojstg"]
+background_mode = 1
+background_color = Color(0.05, 0.05, 0.06, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.52, 0.46, 0.4, 1)
+ambient_light_energy = 0.6
+tonemap_mode = 2
+tonemap_exposure = 1.05
+tonemap_white = 2.2
+adjustment_enabled = true
+adjustment_contrast = 1.05
+adjustment_saturation = 1.06
+
+[node name="Base" type="Node3D" unique_id=1501692160]
+
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=132490807]
+environment = SubResource("Environment_ojstg")
+
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=921932893]
+transform = Transform3D(0.7880108, 0.5435968, -0.2890356, 0, 0.4694716, 0.88294756, 0.6156615, -0.6957722, 0.3699487, 0, 0, 0)
+light_energy = 0.9
+shadow_enabled = true
+
+[node name="Shelter" type="Node3D" parent="." unique_id=2139684436]
+script = ExtResource("1_nroc6")
+
+[node name="Player" type="CharacterBody3D" parent="." unique_id=578818177 instance=ExtResource("2_yy5yb")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -4.5)
+script = ExtResource("3_2m82e")
+
+[node name="CameraRig" type="Node3D" parent="." unique_id=439646463]
+script = ExtResource("4_cby3y")
+TargetPath = NodePath("../Player")
+
+[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=508950883]
+transform = Transform3D(1, 0, 0, 0, 0.8290376, 0.5591929, 0, -0.5591929, 0.8290376, 0, 4.7531395, 7.0468197)
+fov = 55.0
+near = 0.15
+far = 80.0
+
+[node name="Panel" type="Control" parent="." unique_id=1557743558]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-script = ExtResource("1_c07sk")
+mouse_filter = 2
+script = ExtResource("5_5ur46")
 
-[node name="Backdrop" type="ColorRect" parent="." unique_id=1676910609]
+[node name="ScreenBack" type="ColorRect" parent="Panel" unique_id=988380080]
 layout_mode = 0
-anchor_right = 1.0
-anchor_bottom = 1.0
-color = Color(0.09, 0.1, 0.12, 1)
+offset_left = 48.0
+offset_top = 40.0
+offset_right = 928.0
+offset_bottom = 600.0
+mouse_filter = 2
+color = Color(0.05, 0.05, 0.07, 0.72)
 
-[node name="Screen" type="Label" parent="." unique_id=1127789783]
+[node name="SideBack" type="ColorRect" parent="Panel" unique_id=429112400]
+layout_mode = 0
+offset_left = 1440.0
+offset_top = 40.0
+offset_right = 1870.0
+offset_bottom = 440.0
+mouse_filter = 2
+color = Color(0.05, 0.05, 0.07, 0.72)
+
+[node name="Screen" type="Label" parent="Panel" unique_id=1653101868]
 layout_mode = 0
 offset_left = 64.0
-offset_top = 48.0
-offset_right = 964.0
-offset_bottom = 1028.0
+offset_top = 52.0
+offset_right = 914.0
+offset_bottom = 592.0
 
-[node name="Side" type="Label" parent="." unique_id=1815943026]
+[node name="Side" type="Label" parent="Panel" unique_id=1177178965]
 layout_mode = 0
-offset_left = 1010.0
-offset_top = 48.0
-offset_right = 1850.0
-offset_bottom = 1028.0
+offset_left = 1456.0
+offset_top = 52.0
+offset_right = 1856.0
+offset_bottom = 432.0
