@@ -166,9 +166,16 @@ public partial class HudProbe : SceneTree
             // anything incoming, so a single call for "all but two percent" lands
             // somewhere the probe did not choose — and one point too far ends the
             // run instead of testing the bar.
+            //
+            // `Armour + 1`, not 1. A one-point hit against armour is absorbed to
+            // the twenty percent floor, so each call lands 0.2 and the loop needs
+            // five times as many turns to get anywhere. It happens to fit in five
+            // thousand today; it does not have to. Sending armour plus one lands
+            // a point a call whatever the player is wearing, which is what the
+            // loop is written as if it does.
             float target = _player!.MaxHealth * 0.02f;
             for (int i = 0; i < 5000 && _player.Health > target; i++)
-                _player.TakeDamage(1.0f);
+                _player.TakeDamage(_player.Armour + 1.0f);
 
             return null;
         }

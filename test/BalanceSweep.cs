@@ -46,6 +46,18 @@ public partial class BalanceSweep : SceneTree
         /// *difference* between taking one and walking past.
         public readonly bool Zone;
 
+        /// What the run climbed to. Separate from the outcome numbers because
+        /// they answer a different question: banked says whether the run paid,
+        /// these say whether the deck was ever spent.
+        public readonly int Level;
+        public readonly int Picks;
+        public readonly int WeaponLevel;
+        public readonly int WeaponMax;
+
+        /// Seconds at which the weapon hit its ceiling, or -1. A run that never
+        /// reaches it is a weapon curve the player never sees the end of.
+        public readonly float CeilingAt;
+
         public readonly float Linger;
         public readonly ulong Seed;
         public readonly string Outcome;
@@ -54,9 +66,15 @@ public partial class BalanceSweep : SceneTree
         public readonly int LowestHp;
         public readonly int Peak;
 
-        public Row(bool zone, float linger, ulong seed, string outcome, float seconds, int banked, int lowestHp, int peak)
+        public Row(bool zone, int level, int picks, int weaponLevel, int weaponMax, float ceilingAt,
+                   float linger, ulong seed, string outcome, float seconds, int banked, int lowestHp, int peak)
         {
             Zone = zone;
+            Level = level;
+            Picks = picks;
+            WeaponLevel = weaponLevel;
+            WeaponMax = weaponMax;
+            CeilingAt = ceilingAt;
             Linger = linger;
             Seed = seed;
             Outcome = outcome;
@@ -164,6 +182,11 @@ public partial class BalanceSweep : SceneTree
         string outcome = Field(line, "outcome");
         return new Row(
             zone,
+            Mathf.RoundToInt(Number(line, "level")),
+            Mathf.RoundToInt(Number(line, "picks")),
+            Mathf.RoundToInt(Number(line, "weaponLv")),
+            Mathf.RoundToInt(Number(line, "weaponMax")),
+            Number(line, "ceilingAt"),
             linger, seed, outcome.Length > 0 ? outcome : "?",
             Number(line, "seconds"),
             Mathf.RoundToInt(Number(line, "banked")),
@@ -236,6 +259,7 @@ public partial class BalanceSweep : SceneTree
         }
 
         ReportArms(rows);
+        ReportGrowth(rows);
 
         GD.Print("");
         foreach (Row row in rows)
@@ -251,6 +275,54 @@ public partial class BalanceSweep : SceneTree
             : $"SWEEP FAILED — nothing reached {SurvivalTarget:F0}s; the second half of the clock is fiction");
 
         Quit(reachesTarget ? 0 : 1);
+    }
+
+    /// Whether the deck was ever spent.
+    ///
+    /// A second table rather than more columns on the first, because it answers a
+    /// different question. The first says whether a run paid; this says whether
+    /// the player got to make the choices the deck exists to offer. A run that
+    /// banks well at level 4 out of a deck whose ceilings sum to fifty is a run
+    /// that never had a build in it.
+    ///
+    /// Printed after the loop that fills it, not inside — a table interleaved
+    /// with the rows it summarises is a table nobody can read.
+    private static void ReportGrowth(System.Collections.Generic.List<Row> rows)
+    {
+        if (rows.Count == 0)
+            return;
+
+        GD.Print("");
+        GD.Print("arm      median level   median picks   median weapon lv   reached the ceiling");
+
+        foreach ((string label, bool zone) in new[] { ("past", false), ("zone", true) })
+        {
+            var levels = new System.Collections.Generic.List<float>();
+            var picks = new System.Collections.Generic.List<float>();
+            var weapon = new System.Collections.Generic.List<float>();
+            int reached = 0, count = 0, max = 0;
+
+            foreach (Row row in rows)
+            {
+                if (row.Zone != zone)
+                    continue;
+
+                count++;
+                levels.Add(row.Level);
+                picks.Add(row.Picks);
+                weapon.Add(row.WeaponLevel);
+                max = Mathf.Max(max, row.WeaponMax);
+
+                if (row.CeilingAt >= 0.0f)
+                    reached++;
+            }
+
+            if (count == 0)
+                continue;
+
+            GD.Print($"{label,-8} {Median(levels),13}   {Median(picks),12}   " +
+                     $"{Median(weapon),16}   {reached}/{count} (of {max})");
+        }
     }
 
     /// What a danger zone costs and what it pays, as a difference.

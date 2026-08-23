@@ -73,8 +73,19 @@ public partial class RunGrowth : Node
     /// Tuned so a weapon-focused player reaches their ceiling around 60% of the
     /// run — early enough that the last stretch is the horde growing alone,
     /// late enough that the climb is most of the run.
-    [Export] public float BaseLevelCost { get; set; } = 12.0f;
-    [Export] public float LevelCostStep { get; set; } = 5.0f;
+    /// Experience for the first level, and how much each one adds.
+    ///
+    /// Was 12 + 5n, and the measurement said the deck was five times the size of
+    /// the run: a median run reached **level 3, spent 3 picks, and left its
+    /// weapon at 1 of 8** — against a deck of twenty-two options whose ceilings
+    /// sum to about fifty. Not one run in five ever saw the top of its weapon
+    /// curve.
+    ///
+    /// Nothing was wrong with the weights. The run was too short to spend them,
+    /// so every run was the same three cards and the whole growth layer was
+    /// decoration. At 6 + 1.2n the twelfth level costs 19 instead of 67.
+    [Export] public float BaseLevelCost { get; set; } = 6.0f;
+    [Export] public float LevelCostStep { get; set; } = 1.2f;
 
     [Export] public float HealthPerPick { get; set; } = 12.0f;
     [Export] public float ArmourPerPick { get; set; } = 1.0f;

@@ -1098,6 +1098,9 @@ public partial class AutoPlay : SceneTree
                  $"lowestHp={_lowestHealth:F0} maxHp={_player.MaxHealth:F0} " +
                  $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} " +
                  $"zone={(_zone == null ? "none" : _zoneCleared ? _zone.Title.Replace(" ", "") : "failed")} " +
+                 $"level={_growth?.Level ?? 0} picks={_picksTaken} " +
+                 $"weaponLv={_weapons?.Level ?? 0} weaponMax={_weapons?.MaxLevel ?? 0} " +
+                 $"ceilingAt={(_ceilingAt < 0.0f ? -1.0f : _ceilingAt):F0} " +
                  $"seed={_seed}");
 
     private bool Finish()
