@@ -36,7 +36,7 @@ Read this before starting work. Update it as phases land.
 | ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | `3641daf` |
 | ✅ B10 | Three glTF landmarks, authored offline in three.js | `3c65831` |
 | ✅ B14 | The proof video, and the double-draw it found | `dec30dd` |
-| ✅ A4 | `ShadowRenderer`, and the first thing that ever ran the sprite fallback | *this* |
+| ✅ A4 | `ShadowRenderer`, and the first thing that ever ran the sprite fallback | `03c3b57` |
 
 **The rebuild is complete.** Every phase in both halves has landed.
 
