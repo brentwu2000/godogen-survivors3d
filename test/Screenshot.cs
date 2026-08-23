@@ -43,6 +43,18 @@ public partial class Screenshot : SceneTree
         // `--zone` walks the player into the first danger zone before capturing,
         // so a picture of the game includes the thing that was just built. A
         // screenshot of an empty field is a screenshot of the ground shader.
+        //
+        // Read from *both* argument lists. Anything after a bare `--` appears
+        // only in `GetCmdlineUserArgs`, so the first version of this checked the
+        // obvious API and never saw the flag — and produced perfectly good
+        // screenshots of wherever the player happened to spawn, which is exactly
+        // the kind of failure that gets believed.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument == "--zone")
+                _visitZone = true;
+        }
+
         foreach (string argument in OS.GetCmdlineArgs())
         {
             if (argument == "--zone")

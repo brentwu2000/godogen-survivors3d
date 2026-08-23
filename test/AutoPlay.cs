@@ -29,6 +29,31 @@ public partial class AutoPlay : SceneTree
 
     private Vector3[] _route = System.Array.Empty<Vector3>();
     private string[] _routeLabels = System.Array.Empty<string>();
+
+    /// The zone this run will attempt, and which leg of the route it is.
+    ///
+    /// Opt-in through `--zone`, and that is the whole point of the flag. A zone
+    /// is optional in the game, so a bot that always took one and a bot that
+    /// never did would each be measuring half a game. Running the same seed both
+    /// ways is the only way to answer the question the design actually poses:
+    /// what does a zone cost, and does it pay for itself?
+    private DangerZone? _zone;
+    private int _zoneLeg = -1;
+    private bool _attemptZone;
+    private bool _zoneCleared;
+
+    /// The crate a cleared zone drops, which the bot has to actually pick up.
+    ///
+    /// Without this the measurement was nonsense in a way that looked like a
+    /// balance result: the bot cleared a tier-1 Hold, took the ammunition, walked
+    /// past the cache it had just earned, and banked 320 against the 406 it makes
+    /// by ignoring the zone entirely. Read as "zones do not pay", when what it
+    /// actually showed was a bot leaving the payment on the floor.
+    private LootContainer? _zoneCache;
+
+    /// A hold is a minute and the walk there is not free, so the ordinary sixty
+    /// second leg timeout would call a working zone a stuck bot.
+    private const int ZoneLegTimeoutTicks = 150 * 60;
     private int _leg;
     private int _legTicks;
     private int _tick;
@@ -234,7 +259,7 @@ public partial class AutoPlay : SceneTree
         {
             Steer(target);
 
-            if (_legTicks > LegTimeoutTicks)
+            if (_legTicks > (_leg == _zoneLeg ? ZoneLegTimeoutTicks : LegTimeoutTicks))
             {
                 Release();
                 GD.Print($"AUTOPLAY FAILED — could not reach {Label()} in 60s (still {distance:F1}m away)");
@@ -248,7 +273,57 @@ public partial class AutoPlay : SceneTree
         // Standing on the target: stop and let the hold timers run.
         Release();
 
-        if (_leg < _crates.Length)
+        if (_leg == _zoneLeg && _zone != null)
+        {
+            // Standing in it, which for a Hold is the whole encounter and for the
+            // other two is where the weapon can reach what has to die. Nothing
+            // else to press: the rifle fires on its own and the zone counts.
+            if (_zone.State != DangerZone.ZoneState.Cleared)
+            {
+                // The zone leg is discretionary, so `ShouldBreakContact` above
+                // can still pull the bot out — and a Hold pauses when it does,
+                // which is the designed behaviour and worth having in the
+                // measurement rather than engineered around.
+                if (_legTicks > ZoneLegTimeoutTicks)
+                {
+                    GD.Print($"  gave up on {_zone.Title} at {_director.Elapsed:F0}s, " +
+                             $"{_zone.Progress * 100.0f:F0}% through");
+                    _leg++;
+                    _legTicks = 0;
+                }
+
+                return false;
+            }
+
+            if (!_zoneCleared)
+            {
+                _zoneCleared = true;
+                _zoneCache = NearestCache(_zone.GlobalPosition);
+                GD.Print($"  cleared {_zone.Title} at {_director.Elapsed:F0}s — " +
+                         $"HP {_player.Health:F0}, reserve {_weapons?.Reserve ?? 0}, " +
+                         $"cache {(_zoneCache == null ? "missing" : "on the ground")}");
+            }
+
+            // Standing on the cache and searching it. The zone drops it where the
+            // player is already standing, so there is nowhere to walk to — but it
+            // still takes its search seconds, with whatever is left of the wave
+            // arriving during them.
+            if (_zoneCache is { Looted: false })
+                return false;
+
+            if (_zoneCache != null)
+            {
+                int value = _player.TrySecureBest();
+                if (value > 0)
+                    _secured += value;
+
+                GD.Print($"  looted the {_zone.Title} cache — bag {_player.Backpack.TotalValue}, " +
+                         $"secured {_player.SafeBox.TotalValue}");
+
+                _zoneCache = null;
+            }
+        }
+        else if (_leg < _crates.Length)
         {
             if (!_crates[_leg].Looted)
                 return false;
@@ -574,6 +649,24 @@ public partial class AutoPlay : SceneTree
             }
         }
 
+        // `GetCmdlineUserArgs`, not `GetCmdlineArgs`. Everything after a bare
+        // `--` goes to the first and is *absent* from the second, so a flag
+        // written the documented way is silently invisible to the obvious API —
+        // no error, no warning, just a run that quietly ignores what it was
+        // asked to do. Both are read, because `--zone` before the separator is
+        // an equally reasonable thing to type.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument == "--zone")
+                _attemptZone = true;
+        }
+
+        foreach (string argument in OS.GetCmdlineArgs())
+        {
+            if (argument == "--zone")
+                _attemptZone = true;
+        }
+
         var found = new System.Collections.Generic.List<LootContainer>();
         foreach (Node child in crateParent.GetChildren())
         {
@@ -602,6 +695,26 @@ public partial class AutoPlay : SceneTree
             route.Add(crate.GlobalPosition);
             labels.Add(crate.Name);
         }
+        if (_attemptZone)
+        {
+            _zone = NearestZone(scene, _crates.Length > 0
+                ? _crates[^1].GlobalPosition
+                : _player.GlobalPosition);
+
+            if (_zone != null)
+            {
+                _zoneLeg = route.Count;
+                route.Add(_zone.GlobalPosition);
+                labels.Add(_zone.Title);
+                GD.Print($"  attempting {_zone.Title}: tier {_zone.Tier}, " +
+                         $"pays {_zone.Rolls} rolls + {_zone.Rounds} rounds");
+            }
+            else
+            {
+                GD.Print("  --zone given but the map has none");
+            }
+        }
+
         route.Add(_extraction.GlobalPosition);
         labels.Add("extraction");
 
@@ -615,6 +728,62 @@ public partial class AutoPlay : SceneTree
 
         GD.Print($"route: {string.Join(" -> ", _routeLabels)}");
         return true;
+    }
+
+    /// The unlooted crate closest to a point, within a few metres of it.
+    ///
+    /// By position rather than by name, because the cache is created by the zone
+    /// at the moment it clears and the bot has no reference to it. A radius
+    /// rather than "the nearest": if the zone somehow dropped nothing, the
+    /// nearest crate is one on the far side of the map and the bot would walk off
+    /// to it in the middle of a fight.
+    private LootContainer? NearestCache(Vector3 at)
+    {
+        LootContainer? best = null;
+        float bestDistance = 6.0f;
+
+        Node? crates = _player.GetParent()?.GetNodeOrNull("LootContainers");
+        foreach (Node child in crates?.GetChildren() ?? new Godot.Collections.Array<Node>())
+        {
+            if (child is not LootContainer crate || crate.Looted)
+                continue;
+
+            float distance = at.DistanceTo(crate.GlobalPosition);
+            if (distance >= bestDistance)
+                continue;
+
+            bestDistance = distance;
+            best = crate;
+        }
+
+        return best;
+    }
+
+    /// The zone nearest to where the looting ends.
+    ///
+    /// Nearest rather than richest. The tiers differ by less than the walk does
+    /// on a 55 metre map, and a bot that crossed the whole arena for one extra
+    /// loot roll would be measuring the walk rather than the zone.
+    private static DangerZone? NearestZone(Node scene, Vector3 from)
+    {
+        DangerZone? best = null;
+        float bestDistance = float.MaxValue;
+
+        foreach (Node child in scene.GetNodeOrNull("DangerZones")?.GetChildren()
+                               ?? new Godot.Collections.Array<Node>())
+        {
+            if (child is not DangerZone zone)
+                continue;
+
+            float distance = from.DistanceTo(zone.GlobalPosition);
+            if (distance >= bestDistance)
+                continue;
+
+            bestDistance = distance;
+            best = zone;
+        }
+
+        return best;
     }
 
     private string Label() => _leg < _routeLabels.Length ? _routeLabels[_leg] : "done";
@@ -885,7 +1054,9 @@ public partial class AutoPlay : SceneTree
     private void Sweep(string outcome, float seconds, int banked) =>
         GD.Print($"SWEEP outcome={outcome} seconds={seconds:F1} banked={banked} " +
                  $"lowestHp={_lowestHealth:F0} maxHp={_player.MaxHealth:F0} " +
-                 $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} seed={_seed}");
+                 $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} " +
+                 $"zone={(_zone == null ? "none" : _zoneCleared ? _zone.Title.Replace(" ", "") : "failed")} " +
+                 $"seed={_seed}");
 
     private bool Finish()
     {

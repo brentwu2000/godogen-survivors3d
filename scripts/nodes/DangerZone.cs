@@ -26,6 +26,19 @@ public partial class DangerZone : Node3D
     [Export] public int OpeningBurst { get; set; } = 5;
     [Export] public string Title { get; set; } = "Zone";
 
+    /// How far outside the boundary the zone keeps producing, in metres.
+    ///
+    /// It has to be well past the edge, or a zone could be emptied a metre at a
+    /// time by standing outside the line and shooting in — which is not a
+    /// decision, it is a chore.
+    ///
+    /// And it has to be finite. Without this a zone woken in passing spawns
+    /// forever: the bot crossed one on its way to extraction, walked out the far
+    /// side, and arrived at the pad with 111 enemies behind it and a zone still
+    /// filling the map from forty metres away. An abandoned encounter should
+    /// stop, not follow you home. Progress is kept — walking back in resumes it.
+    [Export] public float AttentionMargin { get; set; } = 18.0f;
+
     /// Fired when the player first steps in, and again when it is finished.
     [Signal] public delegate void ZoneStartedEventHandler(string title);
     [Signal] public delegate void ZoneClearedEventHandler(string title, int rounds);
@@ -121,13 +134,28 @@ public partial class DangerZone : Node3D
 
     private void Advance(float step)
     {
-        _spawnCredit += SpawnRate * step;
-
-        while (_spawnCredit >= 1.0f)
+        if (Attending)
         {
-            _spawnCredit -= 1.0f;
-            if (!SpawnOnPerimeter())
-                break;
+            _spawnCredit += SpawnRate * step;
+
+            // The same ceiling the director respects. Without it a zone alone can
+            // fill the pool, and every other source of enemies in the game —
+            // including the next zone — silently stops working.
+            int ceiling = _director?.MaxLiveEnemies ?? int.MaxValue;
+
+            while (_spawnCredit >= 1.0f && (_horde?.Pool.Count ?? 0) < ceiling)
+            {
+                _spawnCredit -= 1.0f;
+                if (!SpawnOnPerimeter())
+                    break;
+            }
+        }
+        else
+        {
+            // Discarded rather than banked, for the reason the director discards
+            // its own: banked, the moment the player comes back the whole absence
+            // arrives at once.
+            _spawnCredit = 0.0f;
         }
 
         Progress = (ZoneKind)Kind switch
@@ -192,6 +220,25 @@ public partial class DangerZone : Node3D
         // through.
         if ((ZoneKind)Kind == ZoneKind.Breach || Contains(position))
             _killed++;
+    }
+
+    /// Whether the player is close enough for this zone to be doing anything.
+    ///
+    /// Chebyshev against the boundary plus a margin, so the region is the
+    /// rectangle grown outward rather than a circle around its centre — a circle
+    /// on a 26 by 20 zone is either short of the long edges or far past the short
+    /// ones.
+    public bool Attending
+    {
+        get
+        {
+            if (_player == null)
+                return false;
+
+            float dx = Mathf.Abs(_player.GlobalPosition.X - GlobalPosition.X) - HalfExtent.X;
+            float dz = Mathf.Abs(_player.GlobalPosition.Z - GlobalPosition.Z) - HalfExtent.Y;
+            return Mathf.Max(dx, dz) <= AttentionMargin;
+        }
     }
 
     public bool Contains(Vector3 position) =>

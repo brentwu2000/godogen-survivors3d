@@ -38,7 +38,7 @@ public readonly record struct ZonePlan(
     /// 0 or 1. Deeper zones are worth more and cost more; nothing else scales.
     int Tier,
 
-    /// Seconds inside, for Hold. 35 to 60 — long enough that the first wave is
+    /// Seconds inside, for Hold. 35 to 50 — long enough that the first wave is
     /// not the whole encounter, short enough to be attempted with a half-full
     /// magazine.
     float HoldSeconds,
@@ -97,7 +97,7 @@ public readonly record struct ZonePlan(
                 HalfExtent: new Vector2(13.0f, 10.0f),
                 Kind: kind,
                 Tier: tier,
-                HoldSeconds: Mathf.Lerp(35.0f, 60.0f, tier),
+                HoldSeconds: Mathf.Lerp(35.0f, 50.0f, tier),
                 PurgeKills: tier == 0 ? 18 : 30,
                 Rolls: tier == 0 ? 3 : 5,
                 Rounds: tier == 0 ? 60 : 110);
@@ -108,15 +108,25 @@ public readonly record struct ZonePlan(
 
     /// How hard it pushes while running, in enemies per second.
     ///
+    /// These were 2.4/3.0/1.0 with a +1.4/+1.6/+0.6 tier bonus, and the first
+    /// measurement said no. A tier-1 Hold ran 60 seconds at 3.8 a second — 228
+    /// enemies against a starting rifle — and the bot died at 80 s with 123 on
+    /// the field, banking 140 against the 406 it takes home by walking past.
+    ///
+    /// A zone has to be a hard decision, not a wrong one. Roughly two thirds of
+    /// the old pressure, and the Hold got 10 seconds shorter as well: the cost is
+    /// meant to be the risk of standing still with a crowd arriving, not the
+    /// arithmetic of a rifle that cannot kill fast enough to matter.
+    ///
     /// A Breach is a single burst rather than a rate, so its steady pressure is
-    /// low; a Hold has to keep producing for a minute without the player ever
-    /// being able to stand still and reload.
+    /// low; a Hold has to keep producing for the better part of a minute without
+    /// the player ever standing still to reload.
     public float SpawnRate => Kind switch
     {
-        ZoneKind.Hold => 2.4f + Tier * 1.4f,
-        ZoneKind.Purge => 3.0f + Tier * 1.6f,
-        ZoneKind.Breach => 1.0f + Tier * 0.6f,
-        _ => 2.0f,
+        ZoneKind.Hold => 1.5f + Tier * 0.8f,
+        ZoneKind.Purge => 1.9f + Tier * 1.0f,
+        ZoneKind.Breach => 0.7f + Tier * 0.4f,
+        _ => 1.4f,
     };
 
     /// Enemies delivered at once when it starts. The whole encounter for a
