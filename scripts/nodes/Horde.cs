@@ -135,6 +135,7 @@ public partial class Horde : Node3D
     private FlowField _field = null!;
     private HordeRenderer _renderer = null!;
     private BodyRenderer? _bodies;
+    private ShadowRenderer? _shadows;
     private HordeRenderer? _shotRenderer;
     private Node3D? _player;
     private int[] _neighbours = null!;
@@ -209,16 +210,31 @@ public partial class Horde : Node3D
                 AddChild(_bodies.Node);
             }
 
-            // The billboards stay built either way, so the toggle is a property
-            // rather than a rebuild — but only one of them draws.
-            //
-            // `Muted`, not `Visible`. Setting the node's visibility here is the
-            // obvious version and it does not work for longer than one frame:
-            // `HordeRenderer.Upload` assigns `Node.Visible = count > 0` on every
-            // sync, so the first tick turns the billboards straight back on and
-            // every enemy is drawn twice from then on. That shipped.
-            _renderer.Muted = SolidBodies;
         }
+
+        // Blob shadows, for the billboard path only — the solid bodies cast real
+        // ones into the shadow map.
+        //
+        // Built outside the branch above, and that is the whole point of where it
+        // sits. Inside it, the renderer only exists when `SolidBodies` is on,
+        // which is precisely when it is muted: the one configuration that needs
+        // blob shadows would be the one configuration without them. The first
+        // version of this did exactly that and looked completely correct.
+        _shadows = new ShadowRenderer(
+            GD.Load<Shader>("res://assets/shaders/blob.gdshader"), Capacity, ArenaExtent);
+        AddChild(_shadows.Node);
+
+        // Only one ground contact and only one silhouette, whichever path this
+        // took. `SolidBodies` may have been turned off a few lines up by a missing
+        // shader, so both of these are read after that decision, not before.
+        //
+        // `Muted`, not `Visible`. Setting the nodes' visibility here is the
+        // obvious version and it does not work for longer than one frame: both
+        // renderers assign `Node.Visible = count > 0` on every sync, so the first
+        // tick turns them straight back on. That shipped, and every enemy in the
+        // game was drawn twice until the proof video caught it.
+        _renderer.Muted = SolidBodies;
+        _shadows.Muted = SolidBodies;
 
         Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
         if (shotTexture != null)
@@ -726,6 +742,11 @@ public partial class Horde : Node3D
         }
 
         _renderer.Sync(Pool, Types);
+
+        // Culled around the player rather than the camera. The rig is thirteen
+        // metres behind the body and the difference is a metre of blobs at the
+        // very edge of the fog, which is not worth reaching across two nodes for.
+        _shadows?.Sync(Pool, Types, _player?.GlobalPosition ?? Vector3.Zero);
     }
 
     /// The solid-body renderer, or null on the sprite path. Only a probe asks.
@@ -733,6 +754,9 @@ public partial class Horde : Node3D
 
     /// The billboard renderer, muted on the solid-body path. Only a probe asks.
     public HordeRenderer Billboards => _renderer;
+
+    /// The blob shadows, muted on the solid-body path. Only a probe asks.
+    public ShadowRenderer? Shadows => _shadows;
 
     /// Ranged behaviour: hold at standoff and shoot. Returns true when the
     /// enemy should stop closing.

@@ -96,6 +96,19 @@ public partial class Screenshot : SceneTree
                 generator.Seed = seed;
         }
 
+        // `sprites` photographs the billboard fallback, which is otherwise code
+        // that ships and is never seen. Also before the tree: `Horde._Ready`
+        // branches on this and builds a different set of renderers either way.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument != "sprites")
+                continue;
+
+            var horde = scene.GetNodeOrNull<Horde>("Horde");
+            if (horde != null)
+                horde.SolidBodies = false;
+        }
+
         GetRoot().AddChild(scene);
         _scene = scene;
 

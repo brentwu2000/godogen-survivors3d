@@ -27,15 +27,19 @@ Read this before starting work. Update it as phases land.
 | ✅ B5 | Spread, Charge and Blast; three weapons that resolve differently | `82ac068` |
 | ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
 | ✅ B3 | `RunKit` — Orbit, Shockwave, Chain and Chill; cards that fight on their own | `4d93557` |
+| ✅ B4 | A fourth equipment slot, for the kit rather than the body | `789ad9f` |
+| ✅ B7 | Curiosities, and selling one is not a mistake | `c7b8e0e` |
+| ✅ B2 | Enemies arrive instead of appearing; the dark closes in | `7c700b1` |
+| ✅ B11 | The deck was five times the size of the run | `3ded786` |
+| ✅ — | The danger zones re-tuned against a player who can now spend the deck | `c22c223` |
+| ✅ B12 | There is air in it | `bc42d67` |
 | ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | `3641daf` |
 | ✅ B10 | Three glTF landmarks, authored offline in three.js | `3c65831` |
-| ✅ B14 | The proof video, and the double-draw it found | *this* |
+| ✅ B14 | The proof video, and the double-draw it found | `dec30dd` |
+| ✅ A4 | `ShadowRenderer`, and the first thing that ever ran the sprite fallback | *this* |
 
-**Next: A4**, the last item in either half.
-
-**Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
-bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
-left in either half.
+**The rebuild is complete.** Every phase in both halves has landed and the sweep is clean at 40
+probes.
 
 ### The three bugs that repeat
 
@@ -195,7 +199,7 @@ retype. Ordered by dependency.
 | A1 | **Third-person camera** | 26° tilt, perspective, 52° FOV, 13 m behind, near 0.15 far 260. Replaced a 52°/24 m orthographic. Turnable: `[A]`/`[D]` turn the view, `[W]`/`[S]` advance along it; right-drag and `[Z]`/`[X]` also turn. `CameraRig.Yaw`, `CameraRig.Turn(radians)`. |
 | A2 | **Turn-and-advance controls** | `Player.Steer(stick, step)` with `TurnToSteer = true`: `stick.X` feeds `_rig.Turn(-x * TurnRateDegrees * step)`, `stick.Y` advances along `(-sin yaw, -cos yaw)`. This is the single most consequential change — it breaks every automated driver that decomposes a world direction into four keys. |
 | A3 | **Solid low-poly bodies** | `MeshBuilder` (Box/Tube/Ball, vertex colours), `BodyMeshLibrary`, `BodyRenderer` (one MultiMesh per variant, `FloatsPerInstance = 16`), `body.gdshader`. MultiMesh has **no skeleton**, so the walk is a vertex-stage function of rig data baked into the UV channel; pace and phase are packed into one float (integer part / fraction). Phase must **not** be derived from world position. Elite marks preserve luminance and shift hue (multiplying goes wrong on saturated vertex colours). Replaced billboards; `Horde.SolidBodies` and `Player.SolidBody` toggle back to the sprite path, which stays working. |
-| A4 | **`ShadowRenderer`** | Blob shadows for the billboard path only (`Visible = false` when `SolidBodies`). `DiameterPerMetre = 0.90`, `GroundClearance = 0.02`, culled beyond 26 m. |
+| ✅ A4 | **`ShadowRenderer`** | Blob shadows for the billboard path only. `DiameterPerMetre = 0.90`, `GroundClearance = 0.02`, culled beyond 26 m with a fade over the last quarter. **`Muted`, not `Visible`** — see B14. |
 | A5 | **Danger zones** | `DangerZone.cs`, `ZonePlan.cs`. Rooms with kinds (Hold / Purge / Breach), `HalfExtent (13, 10)`, tier 0–1, `HoldSeconds` 35–60, spawn on the room's own walls, pay a cache with ammunition in it. `Encounter.cs`: packs placed on the map, `WakeRadius = 22`, spent on waking. This replaced a time-based spawn rate — **threat is a place, not a clock**. |
 | A6 | **Walkable shelter** | `Shelter.cs` builds the room in code; `HalfWidth 11.5`, `HalfDepth 8`. Fittings: Armoury (south wall, `SlotsAlongX`), Locker, Records, Board, Map, Gate. Standing somewhere *is* the input; one verb key (`[E]`), a second verb key for fittings that have one. |
 | A7 | **Minimap**, `Fog` of exploration | `Minimap.cs`, 64-cell fog image, `Extent`, drawn as a `ColorRect` in the HUD corner. |
@@ -424,7 +428,7 @@ rig, hazard decals, and effect puffs. Puffs are planted inside `EffectPool.Spawn
 call sites, so `EffectDirector.OnFired` has to flatten the player's position first or the ground height
 is added twice.
 
-`ShadowRenderer` is not in the list because it does not exist yet — it is A4.
+`ShadowRenderer` plants its blobs the same way; it did not exist when this was written.
 
 Probe: `TerrainProbe`, eight stages. The two the plan named: the enemy pool's Y stays **zero** over
 ground that is provably not flat, and `NearestWithin` finds a target 12 m away across 0.5 m of drop at
@@ -579,6 +583,41 @@ odd shape. One frame of the video with a runner close to the lens made it obviou
 
 `BodyProbe` stage 7 catches it: 12 spawned enemies, 100 ticks, and the billboard node must still be
 hidden. Verified by reintroducing the bug.
+
+### ✅ A4 — `ShadowRenderer`, and the first thing that ever ran the sprite fallback  ·  *done*
+
+Blob shadows under the billboard enemies: a soft dark ellipse per body, sized off
+`DesignHeightMeters * 0.90`, two centimetres off the terrain, culled at 26 m with a fade over the last
+quarter of that. Muted on the solid-body path, where the bodies cast real shadows — the same `Muted`
+flag B14 added to `HordeRenderer`, for the same reason, and it is built *outside* the `if (SolidBodies)`
+branch because inside it the renderer would only exist in the one configuration that mutes it.
+
+The shadows are the small half of this. The large half is that `ShadowProbe` is the **only thing that
+has ever run the sprite path**: `SolidBodies` is on everywhere else, so the billboard renderer, its
+texture array, its shader and now these shadows were code that shipped and never executed — the state
+a fallback is in when it is finally needed and turns out not to work. `test/Screenshot.cs` takes a
+`sprites` argument now for the same reason.
+
+**A four-stage probe passed while the blobs drew nothing at all.** Count, transforms, heights,
+orientation, node visibility, node parentage: all correct, all readable, all read. The screen was
+empty. Turning the opacity to 1.0 and the diameter to 3x changed nothing, because the fault was not in
+any number — a MultiMesh writes its per-instance colour into `COLOR` in the **vertex** stage, and
+`COLOR` in the fragment stage is the interpolated vertex-colour *attribute*, which a `QuadMesh` does
+not have. Reading it there is an alpha of zero. **Forward it through a `varying`.**
+
+What identified it was swapping the `ShaderMaterial` for a flat red `StandardMaterial3D` and watching
+the screen fill with red — one render that separated "the plumbing is wrong" from "the shader is
+wrong", after three that only re-confirmed the plumbing was right.
+
+Two smaller ones on the way:
+
+- **`SurfaceSetMaterial` does nothing on a `PrimitiveMesh`.** It is what every other renderer here
+  calls, because every other renderer builds an `ArrayMesh`. A `QuadMesh` carries its material in
+  `Material`; this uses `MaterialOverride` on the node, which is unambiguous. It compiles either way
+  and it does not warn.
+- The stage that catches the varying is a **text check on the shader source, with comments stripped
+  first**. The prose above says `COLOR` in `fragment()` several times, and this would otherwise be the
+  third probe in this repository to pass by reading a comment.
 
 ---
 
