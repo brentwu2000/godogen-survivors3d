@@ -27,9 +27,10 @@ Read this before starting work. Update it as phases land.
 | ✅ B5 | Spread, Charge and Blast; three weapons that resolve differently | `82ac068` |
 | ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
 | ✅ B3 | `RunKit` — Orbit, Shockwave, Chain and Chill; cards that fight on their own | `4d93557` |
-| ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | *this* |
+| ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | `3641daf` |
+| ✅ B10 | Three glTF landmarks, authored offline in three.js | *this* |
 
-**Next: B10** (landmarks), then B14, and A4 last.
+**Next: B14** (the proof video), then A4 last.
 
 **Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
 bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
@@ -433,23 +434,45 @@ standing on relief.
 `test/sweep.ps1` runs all 38 headless probes. It existed as a habit rather than as a file, which is how
 it kept being run from memory against a stale list.
 
-### B10 — Three landmarks, and the only three.js  ·  *needs B9*
+### ✅ B10 — Three landmarks, and the only three.js  ·  *done*
 
-`art-src/models/build.mjs` authors a lattice pylon (357 tris, 13.1 m), a ribbed silo (334 tris,
-10.6 m) and a crushed coach (133 tris, 2.7 m) in three.js and writes glTF to `assets/models/`.
-`npm i three`. `GLTFExporter` wants `FileReader` — a nine-line shim over `Blob` covers it. Colour in
-materials, not `COLOR_0`. Flat shading.
+`art-src/models/build.mjs` authors a lattice pylon (564 tris, 12.7 m), a ribbed silo (264 tris,
+10.6 m) and a crushed coach (272 tris, 8.6 m long, 2.8 m tall) in three.js and writes `.glb` to
+`assets/models/`. `npm install && npm run build`. `GLTFExporter` wants `FileReader` — a nine-line shim
+over `Blob` covers it. Colour in materials, not `COLOR_0`.
 
-three.js is an **offline modelling tool** for shapes `MeshBuilder` cannot make (lattices, cones), not
-a renderer and not a replacement. Nothing at runtime knows it exists.
+three.js is an **offline modelling tool** for shapes `MeshBuilder` cannot make, not a renderer and not
+a replacement. Nothing at runtime knows it exists; `art-src/models/.gdignore` keeps Godot from even
+scanning it, and `node_modules/` is ignored by git.
+
+**Flat shading does not export.** `flatShading: true` is a three.js render-time flag with no glTF
+equivalent, so the exporter drops it silently and the model arrives in Godot smoothly shaded — next to
+a hundred faceted props. Bake it: `toNonIndexed()` then `computeVertexNormals()`, so every triangle
+owns its vertices.
+
+**`godot --headless --import` after every rebuild.** The import cache is keyed on the file and will
+not notice a rewritten `.glb`. A recolour that "did not apply" is this, and the next thing edited is
+the wrong file.
 
 `LandmarkLibrary.cs`: **never a MultiMesh** (it loses imported meshes on pack/save), **never a trimesh
-collider** (takes the frame under a second, never errors), and measure the footprint off the
-instantiated AABB. A landmark is a `Block` for every purpose except drawing, so the reachability sweep
-counts it.
+collider**, and the footprint is measured off the instantiated AABB — a number written down beside a
+mesh stops being true the first time the mesh is edited. `Centre()` exists because the coach is not
+symmetric about its own origin once it has been crushed.
 
-Probe: `LandmarkProbe`. Its field stage must ask a **behavioural** question — `FlowField.Sample`
-deliberately returns a neighbour's flow for a blocked cell so a body inside an obstacle can walk out.
+A landmark is a `Block` for every purpose except drawing: it is a field on the struct, not a parallel
+list, so `PushOutOfBlocks`, `EnsureReachable`, the collider and the flow-field bake all see it without
+anyone remembering to add it to a fourth place.
+
+**`BuildLandmarks` rolls from a side stream hashed off `Seed`, not from `_rng`** — same reason as the
+terrain offset in B9, learned the same way.
+
+Probe: `LandmarkProbe`, seven stages. The field stage asks a **behavioural** question, because the
+obvious one fails on a correct field: `FlowField.Sample` deliberately returns a neighbour's flow for a
+blocked cell so a body inside an obstacle can walk out, which makes a blocked cell read exactly like an
+open one. Instead it puts one walker on the far side of the widest landmark and watches. It closes 97%
+of a 25 m gap in 1800 ticks and never enters the footprint — and the reason the budget is thirty
+seconds is the finding: the walker first moves *twelve metres away* from the player to clear the
+pylon. At 900 ticks it had closed 37% and looked stuck. It was going round.
 
 ### B11 — The deck was five times the size of the run  ·  *needs B8 (to measure)*
 

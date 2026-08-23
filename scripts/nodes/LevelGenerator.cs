@@ -1,4 +1,5 @@
 using Godot;
+using System.Linq;
 
 /// Lays out the arena for one run: cover, crates, and which pads will open.
 ///
@@ -39,6 +40,17 @@ public partial class LevelGenerator : Node3D
     /// the first ring is risk with no reason.
     [Export] public float DepthRarityBias { get; set; } = 1.9f;
 
+    /// Where this seed put its landmarks, and which one is which.
+    ///
+    /// Exposed for the same reason `Zones` is: a probe that had to find a pylon
+    /// by walking the obstacle list looking for a tall collider would pass on a
+    /// map with a tall crate on it.
+    public System.Collections.Generic.IReadOnlyList<(LandmarkKind Kind, Vector2 Spot)> Landmarks
+        => _landmarks;
+
+    private readonly System.Collections.Generic.List<(LandmarkKind Kind, Vector2 Spot)> _landmarks
+        = new();
+
     /// Where this seed put its danger zones. Read by anything that needs to
     /// know about them without walking the scene tree for nodes.
     public System.Collections.Generic.IReadOnlyList<ZonePlan> Zones => _zones;
@@ -73,13 +85,25 @@ public partial class LevelGenerator : Node3D
         public readonly float Yaw;
         public readonly float HeightScale;
 
-        public Block(Vector2 center, Vector2 half, PropKind kind, float yaw, float heightScale)
+        /// Which imported landmark draws this block, or -1 for ordinary cover.
+        ///
+        /// A landmark is a `Block` for every purpose except drawing. That is the
+        /// whole reason it is a field on this struct rather than a separate list:
+        /// the reachability sweep, `PushOutOfBlocks`, the flow field's obstacle
+        /// bake and the collider all walk `blocks`, and a landmark that lived
+        /// beside them would be a twelve-metre pylon that crates spawn inside and
+        /// enemies walk through, on a map the sweep still calls reachable.
+        public readonly int Landmark;
+
+        public Block(Vector2 center, Vector2 half, PropKind kind, float yaw, float heightScale,
+                     int landmark = -1)
         {
             Center = center;
             Half = half;
             Kind = kind;
             Yaw = yaw;
             HeightScale = heightScale;
+            Landmark = landmark;
         }
     }
 
@@ -168,6 +192,11 @@ public partial class LevelGenerator : Node3D
 
         var blocks = new System.Collections.Generic.List<Block>();
         BuildCover(blocks);
+
+        // Before the pads, the zones and the crates, all of which push out of
+        // `blocks` — a silo sited afterwards would be sited on top of them.
+        BuildLandmarks(blocks);
+
         BuildPads(pads, blocks);
 
         // Before the crates, so a crate is never sited on top of a zone marker.
@@ -186,7 +215,8 @@ public partial class LevelGenerator : Node3D
 
         GD.Print($"level seed {Seed}: {blocks.Count} blocks, {crates.GetChildCount()} crates, " +
                  $"{OpenPadCount}/{pads.GetChildCount()} pads will open, {CarvedLastRun} carved, " +
-                 $"{_props?.Total ?? 0} props, {_scatter?.Total ?? 0} scatter");
+                 $"{_props?.Total ?? 0} props, {_scatter?.Total ?? 0} scatter, " +
+                 $"landmarks {string.Join(" ", _landmarks.Select(l => $"{l.Kind}({l.Spot.X:F0},{l.Spot.Y:F0})"))}");
     }
 
     /// Random cover can seal a corner off, and a run whose exit is behind a wall
@@ -509,7 +539,12 @@ public partial class LevelGenerator : Node3D
         for (int i = 0; i < blocks.Count; i++)
         {
             Block block = blocks[i];
-            float height = PropLibrary.Height(block.Kind) * block.HeightScale;
+            bool landmark = block.Landmark >= 0;
+
+            float height = landmark
+                ? LandmarkLibrary.Height((LandmarkKind)block.Landmark)
+                : PropLibrary.Height(block.Kind) * block.HeightScale;
+
             var size = new Vector3(block.Half.X * 2.0f, height, block.Half.Y * 2.0f);
 
             // Collision only. The visual is one instance in a MultiMesh, so a
@@ -529,6 +564,27 @@ public partial class LevelGenerator : Node3D
             body.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
             obstacles.AddChild(body);
 
+            if (landmark)
+            {
+                // The model, hung under the same body as the collider so the two
+                // cannot drift apart. Offset down by half the height because the
+                // body was raised to the centre of its box, and back by the
+                // model's own horizontal centre — the coach is not symmetric
+                // about its origin once it has been crushed.
+                var kind = (LandmarkKind)block.Landmark;
+                Node3D? model = LandmarkLibrary.Instantiate(kind);
+
+                if (model != null)
+                {
+                    Vector2 centre = LandmarkLibrary.Centre(kind);
+                    model.Position = new Vector3(-centre.X, -height * 0.5f, -centre.Y);
+                    model.RotateY(Mathf.DegToRad(block.Yaw));
+                    body.AddChild(model);
+                }
+
+                continue;
+            }
+
             // Footprints are half-extents and the props are authored in a unit
             // square, so the instance scale is the full width and depth. The yaw
             // is applied to the prop only: the collider stays axis-aligned, which
@@ -540,7 +596,7 @@ public partial class LevelGenerator : Node3D
             _props.Add(block.Kind, block.Center, footprint, block.Yaw, block.HeightScale);
         }
 
-        PlaceLandmarks();
+        PlaceSkyline();
         _props.Commit();
         Scatter(blocks);
         PaintGround();
@@ -676,7 +732,76 @@ public partial class LevelGenerator : Node3D
     ///
     /// Outside the arena rather than in it, so they never become cover, never
     /// need a collider, and can never seal a route.
-    private void PlaceLandmarks()
+    /// Sites one of each landmark inside the arena.
+    ///
+    /// **Rolled from a side stream, not from `_rng`.** Every draw taken here would
+    /// shift every draw the generator makes afterwards, so adding landmarks would
+    /// silently re-roll every layout in the game — same seed, different map, and
+    /// every balance number and probe expectation measured against the old one.
+    /// That mistake has been made once in this file already, by the terrain
+    /// offset, and it cost two probes and an hour of blaming the terrain.
+    ///
+    /// Sited on a ring at roughly two thirds of the arena, one per third of the
+    /// compass, so a player who can see one knows which way they are facing. The
+    /// spacing is the point: three landmarks in a huddle are one landmark.
+    private void BuildLandmarks(System.Collections.Generic.List<Block> blocks)
+    {
+        _landmarks.Clear();
+        ulong rng = Seed ^ 0xA24BAED4963EE407UL;
+
+        float Roll()
+        {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            return (rng >> 11) * (1.0f / 9007199254740992.0f);
+        }
+
+        var kinds = System.Enum.GetValues<LandmarkKind>();
+        float baseAngle = Roll() * Mathf.Tau;
+
+        for (int i = 0; i < kinds.Length; i++)
+        {
+            LandmarkKind kind = kinds[i];
+
+            float angle = baseAngle + Mathf.Tau * i / kinds.Length + (Roll() - 0.5f) * 0.5f;
+            float radius = Extent * (0.52f + Roll() * 0.24f);
+            var spot = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
+
+            // Quarter turns only. The collider is axis-aligned — the flow field's
+            // obstacle test assumes it — so a landmark turned 37 degrees is a
+            // model that no longer fills its own footprint, and the player walks
+            // into thin air beside it.
+            int quarter = (int)(Roll() * 4.0f) & 3;
+            float yaw = quarter * 90.0f;
+
+            Vector2 half = LandmarkLibrary.Footprint(kind);
+            if (quarter % 2 == 1)
+                half = new Vector2(half.Y, half.X);
+
+            // Pushed clear of the cover rather than rejected: at this size a
+            // rejection loop spends most seeds failing, and a landmark shouldered
+            // two metres out of a container stack still looks sited.
+            spot = PushOutOfBlocks(spot, blocks, Mathf.Max(half.X, half.Y) + 1.0f);
+
+            // And clear of the spawn, which is the one place on the map a
+            // landmark must never be: the run starts there.
+            float fromSpawn = spot.Length();
+            float clearance = SpawnClearance + Mathf.Max(half.X, half.Y);
+            if (fromSpawn < clearance)
+                spot = fromSpawn > 0.01f ? spot / fromSpawn * clearance : new Vector2(clearance, 0.0f);
+
+            blocks.Add(new Block(spot, half, PropKind.Container, yaw, 1.0f, (int)kind));
+            _landmarks.Add((kind, spot));
+        }
+    }
+
+    /// The skyline: five props on a ring outside the arena.
+    ///
+    /// Not landmarks and not cover — they sit past `Extent`, where the player
+    /// cannot go and the flow field does not route, and they exist so the horizon
+    /// is not an empty band above the fog.
+    private void PlaceSkyline()
     {
         const int count = 5;
         float radius = Extent * 1.12f;

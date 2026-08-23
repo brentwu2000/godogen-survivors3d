@@ -19,3 +19,9 @@ build/
 # The .gdignore stays tracked: without it the importer swallows every frame.
 screenshots/*
 !screenshots/.gdignore
+
+# three.js, which is an offline modelling tool for art-src/models/build.mjs and
+# not a dependency of the game. `npm install` in that directory restores it; the
+# three .glb files it writes to assets/models/ are tracked, because those are the
+# actual assets and rebuilding them needs Node.
+art-src/models/node_modules/

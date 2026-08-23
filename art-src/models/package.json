@@ -1,0 +1,13 @@
+{
+  "name": "godogen-landmarks",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Offline glTF authoring for the three arena landmarks. Not shipped, not a runtime dependency — see build.mjs.",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  }
+}

@@ -79,6 +79,23 @@ public partial class Screenshot : SceneTree
         if (meta != null)
             meta.Ephemeral = true;
 
+        // `seed:N` pins the layout, and it has to be set before the scene is in
+        // the tree: `LevelGenerator` generates from `_Ready`, so a seed assigned
+        // afterwards is a seed for a map that has already been built.
+        //
+        // Without it every capture is a fresh map, which makes "stand next to the
+        // silo" impossible to ask for — the silo's position is only known once
+        // the run it belongs to has finished generating.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (!argument.StartsWith("seed:") || !ulong.TryParse(argument[5..], out ulong seed))
+                continue;
+
+            var generator = scene.GetNodeOrNull<LevelGenerator>("Level");
+            if (generator != null)
+                generator.Seed = seed;
+        }
+
         GetRoot().AddChild(scene);
         _scene = scene;
 
@@ -104,6 +121,10 @@ public partial class Screenshot : SceneTree
 
             if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
                 GameSession.Biome = biome;
+
+            // `seed:` is read before the scene enters the tree, not here — see
+            // above `GetRoot().AddChild`. By this point the generator has already
+            // run in `_Ready` and setting its seed does nothing at all.
         }
     }
 
