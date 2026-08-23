@@ -49,6 +49,19 @@ public partial class CameraRig : Node3D
     /// How far away an explosion still moves the camera.
     [Export] public float ShakeRange { get; set; } = 18.0f;
 
+    /// Metres the view is pushed back at full recoil, and how fast that dies.
+    ///
+    /// Linear in the recoil level rather than squared, unlike the shake. A
+    /// squared falloff is right for a rattle, whose tail should vanish; recoil is
+    /// a push and a release, and squaring it makes everything below half strength
+    /// — which is every automatic weapon in the game — imperceptible.
+    ///
+    /// Nine per second is about a tenth of a second of travel for a shotgun's
+    /// kick. Faster than that and a single shot is over before a frame has drawn
+    /// it; slower and rapid fire turns into a slow drift backwards.
+    [Export] public float RecoilMetres { get; set; } = 0.5f;
+    [Export] public float RecoilFade { get; set; } = 9.0f;
+
     /// Height above the rig the view is pulled toward when cover is in the way.
     ///
     /// Chest height rather than the feet. The line that has to stay clear is the
@@ -190,6 +203,29 @@ public partial class CameraRig : Node3D
     /// pile of them should still leave the arena readable.
     public void Shake(float amount) => _shake = Mathf.Min(1.0f, _shake + amount);
 
+    /// How much shake is left, 0 to 1. Only a probe asks.
+    public float ShakeLevel => _shake;
+
+    /// A shove straight back along the view, for firing a weapon.
+    ///
+    /// **Not `Shake`, and the difference is not cosmetic.** Shake is a random
+    /// rattle for impacts, tuned around a fade of six per second and amplitudes
+    /// near one; a per-shot kick of 0.02 pushed through it is gone in a fifth of
+    /// a tick and displaces the camera by a third of a millimetre. Every weapon
+    /// in the game measured a kick of exactly 0.000, including the one that
+    /// should punch hardest.
+    ///
+    /// Recoil is a different shape: brief, directional, and along the sight line
+    /// rather than sideways — a gun pushes the view *back*, and a rattle in a
+    /// random direction reads as something exploding nearby instead.
+    public void Kick(float amount) => _recoil = Mathf.Min(1.0f, _recoil + amount);
+
+    /// How much recoil is left, 0 to 1. Only a probe asks — it is how "this
+    /// weapon kicks and that one does not" becomes a number.
+    public float RecoilLevel => _recoil;
+
+    private float _recoil;
+
     /// Turns the view. Positive is counter-clockwise seen from above.
     ///
     /// Wrapped rather than clamped or left to grow: the yaw is read every frame
@@ -262,6 +298,17 @@ public partial class CameraRig : Node3D
         Vector3 settled = GlobalPosition.Lerp(Flatten(_target.GlobalPosition), t);
 
         _shake = Mathf.Max(0.0f, _shake - ShakeFade * step);
+        _recoil = Mathf.Max(0.0f, _recoil - RecoilFade * step);
+
+        // Back along the view. Applied to the settled position rather than to the
+        // camera's own offset, so it composes with the pull-in instead of
+        // fighting it for the same local transform.
+        if (_recoil > 0.0f)
+        {
+            Vector2 back = Forward();
+            settled -= new Vector3(back.X, 0.0f, back.Y) * (RecoilMetres * _recoil);
+        }
+
         if (_shake <= 0.0f)
         {
             GlobalPosition = settled;
@@ -270,6 +317,8 @@ public partial class CameraRig : Node3D
 
         // Squared, so the tail of a shake falls away quickly instead of turning
         // into a slow drift the player reads as the camera being broken.
+        //
+        // Recoil above is deliberately *not* squared — see `RecoilMetres`.
         //
         // Added to `GlobalPosition`, which is deliberately not affected by the
         // rotation set above — a shake in the rig's local space would change

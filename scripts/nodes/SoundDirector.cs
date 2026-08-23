@@ -356,14 +356,65 @@ public partial class SoundDirector : Node
         _hazardCount = count;
     }
 
-    private void OnFired(WeaponCategory category, Vector3 origin, Vector2 direction) => Play(category switch
+    /// Three clips for nine weapons, pitched and levelled by what the weapon is.
+    ///
+    /// **The clip set is not the problem and more clips would not fix it.** Every
+    /// firearm played `RifleShot` at exactly -3 dB and exactly unit pitch, so a
+    /// pump shotgun and a marksman rifle were the same sound at the same volume —
+    /// and weight is most of what a player hears in a weapon. Pitch and level are
+    /// free, already supported by `Play`, and carry the difference between a light
+    /// automatic and something that kicks.
+    ///
+    /// Derived from the weapon's own numbers so a new one in
+    /// `resources/weapons/` sounds like itself without being listed here.
+    private void OnFired(WeaponResource weapon, Vector3 origin, Vector2 direction)
     {
-        WeaponCategory.MeleeShort or WeaponCategory.MeleeLong => Sfx.MeleeSwing,
-        WeaponCategory.BowCrossbow => Sfx.BowShot,
-        _ => Sfx.RifleShot,
-    }, -3.0f);
+        // How heavy one pull is, against the heaviest thing in the game. A slow
+        // weapon that hits hard sits at the bottom of this and sounds it.
+        float weight = Mathf.Clamp(weapon.BaseDamage / 34.0f, 0.0f, 1.0f);
 
-    private void OnHit(Vector3 where) => Play(Sfx.Impact, -4.0f);
+        Sfx clip = weapon.Category switch
+        {
+            WeaponCategory.MeleeShort or WeaponCategory.MeleeLong => Sfx.MeleeSwing,
+            WeaponCategory.BowCrossbow => Sfx.BowShot,
+            _ => Sfx.RifleShot,
+        };
+
+        // Down a fifth across the range. Deeper than that and a heavy weapon
+        // stops reading as the same family of sound as the light one, which is
+        // the point at which "different weapon" becomes "different game".
+        float pitch = Mathf.Lerp(1.22f, 0.74f, weight);
+        float volume = Mathf.Lerp(-7.0f, -1.0f, weight);
+
+        // A melee swing is a swing whatever it is swinging, so its pitch comes
+        // from reach rather than damage — a scythe sweeping 3.4 m is a lower
+        // noise than a knife at 1.6 m, and both are quiet.
+        if (clip == Sfx.MeleeSwing)
+        {
+            pitch = Mathf.Lerp(1.15f, 0.80f, Mathf.Clamp(weapon.BaseRange / 3.4f, 0.0f, 1.0f));
+            volume = -4.0f;
+        }
+
+        Play(clip, volume, pitch);
+
+        // A launched charge gets a second, much lower voice under the shot. One
+        // clip cannot be both a report and a thump, and the bolt launcher is the
+        // only weapon in the set that should be felt leaving.
+        if (weapon.Trait == WeaponTrait.Blast)
+            Play(Sfx.Explosion, -12.0f, 0.5f);
+    }
+
+    /// Louder and lower the harder it landed.
+    ///
+    /// A knife tick and a thirty-four damage marksman round used to be the same
+    /// impact at the same level, which threw away the only per-hit feedback the
+    /// audio had. Chain jumps do a fraction of the damage and now sound like it,
+    /// which is what stops a chained volley from turning into a wall of noise.
+    private void OnHit(Vector3 where, WeaponCategory category, float damage)
+    {
+        float weight = Mathf.Clamp(damage / 30.0f, 0.0f, 1.0f);
+        Play(Sfx.Impact, Mathf.Lerp(-9.0f, -2.0f, weight), Mathf.Lerp(1.18f, 0.82f, weight));
+    }
 
     private void OnEnemyKilled(int type, Vector3 position) => Play(Sfx.EnemyDeath, -5.0f);
 

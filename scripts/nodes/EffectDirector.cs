@@ -137,8 +137,23 @@ public partial class EffectDirector : Node3D
         Sync();
     }
 
-    private void OnFired(WeaponCategory category, Vector3 origin, Vector2 direction)
+    /// What a shot looks like, built from the weapon rather than from its
+    /// category.
+    ///
+    /// **Nine weapons shared four effects, and three of those four were the same
+    /// white puff.** A pump shotgun throwing eight pellets across twenty degrees
+    /// and a marksman rifle putting one round through three bodies at thirty
+    /// metres produced identical feedback, so the only evidence the player had
+    /// that they were different weapons was the number in the corner. The traits
+    /// were all implemented; none of them were *visible*.
+    ///
+    /// Every branch below reads off the weapon's own numbers, so a weapon added
+    /// to `resources/weapons/` gets an appropriate flash without being listed
+    /// here. The trait switch is for the ones whose character is a shape rather
+    /// than a magnitude.
+    private void OnFired(WeaponResource weapon, Vector3 origin, Vector2 direction)
     {
+        WeaponCategory category = weapon.Category;
         // At the muzzle, not at the character. A flash centred on the player
         // reads as the player glowing; a metre out along the shot reads as a gun.
         // Flattened, because the player is planted and `EffectPool.Spawn`
@@ -154,21 +169,156 @@ public partial class EffectDirector : Node3D
             // A swing has no flash. It gets a pale smear along the arc instead,
             // because a melee player whose weapon shows nothing cannot tell a
             // weapon on cooldown from one out of range.
-            _pool.Spawn(at + new Vector3(0.0f, 0.4f, 0.0f), 0.8f, 1.7f,
-                        new Color(0.80f, 0.86f, 0.95f, 0.24f), 0.12f, direction * 3.5f);
+            //
+            // Sized off the weapon's reach, so a scythe sweeping 3.4 m draws a
+            // wider arc than a knife at 1.6 m. Cleave gets a second, slower smear
+            // behind the first: the trait hits everything in the arc, and one
+            // streak cannot say that.
+            float reach = Mathf.Max(1.0f, weapon.BaseRange);
+            _pool.Spawn(at + new Vector3(0.0f, 0.4f, 0.0f), reach * 0.42f, reach * 0.92f,
+                        new Color(0.80f, 0.86f, 0.95f, 0.24f), 0.12f, direction * (reach * 1.4f));
+
+            if (weapon.Trait == WeaponTrait.Cleave)
+            {
+                _pool.Spawn(at + new Vector3(0.0f, 0.55f, 0.0f), reach * 0.30f, reach * 1.20f,
+                            new Color(0.90f, 0.80f, 0.62f, 0.16f), 0.22f, direction * (reach * 0.7f));
+            }
+
+            Kick(0.05f);
             return;
         }
 
-        _pool.Spawn(at + new Vector3(0.0f, 0.15f, 0.0f), 0.5f, 0.12f, Muzzle, 0.075f, Vector2.Zero);
+        // A bow has no powder, and the absence is the character.
+        //
+        // Giving it a muzzle flash was the single worst thing about the old
+        // effect: a drawn string releasing is a quiet event, and lighting it up
+        // like a rifle made the bow feel like a rifle that happened to be slow.
+        if (category == WeaponCategory.BowCrossbow)
+        {
+            _pool.Spawn(at + new Vector3(0.0f, 0.30f, 0.0f), 0.22f, 0.06f,
+                        new Color(0.86f, 0.84f, 0.74f, 0.30f), 0.06f, direction * 1.2f);
+            Kick(0.16f);
+            return;
+        }
+
+        // Firearms. The flash grows with the damage of one shot and spreads with
+        // the weapon's own cone, which is what separates a rifle from a shotgun
+        // without either of them being special-cased.
+        float bite = Mathf.Clamp(weapon.BaseDamage / 34.0f, 0.25f, 1.0f);
+        float spread = Mathf.DegToRad(weapon.BaseSpreadDegrees);
+
+        switch (weapon.Trait)
+        {
+            // Eight pellets across twenty degrees. Drawn as a fan of small puffs
+            // rather than one large one, because the *width* is the weapon: a
+            // single wide flash reads as a bigger rifle, and a fan reads as a
+            // shotgun before the player has looked at the numbers.
+            case WeaponTrait.Spread:
+            {
+                int fingers = Mathf.Clamp(weapon.TraitCount, 3, 7);
+                for (int i = 0; i < fingers; i++)
+                {
+                    float across = fingers == 1 ? 0.0f : (i / (float)(fingers - 1) - 0.5f) * 2.0f;
+                    Vector2 fan = direction.Rotated(across * spread);
+
+                    _pool.Spawn(at + new Vector3(0.0f, 0.18f, 0.0f), 0.34f * bite, 0.9f * bite,
+                                new Color(1.0f, 0.62f, 0.22f, 0.55f), 0.10f, fan * 7.0f);
+                }
+
+                Kick(0.55f);
+                break;
+            }
+
+            // One round, a long way, through several bodies. A thin white lance
+            // laid down the shot rather than a bloom at the muzzle — the reach is
+            // the weapon, so the effect should be long rather than bright.
+            case WeaponTrait.Charge:
+            {
+                for (int i = 1; i <= 4; i++)
+                {
+                    _pool.Spawn(
+                        at + new Vector3(direction.X, 0.0f, direction.Y) * (i * 1.6f)
+                           + new Vector3(0.0f, 0.20f, 0.0f),
+                        0.16f, 0.02f, new Color(0.94f, 0.96f, 1.0f, 0.5f), 0.09f, Vector2.Zero);
+                }
+
+                Kick(0.48f);
+                break;
+            }
+
+            // A launched charge. Slow, heavy, and it leaves smoke — the only
+            // firearm whose shot is worth watching travel.
+            case WeaponTrait.Blast:
+                _pool.Spawn(at + new Vector3(0.0f, 0.20f, 0.0f), 0.7f, 1.5f,
+                            new Color(1.0f, 0.55f, 0.20f, 0.6f), 0.16f, direction * 2.0f);
+                _pool.Spawn(at + new Vector3(0.0f, 0.28f, 0.0f), 0.5f, 1.9f,
+                            new Color(0.42f, 0.40f, 0.38f, 0.35f), 0.55f, direction * 1.0f);
+                Kick(0.60f);
+                break;
+
+            // Everything else, including the automatics. Small and quick,
+            // because it happens six or seven times a second and anything larger
+            // is a strobe rather than a gun.
+            default:
+                _pool.Spawn(at + new Vector3(0.0f, 0.15f, 0.0f), 0.5f * bite, 0.12f,
+                            Muzzle, 0.075f, Vector2.Zero);
+                Kick(0.16f * bite);
+                break;
+        }
     }
 
-    private void OnHit(Vector3 where)
+    /// A shove on the camera, per shot.
+    ///
+    /// Weight is the one thing a still image cannot carry, and it is most of why
+    /// a slow heavy weapon feels slow and heavy.
+    ///
+    /// Through `CameraRig.Kick` rather than `Shake`. The first version used shake,
+    /// which is tuned for impacts at a fade of six per second: the amounts a
+    /// per-shot recoil wants are around 0.1, and 0.1 through that channel lasts a
+    /// fifth of a tick and moves the camera a third of a millimetre. Every weapon
+    /// measured a kick of exactly zero.
+    ///
+    /// The values accumulate, so an automatic at seven shots a second is not
+    /// seven times a shotgun at one and a half. `RecoilFade` is nine per second,
+    /// which puts a repeating 0.12 at a steady 0.09 — four centimetres of push,
+    /// a buzz — against a shotgun's single 0.55, which is a twenty-seven
+    /// centimetre punch that then lets go.
+    ///
+    /// Melee gets the least of anything: a swing that moved the camera would move
+    /// it on every miss, and the hit is where a melee weapon should land.
+    private void Kick(float amount)
+    {
+        _rig ??= GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
+        _rig?.Kick(amount);
+    }
+
+    private CameraRig? _rig;
+
+    /// The puffs, for a probe that needs to know what a shot emitted. The game
+    /// never reaches in here.
+    public EffectPool Effects => _pool;
+
+    private void OnHit(Vector3 where, WeaponCategory category, float damage)
     {
         if (_clock - _lastImpact < ImpactInterval)
             return;
 
         _lastImpact = _clock;
-        _pool.Spawn(where + new Vector3(0.0f, 0.9f, 0.0f), 0.4f, 0.95f, Spark, 0.13f, Scatter(2.0f));
+        // Scaled by what actually landed. A knife tick and a thirty-four damage
+        // marksman round used to throw the same flare, so the one piece of
+        // feedback that could have said "that connected properly" said nothing at
+        // all — and a chain jump, which does a fraction of the damage, announced
+        // itself as loudly as the shot that caused it.
+        float weight = Mathf.Clamp(damage / 30.0f, 0.35f, 1.6f);
+
+        _pool.Spawn(where + new Vector3(0.0f, 0.9f, 0.0f),
+                    0.4f * weight, 0.95f * weight, Spark, 0.13f, Scatter(2.0f * weight));
+
+        // Melee lands with a thump the camera can feel. Ranged does not: the
+        // player is metres away and a screen that jumped on every rifle hit would
+        // never stop moving.
+        if (category is WeaponCategory.MeleeShort or WeaponCategory.MeleeLong)
+            Kick(Mathf.Min(0.22f, 0.018f * damage));
     }
 
     /// A kill is the one event the player is trying to cause, so it is the one

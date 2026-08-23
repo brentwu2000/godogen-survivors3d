@@ -72,8 +72,24 @@ public partial class WeaponHandler : Node3D
     /// positional — but a muzzle flash with no muzzle and a spark with no impact
     /// point are the two effects most worth having, so the position travels with
     /// the event rather than being re-derived by whoever wants to draw it.
-    public event System.Action<WeaponCategory, Vector3, Vector2>? Fired;
-    public event System.Action<Vector3>? Hit;
+    /// A shot went out. Carries the *weapon*, not its category.
+    ///
+    /// The category was four values for nine weapons, so a pump shotgun and a
+    /// marksman rifle announced themselves identically and were drawn
+    /// identically — the same white puff, the same size, the same duration. The
+    /// weapons resolve completely differently and none of that reached the
+    /// screen, which is the whole of "the weapon types feel the same".
+    ///
+    /// The resource is already in hand at every call site. Passing it costs
+    /// nothing and lets the effect be built from damage, spread, rate and trait
+    /// rather than from a four-way switch.
+    public event System.Action<WeaponResource, Vector3, Vector2>? Fired;
+    /// Something was hit, and by how much.
+    ///
+    /// The damage is what makes a spark worth scaling: a knife tick and a
+    /// marksman round both used to produce the same flare, so the one piece of
+    /// feedback that could have said "that landed properly" said nothing.
+    public event System.Action<Vector3, WeaponCategory, float>? Hit;
 
     public WeaponResource? Weapon => _slots[_active].Weapon;
     public int Ammo => _slots[_active].Ammo;
@@ -436,7 +452,7 @@ public partial class WeaponHandler : Node3D
 
         float knockback = weapon.Knockback + Mods.Knockback;
 
-        Fired?.Invoke(weapon.Category, origin, direction);
+        Fired?.Invoke(weapon, origin, direction);
 
         if (allowBurst && weapon.Trait == WeaponTrait.Burst && weapon.TraitCount > 0)
         {
@@ -676,7 +692,7 @@ public partial class WeaponHandler : Node3D
     private void RecordHit(WeaponCategory category, Vector3 where, float damage)
     {
         _hits[(int)category]++;
-        Hit?.Invoke(where);
+        Hit?.Invoke(where, category, damage);
 
         if (damage <= 0.0f || Mods.ChainChance <= 0.0f || _horde == null)
             return;
@@ -700,7 +716,10 @@ public partial class WeaponHandler : Node3D
         Vector3 to = _horde.Pool.Position[next];
         _horde.Damage(next, damage * ChainFraction, Vector2.Zero);
         _hits[(int)category]++;
-        Hit?.Invoke(to);
+
+        // A chain jump reads as a smaller event than the shot that started it,
+        // because it is: the chain does a fraction of the damage.
+        Hit?.Invoke(to, category, damage * ChainFraction);
     }
 
     /// How far an arc will reach. Short, like the ricochet: this is a crowd

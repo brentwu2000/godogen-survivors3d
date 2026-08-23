@@ -44,8 +44,28 @@ public sealed class EffectPool
         Drift = new Vector2[capacity];
     }
 
+    /// How many puffs have ever been spawned, and how big they were.
+    ///
+    /// Counted rather than sampled, because a puff lives for a tenth of a second
+    /// and a probe reading `Count` a few ticks later sees whatever happens to
+    /// still be alive. What a probe wants to know is what the shot *emitted*,
+    /// which is a running total.
+    public int TotalSpawned { get; private set; }
+
+    public float TotalStartSize { get; private set; }
+
+    /// Forgets the totals. Only a probe calls this; the game never needs it.
+    public void ForgetTotals()
+    {
+        TotalSpawned = 0;
+        TotalStartSize = 0.0f;
+    }
+
     public void Spawn(Vector3 position, float startSize, float endSize, Color tint, float seconds, Vector2 drift)
     {
+        TotalSpawned++;
+        TotalStartSize += startSize;
+
         int i;
         if (Count < Capacity)
         {
