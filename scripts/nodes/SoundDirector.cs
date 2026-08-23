@@ -375,7 +375,14 @@ public partial class SoundDirector : Node
 
     private void OnExploded(Vector3 position) => Play(Sfx.Explosion, 2.0f);
 
-    private void OnContainerEmptied(int value) => Play(Sfx.LootDone);
+    /// Only on the last haul. A crate that pays out three times as the player
+    /// drops things and comes back would otherwise chime three times, and the
+    /// chime means "that one is finished".
+    private void OnContainerEmptied(int value, bool finished)
+    {
+        if (finished)
+            Play(Sfx.LootDone);
+    }
 
     private void OnRunEnded(int state, int banked)
     {

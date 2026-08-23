@@ -49,7 +49,11 @@ public partial class BuildInputMap : SceneTree
         // collide with because there is only one of it, and no fitting can have a
         // verb without a key because they all share the same one.
         Define("interact_second", Keys(Key.C));
-        Define("reload", Keys(Key.R));
+        // `reload` is retired and R is the drop key now. Reloading has always
+        // happened on its own when the magazine empties — the action was defined,
+        // bound, and never polled by anything, which is a key held in reserve
+        // against a keyboard that had run out of them.
+        Define("drop", Keys(Key.R));
         Define("secure", Keys(Key.F));
         Define("use", Keys(Key.Q));
         Define("swap", Keys(Key.Tab));
@@ -74,7 +78,7 @@ public partial class BuildInputMap : SceneTree
         // `move_down`. On a screen with no movement that was harmless. In a room
         // it sells the stash every time the player walks backwards.
         foreach (string retired in new[]
-                 { "fire", "menu_sell", "menu_launch", "menu_reroll", "menu_biome", "menu_daily" })
+                 { "fire", "reload", "menu_sell", "menu_launch", "menu_reroll", "menu_biome", "menu_daily" })
         {
             ProjectSettings.SetSetting($"input/{retired}", default);
         }

@@ -90,6 +90,36 @@ public sealed class Inventory
         return best;
     }
 
+    /// Index of the entry worth least *per unit of bulk*, or -1 when empty.
+    ///
+    /// Per bulk, unlike `MostValuableIndex`, and the asymmetry is the point.
+    /// Securing asks "what do I most want to keep", where the safe box is small
+    /// enough that bulk rarely decides. Dropping asks "what is costing me the
+    /// most room for the least return", which is a different question with a
+    /// different answer: four boxes of rifle rounds are worth more in total than
+    /// one circuit board and are exactly what should go over the side when a
+    /// cache is on the ground in front of you.
+    public int LeastValuableIndex()
+    {
+        int worst = -1;
+        float worstRate = float.MaxValue;
+
+        for (int i = 0; i < EntryCount; i++)
+        {
+            if (_counts[i] <= 0 || _items[i].Bulk <= 0)
+                continue;
+
+            float rate = _items[i].Value / (float)_items[i].Bulk;
+            if (rate >= worstRate)
+                continue;
+
+            worstRate = rate;
+            worst = i;
+        }
+
+        return worst;
+    }
+
     /// Removes a single unit, collapsing the entry when it empties.
     public bool RemoveOne(int index)
     {

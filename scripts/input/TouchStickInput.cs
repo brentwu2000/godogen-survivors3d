@@ -28,6 +28,7 @@ public sealed class TouchStickInput : IInputSource
     public bool UsePressed { get; private set; }
     public bool SwapPressed { get; private set; }
     public bool ThrowPressed { get; private set; }
+    public bool DropPressed { get; private set; }
 
     /// Order matches TouchAction.
     public TouchStickInput(VirtualStick moveStick, TouchButton[] buttons)
@@ -47,6 +48,7 @@ public sealed class TouchStickInput : IInputSource
         UsePressed = Take(TouchAction.Use);
         SwapPressed = Take(TouchAction.Swap);
         ThrowPressed = Take(TouchAction.Throw);
+        DropPressed = Take(TouchAction.Drop);
     }
 
     private bool Take(TouchAction action)
@@ -62,4 +64,9 @@ public enum TouchAction
     Use,
     Throw,
     Swap,
+
+    /// Appended, never inserted. This enum indexes the button array the touch
+    /// readout builds, so putting a new value in the middle silently renumbers
+    /// every button after it — the player would press Use and get Throw.
+    Drop,
 }

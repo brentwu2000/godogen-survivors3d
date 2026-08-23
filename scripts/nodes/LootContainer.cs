@@ -19,11 +19,32 @@ public partial class LootContainer : Node3D
 
     /// Named Emptied rather than Looted: the source generator turns a signal into
     /// a member of the same name, which would collide with the Looted state flag.
-    [Signal] public delegate void EmptiedEventHandler(int value);
+    ///
+    /// Two arguments. `finished` is false when the backpack filled and the crate
+    /// still holds something — the run log has to value every visit and count the
+    /// crate once, and with one argument it could do only one of those.
+    [Signal] public delegate void EmptiedEventHandler(int value, bool finished);
 
     public float Progress { get; private set; }
     public bool Looted { get; private set; }
     public bool PlayerInRange { get; private set; }
+
+    /// What was rolled and would not fit.
+    ///
+    /// The crate keeps it. Previously a full backpack emptied the container and
+    /// destroyed the overflow, which made carrying capacity a silent tax rather
+    /// than a decision — the player never learned what they had lost, so there
+    /// was nothing to weigh and no reason to drop anything.
+    ///
+    /// Rolled once. Coming back must not re-roll: a crate that rerolled would let
+    /// a player with a full bag farm one container for the item they wanted.
+    private Inventory? _remains;
+
+    /// Bulk still waiting in this crate, and what it is worth. The readout asks,
+    /// because "your bag is full" is only actionable next to "and this is what is
+    /// sitting here".
+    public int RemainingBulk => _remains?.UsedBulk ?? 0;
+    public int RemainingValue => _remains?.TotalValue ?? 0;
 
     private Player? _player;
     private ItemResource[] _table = System.Array.Empty<ItemResource>();
@@ -121,12 +142,51 @@ public partial class LootContainer : Node3D
         if (Progress < 1.0f)
             return;
 
-        Progress = 1.0f;
-        Looted = true;
         // Read once, here, rather than inside the roll: the value multiplier is
         // the player's and the roll only knows about items.
         _valueScale = _player.Mods.LootValueScale;
-        EmitSignal(SignalName.Emptied, RollInto(_player.Backpack));
+
+        // Rolled on the first search only. Afterwards the crate is a pile with a
+        // known content, and coming back moves what fits.
+        _remains ??= RollAll();
+
+        int taken = Transfer(_remains, _player.Backpack);
+        Looted = _remains.EntryCount == 0;
+
+        // Reset rather than held at 1. Held, the search completes again on the
+        // very next tick against a bag that is still full, and the crate emits a
+        // zero-value haul sixty times a second for as long as the player stands
+        // near it.
+        Progress = 0.0f;
+
+        // Silent when nothing moved. A player standing on a crate with a full bag
+        // completes the search over and over, and announcing a haul of zero each
+        // time would chime, log and total nothing repeatedly — the probe saw
+        // fourteen payouts for one crate. The crate is still *searchable*; it just
+        // has nothing to say until the player makes room.
+        if (taken > 0 || Looted)
+            EmitSignal(SignalName.Emptied, taken, Looted);
+    }
+
+    /// Moves as much as fits, and returns what it was worth.
+    private int Transfer(Inventory from, Inventory into)
+    {
+        int gained = 0;
+
+        // Backwards, because a fully-moved entry collapses by swapping the last
+        // one into its slot — a forward walk would skip whatever took its place.
+        for (int i = from.EntryCount - 1; i >= 0; i--)
+        {
+            ItemResource item = from.ItemAt(i);
+            int moved = into.TryAdd(item, from.CountAt(i));
+
+            for (int n = 0; n < moved; n++)
+                from.RemoveOne(i);
+
+            gained += Mathf.RoundToInt(moved * item.Value * _valueScale);
+        }
+
+        return gained;
     }
 
     /// Rolls this crate's table into a bag without emptying it.
@@ -135,25 +195,27 @@ public partial class LootContainer : Node3D
     /// to pick up. A stage that read the rarity bias instead would be reading the
     /// input to the question — which is exactly how a cache named "supply" shipped
     /// full of jewellery.
-    public void RollIntoForTesting(Inventory bag) => RollInto(bag);
+    public void RollIntoForTesting(Inventory bag) => Transfer(RollAll(), bag);
 
-    /// Returns the value actually taken — a full backpack means the crate is
-    /// still emptied but the loot is left behind, which is the honest outcome.
-    private int RollInto(Inventory backpack)
+    /// Everything this crate holds, in an inventory of its own.
+    ///
+    /// Capacity is effectively unbounded: the crate is not carrying it anywhere
+    /// and a roll refused for bulk would be loot the player never learns existed,
+    /// which is the failure this whole change is undoing.
+    private Inventory RollAll()
     {
+        var contents = new Inventory(int.MaxValue / 2);
         if (_table.Length == 0 || _weightTotal <= 0.0f)
-            return 0;
+            return contents;
 
-        int gained = 0;
         for (int roll = 0; roll < RollCount; roll++)
         {
             ItemResource item = PickWeighted();
             int stack = item.MinStack + (int)(NextFloat() * (item.MaxStack - item.MinStack + 1));
-            stack = Mathf.Clamp(stack, item.MinStack, item.MaxStack);
-            gained += Mathf.RoundToInt(backpack.TryAdd(item, stack) * item.Value * _valueScale);
+            contents.TryAdd(item, Mathf.Clamp(stack, item.MinStack, item.MaxStack));
         }
 
-        return gained;
+        return contents;
     }
 
     private ItemResource PickWeighted()

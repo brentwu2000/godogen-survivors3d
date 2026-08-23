@@ -23,7 +23,7 @@ public partial class ShelterProbe : SceneTree
     /// verb that worked from anywhere in the base, which is exactly what made the
     /// room unnecessary.
     private static readonly string[] Retired =
-        { "fire", "menu_sell", "menu_launch", "menu_reroll", "menu_biome", "menu_daily" };
+        { "fire", "reload", "menu_sell", "menu_launch", "menu_reroll", "menu_biome", "menu_daily" };
 
     private Shelter? _shelter;
     private Player? _player;

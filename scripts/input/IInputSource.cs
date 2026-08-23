@@ -39,6 +39,13 @@ public interface IInputSource
     /// Throws the cheapest carried item that acts on the world.
     bool ThrowPressed { get; }
 
+    /// Throws away the worst thing in the backpack, by value per bulk.
+    ///
+    /// Its own verb rather than a menu, because the moment it is for is standing
+    /// over a cache with a full bag and something arriving. A player who has to
+    /// open an inventory to decide is a player who has already been bitten.
+    bool DropPressed { get; }
+
     /// Called once per frame before the properties are read. Sources that need
     /// to project a screen position into the world (mouse aim) use the player's
     /// position as the ground plane height.

@@ -448,7 +448,8 @@ public partial class Hud : CanvasLayer
         _keys.Text = _touchActive
             ? ""
             : "[Tab] swap   [Q] use   [F] secure" +
-              (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "");
+              (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "") +
+              (_player?.Backpack.EntryCount > 0 ? "   [R] drop worst" : "");
     }
 
     private void UpdateClock()
@@ -537,11 +538,18 @@ public partial class Hud : CanvasLayer
 
         foreach (LootContainer container in _containers)
         {
-            if (container is { Looted: false, PlayerInRange: true })
-            {
-                ShowHold(true, container.Progress, "SEARCHING");
-                return;
-            }
+            if (container is not { Looted: false, PlayerInRange: true })
+                continue;
+
+            // What is still in it, once there is anything. A crate keeps what
+            // would not fit, and "your bag is full" is only a decision next to
+            // "and this is what is sitting here" — without the second half the
+            // player has no idea whether it is worth dropping something for.
+            ShowHold(true, container.Progress, container.RemainingBulk > 0
+                ? $"{container.RemainingBulk} LEFT, WORTH {container.RemainingValue}"
+                : "SEARCHING");
+
+            return;
         }
 
         ShowHold(false, 0.0f, "");

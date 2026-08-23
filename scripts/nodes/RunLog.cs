@@ -110,9 +110,18 @@ public partial class RunLog : Node
             _killsByType[type]++;
     }
 
-    private void OnCrateEmptied(int value)
+    /// Every visit is worth something; the crate is counted once.
+    ///
+    /// A full backpack now leaves what did not fit in the crate, so a container
+    /// can pay out two or three times as the player drops things and comes back.
+    /// Counting a crate per payout would credit one crate as three, and counting
+    /// the value only on the last visit would throw away most of the haul —
+    /// which is why the signal carries both numbers.
+    private void OnCrateEmptied(int value, bool finished)
     {
-        _cratesLooted++;
+        if (finished)
+            _cratesLooted++;
+
         _lootValue += value;
     }
 

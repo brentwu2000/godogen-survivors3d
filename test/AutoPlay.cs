@@ -309,7 +309,10 @@ public partial class AutoPlay : SceneTree
             // still takes its search seconds, with whatever is left of the wave
             // arriving during them.
             if (_zoneCache is { Looted: false })
+            {
+                MakeRoomFor(_zoneCache);
                 return false;
+            }
 
             if (_zoneCache != null)
             {
@@ -326,7 +329,10 @@ public partial class AutoPlay : SceneTree
         else if (_leg < _crates.Length)
         {
             if (!_crates[_leg].Looted)
+            {
+                MakeRoomFor(_crates[_leg]);
                 return false;
+            }
 
             // Secure the best find before moving on — that is the whole point of
             // carrying a safe box rather than trusting the walk home.
@@ -728,6 +734,42 @@ public partial class AutoPlay : SceneTree
 
         GD.Print($"route: {string.Join(" -> ", _routeLabels)}");
         return true;
+    }
+
+    /// Throws away the worst thing carried while a crate still has something.
+    ///
+    /// The bot has to be able to make the decision the game now asks for. A crate
+    /// keeps what would not fit, so with a full backpack `Looted` never becomes
+    /// true and the leg waits for something that will not happen — the bot stood
+    /// at crates until the leg timeout, reached the zone eighteen seconds late
+    /// with an empty reserve, and died. It was a bot that could not play the game
+    /// rather than a game that was too hard.
+    ///
+    /// One unit per tick, not a loop. Dropping is a keypress and the player can
+    /// only make one a frame; a bot that emptied its bag instantly would measure
+    /// a game nobody can play, which is the failure this whole file exists to
+    /// avoid.
+    ///
+    /// It stops when the crate is worth less per bulk than what is being carried
+    /// — otherwise the bot would throw away a circuit board for a box of rounds
+    /// and call it progress.
+    private void MakeRoomFor(LootContainer crate)
+    {
+        if (crate.RemainingBulk <= 0 || _player.Backpack.FreeBulk > 0)
+            return;
+
+        int worst = _player.Backpack.LeastValuableIndex();
+        if (worst < 0)
+            return;
+
+        ItemResource carried = _player.Backpack.ItemAt(worst);
+        float carriedRate = carried.Value / (float)Mathf.Max(1, carried.Bulk);
+        float waitingRate = crate.RemainingValue / (float)crate.RemainingBulk;
+
+        if (waitingRate <= carriedRate)
+            return;
+
+        _player.TryDropWorst();
     }
 
     /// The unlooted crate closest to a point, within a few metres of it.

@@ -71,6 +71,7 @@ public partial class TouchHud : CanvasLayer
             (TouchAction.Use, "Q"),
             (TouchAction.Throw, "G"),
             (TouchAction.Swap, "⇄"),
+            (TouchAction.Drop, "↓"),
         };
 
         _buttons = new TouchButton[layout.Length];
@@ -111,5 +112,10 @@ public partial class TouchHud : CanvasLayer
         _buttons[(int)TouchAction.Use].Enabled = _player.HasUsableItem;
         _buttons[(int)TouchAction.Throw].Enabled = _player.ThrowableCount > 0;
         _buttons[(int)TouchAction.Swap].Enabled = _weapons?.OtherSlotReady ?? false;
+
+        // Only worth offering when the bag has something in it. A drop button on
+        // an empty backpack is a button that does nothing, on a device where
+        // every button costs a thumb.
+        _buttons[(int)TouchAction.Drop].Enabled = _player.Backpack.EntryCount > 0;
     }
 }

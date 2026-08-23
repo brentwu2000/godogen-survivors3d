@@ -497,6 +497,9 @@ public partial class Player : CharacterBody3D
 
         if (_input.SwapPressed)
             _weapons?.SwapWeapon();
+
+        if (_input.DropPressed)
+            TryDropWorst();
     }
 
     /// Turns the stick into a world-space direction to travel in.
@@ -532,6 +535,29 @@ public partial class Player : CharacterBody3D
         // Negated for the same reason `move_up` is −Y: the stick's vertical axis
         // is screen-space and points down.
         return _rig.Forward() * -stick.Y;
+    }
+
+    /// Throws away one unit of the worst thing being carried.
+    ///
+    /// Worst by value per bulk, which is a different question from the one
+    /// `TrySecureBest` asks. Securing is "what do I most want to keep"; dropping
+    /// is "what is costing me the most room for the least return", and four boxes
+    /// of rifle rounds answer the second differently from the first.
+    ///
+    /// One unit rather than the whole stack. Standing over a cache the player
+    /// wants exactly enough room for what is in front of them, and a key that
+    /// dumped a whole stack would cost more than it had to every time.
+    ///
+    /// Returns what was thrown away, so a readout can say so — a silent drop
+    /// under pressure is indistinguishable from a key that did nothing.
+    public int TryDropWorst()
+    {
+        int index = Backpack.LeastValuableIndex();
+        if (index < 0)
+            return 0;
+
+        ItemResource item = Backpack.ItemAt(index);
+        return Backpack.RemoveOne(index) ? item.Value : 0;
     }
 
     /// Places the body and walks its legs.
