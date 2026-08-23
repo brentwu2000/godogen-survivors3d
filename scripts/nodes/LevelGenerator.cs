@@ -706,31 +706,39 @@ public partial class LevelGenerator : Node3D
 
     /// The rectangle on the ground.
     ///
-    /// Hollow, so it is a boundary rather than a sticker — the player has to be
-    /// able to see the floor they are standing on, and the edge is the only part
-    /// that means anything. Dormant colours: cold and dim, because an unwoken
-    /// zone should read as somewhere to consider rather than somewhere on fire.
+    /// `zone_marker.gdshader`, not `ground_marker`. The shared one is radial,
+    /// which is correct for the extraction pads and the burning ground and
+    /// produces a soft elliptical blob with no visible edge when stretched over
+    /// 26 by 20 metres. That was the first version and it failed at the only job
+    /// this has: a zone works by enemies arriving at the perimeter and the player
+    /// choosing whether to cross it, so a boundary nobody can see is a harder
+    /// fight with the information removed.
+    ///
+    /// Dormant colours are cold and dim — an unwoken zone should read as
+    /// somewhere to consider, not somewhere already on fire.
     private static MeshInstance3D BuildZoneMarker(ZonePlan plan)
     {
-        var material = new StandardMaterial3D
+        Material chosen = new StandardMaterial3D
         {
             AlbedoColor = new Color(0.45f, 0.50f, 0.62f, 0.5f),
             Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
             ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
         };
 
-        Material chosen = material;
-        var shader = GD.Load<Shader>("res://assets/shaders/ground_marker.gdshader");
-
+        var shader = GD.Load<Shader>("res://assets/shaders/zone_marker.gdshader");
         if (shader != null)
         {
             var live = new ShaderMaterial { Shader = shader };
-            live.SetShaderParameter("inner_colour", new Color(0.62f, 0.68f, 0.82f));
-            live.SetShaderParameter("outer_colour", new Color(0.20f, 0.26f, 0.40f));
-            live.SetShaderParameter("strength", 0.30f);
-            live.SetShaderParameter("churn", 0.35f);
-            live.SetShaderParameter("flicker", 0.05f);
-            live.SetShaderParameter("hollow", 0.82f);
+            live.SetShaderParameter("edge_colour", new Color(0.62f, 0.72f, 0.95f));
+            live.SetShaderParameter("fill_colour", new Color(0.20f, 0.26f, 0.40f));
+            // Low, because the blend is additive: this value lands on top of a
+            // ground already at about half brightness, and 0.55 clipped the line
+            // to pure white — which reads as a light source rather than a
+            // boundary, and loses the colour that says whether the zone is awake.
+            live.SetShaderParameter("strength", 0.26f);
+            live.SetShaderParameter("band", 0.055f);
+            live.SetShaderParameter("fill", 0.08f);
+            live.SetShaderParameter("pulse_speed", 0.9f);
             live.SetShaderParameter("seed", plan.Centre.X * 0.37f + plan.Centre.Y * 0.11f);
             chosen = live;
         }

@@ -66,6 +66,7 @@ public partial class Hud : CanvasLayer
     private RunGrowth? _growth;
     private WeaponHandler? _weapons;
     private LootContainer[] _containers = System.Array.Empty<LootContainer>();
+    private DangerZone[] _zones = System.Array.Empty<DangerZone>();
 
     /// Health as the readout shows it, which lags the real value. The gap between
     /// the two is the hit — a bar that snaps gives the player nothing to see, and
@@ -150,6 +151,7 @@ public partial class Hud : CanvasLayer
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
 
         RefreshContainers();
+        FindZones();
 
         if (_director != null)
         {
@@ -189,6 +191,35 @@ public partial class Hud : CanvasLayer
     }
 
     private bool _watchingCrates;
+
+    /// The danger zones, and their announcements.
+    ///
+    /// Collected once. Unlike the crates, zones are never added mid-run — the
+    /// level places all of them before the first frame — so there is nothing to
+    /// watch for and no reason to pay for a signal that would never fire.
+    private void FindZones()
+    {
+        var found = new System.Collections.Generic.List<DangerZone>();
+
+        foreach (Node child in GetParent()?.GetNodeOrNull("DangerZones")?.GetChildren()
+                               ?? new Godot.Collections.Array<Node>())
+        {
+            if (child is not DangerZone zone)
+                continue;
+
+            found.Add(zone);
+
+            // A zone waking is the single most important thing that can happen
+            // without the player having pressed anything, and it happens *because*
+            // they walked somewhere. Without a line saying so, the first sign is
+            // eight enemies arriving and no explanation for them.
+            zone.ZoneStarted += title => Announce($"{title.ToUpper()} — HOLD OR LEAVE", 2.6f);
+            zone.ZoneCleared += (title, rounds) =>
+                Announce($"{title.ToUpper()} CLEARED — +{rounds} ROUNDS", 2.6f);
+        }
+
+        _zones = found.ToArray();
+    }
 
     /// A line that says itself and then gets out of the way. Anything permanent
     /// in the upper third competes with the thing it is warning about.
@@ -476,6 +507,23 @@ public partial class Hud : CanvasLayer
             if (pad is { Open: true, PlayerInside: true, Progress: > 0.0f })
             {
                 ShowHold(true, pad.Progress, "EXTRACTING");
+                return;
+            }
+        }
+
+        // Then the zone the player is standing in. Below extraction because
+        // extraction ends the run, above searching because a crate can wait and
+        // a zone is spawning enemies at the player while they read it.
+        //
+        // Only while inside. A zone keeps running when the player steps out —
+        // deliberately, so it cannot be farmed from the edge — but a progress bar
+        // for somewhere they are no longer standing is a bar that describes
+        // nothing they can act on.
+        foreach (DangerZone zone in _zones)
+        {
+            if (zone is { State: DangerZone.ZoneState.Running, PlayerInside: true })
+            {
+                ShowHold(true, zone.Progress, zone.Title.ToUpper());
                 return;
             }
         }

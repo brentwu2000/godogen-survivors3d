@@ -94,9 +94,10 @@ public partial class ZoneProbe : SceneTree
             case 0: return RunStage(StagePlaced, "three zones, one of each kind, clear of the pads");
             case 1: return RunStage(StageDormant, "a zone does nothing until somebody walks in");
             case 2: return RunStage(StageWakes, "walking in wakes it and the first wave arrives");
-            case 3: return RunStage(StagePerimeter, "reinforcements come from the zone's edge, not from around the player");
-            case 4: return RunStage(StageHoldPauses, "leaving a hold pauses the clock rather than resetting it");
-            case 5: return RunStage(StagePays, "clearing it pays rounds and a cache, and it stops spawning");
+            case 3: return RunStage(StageReadout, "the readout says which zone and how far through");
+            case 4: return RunStage(StagePerimeter, "reinforcements come from the zone's edge, not from around the player");
+            case 5: return RunStage(StageHoldPauses, "leaving a hold pauses the clock rather than resetting it");
+            case 6: return RunStage(StagePays, "clearing it pays rounds and a cache, and it stops spawning");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -277,6 +278,58 @@ public partial class ZoneProbe : SceneTree
         }
 
         return woke && burstArrived;
+    }
+
+    /// A zone with no readout is a zone the player cannot act on.
+    ///
+    /// Standing inside one, the bar has to name it and show how far through. The
+    /// alternative — which is what the first version of this shipped as — is that
+    /// eight enemies arrive, the ground turns orange, and nothing anywhere says
+    /// what is being asked or how much longer it lasts.
+    ///
+    /// Read off the HUD's own nodes rather than off a property added for the
+    /// test, because the failure being guarded against is the readout not being
+    /// wired to the zones at all.
+    private bool? StageReadout(int tick)
+    {
+        if (Holdout() is not DangerZone hold)
+            return Missing();
+
+        var hud = GetRoot().GetChild(GetRoot().GetChildCount() - 1).GetNodeOrNull<CanvasLayer>("Hud");
+        if (hud == null)
+        {
+            GD.PushError("  no Hud");
+            return false;
+        }
+
+        // The HUD updates in _Process; a couple of ticks so it has run at least
+        // once with the player standing inside.
+        if (tick == 1)
+        {
+            _player!.GlobalPosition = hold.GlobalPosition;
+            return null;
+        }
+
+        if (tick < 5)
+            return null;
+
+        var back = hud.GetNodeOrNull<ColorRect>("HoldBack");
+        var fill = hud.GetNodeOrNull<ColorRect>("HoldFill");
+        var text = hud.GetNodeOrNull<Label>("HoldText");
+
+        string shown = text?.Text ?? "";
+        bool visible = back is { Visible: true };
+        bool named = shown.Contains(hold.Title.ToUpper());
+
+        GD.Print($"  the hold bar reads \"{shown}\", visible {visible}, " +
+                 $"fill {fill?.Size.X ?? 0.0f:F0}px at {hold.Progress * 100.0f:F0}% through");
+
+        if (!visible)
+            GD.PushError("  the readout is not showing anything while the player stands in a live zone");
+        if (!named)
+            GD.PushError($"  the readout says \"{shown}\" rather than naming {hold.Title}");
+
+        return visible && named;
     }
 
     /// Where reinforcements come from is the whole mechanic.

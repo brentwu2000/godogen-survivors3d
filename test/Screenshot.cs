@@ -40,6 +40,15 @@ public partial class Screenshot : SceneTree
         if (!Display.Required(this, "Screenshot"))
             return;
 
+        // `--zone` walks the player into the first danger zone before capturing,
+        // so a picture of the game includes the thing that was just built. A
+        // screenshot of an empty field is a screenshot of the ground shader.
+        foreach (string argument in OS.GetCmdlineArgs())
+        {
+            if (argument == "--zone")
+                _visitZone = true;
+        }
+
         var scene = GD.Load<PackedScene>(ScenePath)?.Instantiate();
         if (scene == null)
         {
@@ -83,6 +92,35 @@ public partial class Screenshot : SceneTree
         }
     }
 
+    private bool _visitZone;
+
+    /// Puts the player in the middle of the first zone on the map.
+    ///
+    /// Teleported rather than walked. The bot could get there, but it would take
+    /// twenty seconds of simulation to produce one frame, and where the player is
+    /// standing is the only thing this needs to control.
+    private void GoToZone()
+    {
+        Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+        var player = scene.GetNodeOrNull<Player>("Player");
+        Node? zones = scene.GetNodeOrNull("DangerZones");
+        if (player == null || zones == null)
+            return;
+
+        foreach (Node child in zones.GetChildren())
+        {
+            if (child is not DangerZone zone)
+                continue;
+
+            // Just inside the near edge, looking in. Standing at the centre
+            // frames the far side and none of the boundary the enemies arrive
+            // from, which is the half of a zone worth photographing.
+            player.GlobalPosition = zone.GlobalPosition
+                - new Vector3(0.0f, 0.0f, zone.HalfExtent.Y * 0.75f);
+            return;
+        }
+    }
+
     public override bool _Process(double delta)
     {
         // Not in _Initialize: nodes are not inside the tree yet, so setting a
@@ -92,6 +130,9 @@ public partial class Screenshot : SceneTree
             var player = _scene.GetNodeOrNull<Node3D>("Player");
             if (_teleport.HasValue && player != null)
                 player.GlobalPosition = _teleport.Value;
+
+            if (_visitZone)
+                GoToZone();
 
             var horde = _scene.GetNodeOrNull<Horde>("Horde");
             if (_mixed && horde != null && player != null)

@@ -114,7 +114,7 @@ public partial class DangerZone : Node3D
         for (int i = 0; i < OpeningBurst; i++)
             SpawnOnPerimeter();
 
-        Recolour(new Color(1.0f, 0.42f, 0.20f), new Color(0.75f, 0.10f, 0.04f), 1.0f);
+        Recolour(new Color(1.0f, 0.52f, 0.22f), new Color(0.75f, 0.18f, 0.05f), 0.72f, 2.6f);
         EmitSignal(SignalName.ZoneStarted, Title);
         GD.Print($"{Title} woke — {OpeningBurst} arriving, tier {Tier}");
     }
@@ -176,7 +176,7 @@ public partial class DangerZone : Node3D
         _director?.DropCache($"{Name}Cache", GlobalPosition, bias: 2.2f + Tier * 0.8f,
                              rolls: Rolls, seconds: 1.4f);
 
-        Recolour(new Color(0.55f, 1.0f, 0.68f), new Color(0.12f, 0.62f, 0.30f), 0.45f);
+        Recolour(new Color(0.55f, 1.0f, 0.68f), new Color(0.12f, 0.62f, 0.30f), 0.22f, 0.5f);
         EmitSignal(SignalName.ZoneCleared, Title, taken);
         GD.Print($"{Title} cleared — {Rolls} rolls and {taken} rounds");
     }
@@ -259,14 +259,19 @@ public partial class DangerZone : Node3D
     /// The zone is the only thing on the map whose appearance is its state, so
     /// the marker has to change: a rectangle that looks identical dormant, live
     /// and spent is a rectangle the player learns to ignore.
-    private void Recolour(Color inner, Color outer, float strength)
+    private void Recolour(Color edge, Color fill, float strength, float pulseSpeed)
     {
         if (_marker?.MaterialOverride is not ShaderMaterial material)
             return;
 
-        material.SetShaderParameter("inner_colour", inner);
-        material.SetShaderParameter("outer_colour", outer);
+        material.SetShaderParameter("edge_colour", edge);
+        material.SetShaderParameter("fill_colour", fill);
         material.SetShaderParameter("strength", strength);
+
+        // The pulse carries the state as much as the colour does. A live zone
+        // breathes fast and a spent one barely at all, which is legible from far
+        // enough away that the colour is still two orange pixels.
+        material.SetShaderParameter("pulse_speed", pulseSpeed);
     }
 
     private float NextFloat()
