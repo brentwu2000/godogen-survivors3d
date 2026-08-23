@@ -39,6 +39,13 @@ public partial class BalanceSweep : SceneTree
 
     private readonly struct Row
     {
+        /// Whether this run attempted a danger zone.
+        ///
+        /// A run is one of two experiments rather than one measurement — a zone
+        /// is optional in the game, and the interesting number is the
+        /// *difference* between taking one and walking past.
+        public readonly bool Zone;
+
         public readonly float Linger;
         public readonly ulong Seed;
         public readonly string Outcome;
@@ -47,8 +54,9 @@ public partial class BalanceSweep : SceneTree
         public readonly int LowestHp;
         public readonly int Peak;
 
-        public Row(float linger, ulong seed, string outcome, float seconds, int banked, int lowestHp, int peak)
+        public Row(bool zone, float linger, ulong seed, string outcome, float seconds, int banked, int lowestHp, int peak)
         {
+            Zone = zone;
             Linger = linger;
             Seed = seed;
             Outcome = outcome;
@@ -66,10 +74,20 @@ public partial class BalanceSweep : SceneTree
         float[] lingers = DefaultLingers;
         ulong[] seeds = DefaultSeeds;
 
+        // Which arms to run. `off` is the default so the existing table keeps
+        // meaning what it meant; `both` is what answers whether a zone pays.
+        bool[] arms = { false };
+
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("seeds:") && int.TryParse(arg[6..], out int count))
                 seeds = seeds[..Mathf.Clamp(count, 1, seeds.Length)];
+
+            if (arg == "zones:on")
+                arms = new[] { true };
+
+            if (arg == "zones:both")
+                arms = new[] { false, true };
 
             if (arg.StartsWith("lingers:"))
             {
@@ -87,18 +105,21 @@ public partial class BalanceSweep : SceneTree
         }
 
         var rows = new System.Collections.Generic.List<Row>();
-        GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts = " +
-                 $"{lingers.Length * seeds.Length} runs");
+        GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
+                 $"{arms.Length} arm(s) = {lingers.Length * seeds.Length * arms.Length} runs");
 
-        foreach (float linger in lingers)
+        foreach (bool zone in arms)
         {
-            foreach (ulong seed in seeds)
+            foreach (float linger in lingers)
             {
-                Row? row = RunOne(linger, seed);
-                if (row is { } value)
-                    rows.Add(value);
-                else
-                    GD.PushError($"  linger {linger:F0} seed {seed}: produced no result");
+                foreach (ulong seed in seeds)
+                {
+                    Row? row = RunOne(linger, seed, zone);
+                    if (row is { } value)
+                        rows.Add(value);
+                    else
+                        GD.PushError($"  linger {linger:F0} seed {seed} zone {zone}: no result");
+                }
             }
         }
 
@@ -107,38 +128,42 @@ public partial class BalanceSweep : SceneTree
 
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
-    private static Row? RunOne(float linger, ulong seed)
+    private static Row? RunOne(float linger, ulong seed, bool zone)
     {
         var output = new Godot.Collections.Array();
 
-        string[] args =
+        var args = new System.Collections.Generic.List<string>
         {
             "--headless", "--fixed-fps", "60", "--path", ProjectSettings.GlobalizePath("res://"),
             "--script", "test/AutoPlay.cs", "--",
             $"linger:{linger:F0}", $"seed:{seed}",
         };
 
+        if (zone)
+            args.Add("--zone");
+
         // The exit code is ignored on purpose: a death is a failure for the
         // play-test and a data point for this, and treating it as an error here
         // would throw away exactly the rows the table exists to show.
-        OS.Execute(OS.GetExecutablePath(), args, output, readStderr: true);
+        OS.Execute(OS.GetExecutablePath(), args.ToArray(), output, readStderr: true);
 
         foreach (Variant line in output)
         {
             foreach (string text in line.AsString().Split('\n'))
             {
                 if (text.Contains("SWEEP "))
-                    return Parse(text, linger, seed);
+                    return Parse(text, linger, seed, zone);
             }
         }
 
         return null;
     }
 
-    private static Row Parse(string line, float linger, ulong seed)
+    private static Row Parse(string line, float linger, ulong seed, bool zone)
     {
         string outcome = Field(line, "outcome");
         return new Row(
+            zone,
             linger, seed, outcome.Length > 0 ? outcome : "?",
             Number(line, "seconds"),
             Mathf.RoundToInt(Number(line, "banked")),
@@ -210,11 +235,14 @@ public partial class BalanceSweep : SceneTree
                      $"{Median(banked),13}   {Median(deaths),12}   {worstPeak,10}   {Median(lowest),16}");
         }
 
+        ReportArms(rows);
+
         GD.Print("");
         foreach (Row row in rows)
         {
-            GD.Print($"  linger {row.Linger,3:F0}s seed {row.Seed,-12} {row.Outcome,-9} " +
-                     $"{row.Seconds,6:F1}s  banked {row.Banked,5}  peak {row.Peak,4}  lowest HP {row.LowestHp,3}");
+            GD.Print($"  linger {row.Linger,3:F0}s seed {row.Seed,-12} {(row.Zone ? "zone" : "past")} " +
+                     $"{row.Outcome,-9} {row.Seconds,6:F1}s  banked {row.Banked,5}  " +
+                     $"peak {row.Peak,4}  lowest HP {row.LowestHp,3}");
         }
 
         GD.Print("");
@@ -223,6 +251,51 @@ public partial class BalanceSweep : SceneTree
             : $"SWEEP FAILED — nothing reached {SurvivalTarget:F0}s; the second half of the clock is fiction");
 
         Quit(reachesTarget ? 0 : 1);
+    }
+
+    /// What a danger zone costs and what it pays, as a difference.
+    ///
+    /// Printed only when both arms ran. A single arm's median is a number about
+    /// this bot on these seeds; the gap between two arms on the *same* seeds is a
+    /// statement about the design, and it is the only one of the two worth
+    /// tuning against.
+    private static void ReportArms(System.Collections.Generic.List<Row> rows)
+    {
+        var past = new System.Collections.Generic.List<Row>();
+        var took = new System.Collections.Generic.List<Row>();
+
+        foreach (Row row in rows)
+            (row.Zone ? took : past).Add(row);
+
+        if (past.Count == 0 || took.Count == 0)
+            return;
+
+        GD.Print("");
+        GD.Print("arm      survived   median banked   median seconds   median lowest HP   worst peak");
+
+        foreach ((string label, System.Collections.Generic.List<Row> arm) in
+                 new[] { ("past", past), ("zone", took) })
+        {
+            int survived = 0, worstPeak = 0;
+            var banked = new System.Collections.Generic.List<float>();
+            var seconds = new System.Collections.Generic.List<float>();
+            var lowest = new System.Collections.Generic.List<float>();
+
+            foreach (Row row in arm)
+            {
+                worstPeak = Mathf.Max(worstPeak, row.Peak);
+                lowest.Add(row.LowestHp);
+                seconds.Add(row.Seconds);
+                if (row.Survived)
+                {
+                    survived++;
+                    banked.Add(row.Banked);
+                }
+            }
+
+            GD.Print($"{label,-8} {survived}/{arm.Count,-8}   {Median(banked),13}   " +
+                     $"{Median(seconds),14}   {Median(lowest),16}   {worstPeak,10}");
+        }
     }
 
     /// Median rather than mean, because a single early death drags an average

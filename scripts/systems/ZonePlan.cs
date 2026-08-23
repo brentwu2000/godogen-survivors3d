@@ -108,25 +108,33 @@ public readonly record struct ZonePlan(
 
     /// How hard it pushes while running, in enemies per second.
     ///
-    /// These were 2.4/3.0/1.0 with a +1.4/+1.6/+0.6 tier bonus, and the first
-    /// measurement said no. A tier-1 Hold ran 60 seconds at 3.8 a second — 228
-    /// enemies against a starting rifle — and the bot died at 80 s with 123 on
-    /// the field, banking 140 against the 406 it takes home by walking past.
+    /// Twice measured, twice moved, and both numbers are in the history for a
+    /// reason — this is the one dial the whole feature turns on.
     ///
-    /// A zone has to be a hard decision, not a wrong one. Roughly two thirds of
-    /// the old pressure, and the Hold got 10 seconds shorter as well: the cost is
-    /// meant to be the risk of standing still with a crowd arriving, not the
-    /// arithmetic of a rifle that cannot kill fast enough to matter.
+    /// It started at 2.4/3.0/1.0 with a +1.4/+1.6/+0.6 tier bonus. A tier-1 Hold
+    /// was then 60 seconds at 3.8 a second, which is 228 enemies against a
+    /// starting rifle: the bot died at 80 s with 123 on the field, banking 140
+    /// against the 406 it takes home by walking past. Not a hard decision, a
+    /// wrong one.
+    ///
+    /// Cut to 1.5/1.9/0.7 with the Hold shortened to 50 seconds, and five seeds
+    /// through both arms said the opposite: 5 of 5 survived either way, a zone
+    /// paid 2.4 times as much, and it cost a median of **three health points**.
+    /// Free money is not a decision either.
+    ///
+    /// These are thirty percent above that — 150 enemies through a tier-1 Hold
+    /// rather than 115 or 228. The cost is meant to be the risk of standing still
+    /// while a crowd arrives, which means it has to actually cost something.
     ///
     /// A Breach is a single burst rather than a rate, so its steady pressure is
     /// low; a Hold has to keep producing for the better part of a minute without
     /// the player ever standing still to reload.
     public float SpawnRate => Kind switch
     {
-        ZoneKind.Hold => 1.5f + Tier * 0.8f,
-        ZoneKind.Purge => 1.9f + Tier * 1.0f,
-        ZoneKind.Breach => 0.7f + Tier * 0.4f,
-        _ => 1.4f,
+        ZoneKind.Hold => 1.95f + Tier * 1.05f,
+        ZoneKind.Purge => 2.45f + Tier * 1.30f,
+        ZoneKind.Breach => 0.90f + Tier * 0.50f,
+        _ => 1.8f,
     };
 
     /// Enemies delivered at once when it starts. The whole encounter for a
