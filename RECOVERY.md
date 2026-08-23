@@ -38,8 +38,53 @@ Read this before starting work. Update it as phases land.
 | ✅ B14 | The proof video, and the double-draw it found | `dec30dd` |
 | ✅ A4 | `ShadowRenderer`, and the first thing that ever ran the sprite fallback | *this* |
 
-**The rebuild is complete.** Every phase in both halves has landed and the sweep is clean at 40
-probes.
+**The rebuild is complete.** Every phase in both halves has landed.
+
+### After the rebuild
+
+| Done | What | Commit |
+| :--- | :--- | :--- |
+| ✅ C1 | The camera gets out from behind cover | *this* |
+
+#### ✅ C1 — The camera gets out from behind cover
+
+The rig sits 11.7 m behind the player and 5.7 m up; the arena is full of containers 2.5 m tall. Walking
+past one put it across the sight line and the player simply disappeared until they had walked far
+enough past. It was in every screenshot ever taken and nobody had named it until a frame of the proof
+video made it the subject.
+
+`CameraRig` casts one ray per physics tick from a pivot at chest height to where the camera would sit,
+and slides the camera **along that same line** toward the pivot until the shot is clear — down to a
+third of its reach and no further, with 0.45 m of clearance so the 0.15 m near plane does not end up
+inside the wall. In fast (22/s), out slow (5/s): coming in has to beat the geometry, going back out is
+cosmetic and doing it quickly reads as the camera being shoved.
+
+Along the line, not to a new place. The tilt, the height and the set-back together *are* the shot;
+moving the camera off that line changes the composition rather than the distance. The camera's own
+rotation is left alone for the same reason — re-aiming it at the player as it came in would swing the
+horizon every time somebody walked past a container.
+
+**The query goes in `_PhysicsProcess`, the movement in `_Process`.** The space state is only safe to
+read on the physics tick; reading it from a frame callback is a "Can't change this state while flushing
+queries" error, intermittently, depending on where in the frame it lands. Storing the answer and
+smoothing it separately also keeps the camera running at the frame rate rather than at 60 Hz.
+
+Two things the ray must not treat as cover: **areas** (the pads, the zones and the crates' pickup radii
+are all `Area3D`, and a camera that swung in whenever the player stood near the way out would be
+unusable) and **the player** (the ray starts inside its own capsule, which without an exclusion is a hit
+at zero distance every frame and a camera permanently inside the character's head).
+
+Probe: `CameraProbe`, six stages, each building its own wall rather than hunting the map for one. The
+first stage is the one that matters most — every other stage says "the number went down", and without
+one that says the number is 1.0 when nothing is in the way, a rig that pulled in permanently would pass
+all of them.
+
+Its last stage samples twelve spots on a 26 m ring and requires three quarters of them to leave the
+camera fully out, because off the flat spawn the pivot can sit *below* the flat box the arena collides
+with — a ray drawn upward out of the floor is a ray starting inside it, which Godot ignores by default
+and would otherwise snap the camera to its minimum in every dip on the map. That stage failed at first
+with sixteen of twenty spots "blocked by nothing at all": a fifth of a second per spot, against a
+release rate of 5 per second, was reading the previous spot still letting out.
 
 ### The three bugs that repeat
 
