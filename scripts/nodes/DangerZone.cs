@@ -268,11 +268,71 @@ public partial class DangerZone : Node3D
         // so six tries reaches all of them.
         for (int attempt = 0; attempt < 6; attempt++)
         {
-            if (_horde.SpawnByIntensity(PerimeterPoint()))
+            if (_horde.SpawnByIntensity(OutOfSight(PerimeterPoint())))
                 return true;
         }
 
         return false;
+    }
+
+    /// How close a spawn has to be before the player could see it arrive.
+    ///
+    /// Twenty-two metres. The fog reaches full at 35 and the eye picks up
+    /// movement well before that, so anything nearer than this is somewhere an
+    /// arrival is genuinely watchable.
+    [Export] public float SightlineMetres { get; set; } = 22.0f;
+
+    /// How far off the view direction still counts as "in front of".
+    [Export] public float SightlineDegrees { get; set; } = 60.0f;
+
+    /// Moves a spawn to the far side if the player is looking at it.
+    ///
+    /// A zone spawns on its own perimeter, which is the point — but the player
+    /// may be standing on that perimeter looking straight at it, and no amount of
+    /// emerge ramp makes a body appearing six metres in front of you read as
+    /// something that walked there. The fog handles this everywhere else by
+    /// putting the spawn ring past the horizon; a zone has no such distance to
+    /// hide behind.
+    ///
+    /// Only when the opposite side is not itself close. On a 26 by 20 rectangle
+    /// the far edge can be twenty metres away or two, depending on where the
+    /// player is standing, and flipping into a second sightline is worse than
+    /// staying put — a rule that has to be right in both directions is a rule
+    /// that needs the second check.
+    private Vector3 OutOfSight(Vector3 at)
+    {
+        if (_player == null)
+            return at;
+
+        Vector3 toSpawn = at - _player.GlobalPosition;
+        var flat = new Vector2(toSpawn.X, toSpawn.Z);
+        float distance = flat.Length();
+
+        if (distance > SightlineMetres || distance < 0.01f)
+            return at;
+
+        Vector2 facing = _player.Facing;
+        if (facing.LengthSquared() < 0.0001f)
+            return at;
+
+        float offAxis = Mathf.RadToDeg(Mathf.Acos(
+            Mathf.Clamp(flat.Normalized().Dot(facing.Normalized()), -1.0f, 1.0f)));
+
+        if (offAxis > SightlineDegrees)
+            return at;
+
+        // Mirrored through the zone's centre, which is the far side of whichever
+        // edge it came from.
+        var mirrored = new Vector3(
+            GlobalPosition.X * 2.0f - at.X,
+            0.0f,
+            GlobalPosition.Z * 2.0f - at.Z);
+
+        Vector3 toMirror = mirrored - _player.GlobalPosition;
+        float mirrorDistance = new Vector2(toMirror.X, toMirror.Z).Length();
+
+        // No better. Staying put beats swapping one sightline for another.
+        return mirrorDistance > distance ? mirrored : at;
     }
 
     /// A point just outside the zone's boundary.

@@ -35,6 +35,14 @@ public sealed class EnemyPool
     /// are still out of step with each other.
     public readonly float[] Stride;
 
+    /// How far out of the ground this one is, 0 to 1.
+    ///
+    /// Purely cosmetic. The flow field, the collider and the damage all treat a
+    /// half-risen enemy as fully present — a body that could be walked through
+    /// while it grew would be a rule the player has to learn from being killed by
+    /// something they thought was scenery.
+    public readonly float[] Emerge;
+
     /// Which way the body is facing, in radians about +Y.
     ///
     /// Kept here rather than recomputed from velocity every frame because
@@ -84,6 +92,7 @@ public sealed class EnemyPool
         Phase = new float[capacity];
         Stride = new float[capacity];
         Yaw = new float[capacity];
+        Emerge = new float[capacity];
         Type = new byte[capacity];
         AttackCooldown = new float[capacity];
         HitFlash = new float[capacity];
@@ -104,6 +113,7 @@ public sealed class EnemyPool
         Phase[i] = phase;
         Stride[i] = phase;
         Yaw[i] = 0.0f;
+        Emerge[i] = 0.0f;
         Type[i] = type;
         AttackCooldown[i] = 0.0f;
         HitFlash[i] = 0.0f;
@@ -133,6 +143,7 @@ public sealed class EnemyPool
             Phase[index] = Phase[last];
             Stride[index] = Stride[last];
             Yaw[index] = Yaw[last];
+            Emerge[index] = Emerge[last];
             Type[index] = Type[last];
             AttackCooldown[index] = AttackCooldown[last];
             HitFlash[index] = HitFlash[last];

@@ -56,6 +56,16 @@ public partial class Horde : Node3D
     /// the space you are standing in — applied everywhere it would be a global
     /// speed debuff, which is the same thing as making every enemy slower and
     /// has no positioning in it at all.
+    /// Seconds for a new arrival to finish rising.
+    ///
+    /// A third of a second: long enough that the eye catches movement where there
+    /// was none, short enough that it is over before the thing is a threat. The
+    /// fog stops the view at 35 m and the spawn ring reaches 40, so most arrivals
+    /// finish rising while still invisible — this is for the ones that do not,
+    /// and for the danger zones, which spawn on a perimeter the player may be
+    /// standing on.
+    [Export] public float EmergeSeconds { get; set; } = 0.34f;
+
     [Export] public float ChillRadius { get; set; } = 7.5f;
 
     [Export] public float SeparationRadius { get; set; } = 0.75f;
@@ -524,6 +534,8 @@ public partial class Horde : Node3D
             Damage(i, Pool.Bleed[i] * step, Vector2.Zero, allowBlast: false, flash: false);
         }
 
+        StepEmerge(step);
+
         if (_player == null || Pool.Count == 0)
         {
             StepEnemyShots(step);
@@ -646,6 +658,39 @@ public partial class Horde : Node3D
 
         _tick++;
         Draw(step);
+    }
+
+    /// Raises every arrival, including the ones the movement loop skipped.
+    ///
+    /// Its own pass over the whole pool rather than a line inside the movement
+    /// loop, because that loop strides — enemies beyond `ActiveRadius` are
+    /// updated every few ticks and moved further to compensate. A ramp advanced
+    /// there would rise in visible steps for exactly the enemies that are far
+    /// away, which is to say the ones the player is watching arrive.
+    private void StepEmerge(float step)
+    {
+        float rate = step / Mathf.Max(0.001f, EmergeSeconds);
+
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (Pool.Emerge[i] < 1.0f)
+                Pool.Emerge[i] = Mathf.Min(1.0f, Pool.Emerge[i] + rate);
+        }
+    }
+
+    /// How tall a body draws while it is still rising.
+    ///
+    /// `1 - (1-e)²` rather than `e`: the ramp starts fast and eases out, so the
+    /// arrival is a shape that appears and settles rather than a smooth grow that
+    /// reads as a scaling animation.
+    ///
+    /// Floored at 0.04 and never zero. A scale of zero is a basis with no
+    /// determinant, which is not a body of no height — it is an invalid transform,
+    /// and the renderer's behaviour on one is nothing anybody chose.
+    public static float EmergeScale(float emerge)
+    {
+        float eased = 1.0f - (1.0f - emerge) * (1.0f - emerge);
+        return Mathf.Max(0.04f, eased);
     }
 
     /// Hands the frame to whichever renderer is switched on.

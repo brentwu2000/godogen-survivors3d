@@ -135,7 +135,13 @@ public sealed class BodyRenderer
 
             EnemyTypeResource type = types[variant];
             byte elite = pool.Elite[i];
-            float scale = type.SpriteScale * Elites.ScaleBonus(elite);
+            // Scaled by how far out of the ground it is. Cosmetic only — the
+            // flow field, the collider and the damage all treat a half-risen
+            // enemy as fully present, because a body that could be walked through
+            // while it grew is a rule the player learns by being killed by
+            // something they took for scenery.
+            float scale = type.SpriteScale * Elites.ScaleBonus(elite)
+                          * Horde.EmergeScale(pool.Emerge[i]);
 
             Write(_buffers[variant], slot, pool.Position[i], pool.Yaw[i], scale,
                   Pack(pool.Velocity[i].Length(), pool.Stride[i]),

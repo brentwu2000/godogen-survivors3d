@@ -149,7 +149,10 @@ public sealed class HordeRenderer
             EnemyTypeResource type = types[pool.Type[i]];
             byte elite = pool.Elite[i];
 
-            Write(i, pool.Position[i], type.SpriteScale * Elites.ScaleBonus(elite),
+            // Scaled by how far out of the ground it is. Cosmetic only — the
+            // flow field and the damage already treat it as fully present.
+            Write(i, pool.Position[i],
+                  type.SpriteScale * Elites.ScaleBonus(elite) * Horde.EmergeScale(pool.Emerge[i]),
                   pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer,
                   pool.HitFlash[i], Elites.Tint(elite));
         }
