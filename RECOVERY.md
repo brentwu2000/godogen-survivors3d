@@ -44,7 +44,27 @@ Read this before starting work. Update it as phases land.
 
 | Done | What | Commit |
 | :--- | :--- | :--- |
-| ✅ C1 | The camera gets out from behind cover | *this* |
+| ✅ C1 | The camera gets out from behind cover | `8bcbe7e` |
+| ✅ C2 | A muted renderer is not synced, and owns its own visibility | *this* |
+
+#### ✅ C2 — A muted renderer is not synced, and owns its own visibility
+
+Two hundred instances were written into a buffer and uploaded twice a frame, every frame, for
+renderers whose nodes were hidden. The argument for keeping them running was that a fallback which has
+not run since startup is not a fallback — right until A4, when `ShadowProbe` started building the scene
+with `SolidBodies` off and running the whole billboard path. A probe in the sweep is a stronger
+guarantee than code that executes every frame with nothing looking at the result.
+
+**Measured, and it did not move.** `HordePerf` reads 6.90 ms mean at 200 enemies before and after. The
+saving is a per-frame GPU upload, which a headless run cannot see, and the CPU half is below the noise
+at this scale. Kept because it removes work that provably cannot reach the screen, not because the
+number changed.
+
+**Skipping the sync reintroduced the double-draw immediately.** `HordeRenderer` set `Node.Visible`
+inside `Upload`, so a renderer that was never synced kept the visibility it was constructed with —
+`true` — and every enemy in the game was drawn twice again, from a different cause, three commits after
+the first one was fixed. `BodyProbe` stage 7 caught it in the sweep, which is the entire reason that
+stage exists. `Muted` is a property with a setter now, and hiding the node is its job.
 
 #### ✅ C1 — The camera gets out from behind cover
 

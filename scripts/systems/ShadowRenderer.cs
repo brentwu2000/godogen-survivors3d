@@ -46,8 +46,26 @@ public sealed class ShadowRenderer
 
     public MultiMeshInstance3D Node { get; }
 
-    /// Keeps the node hidden whatever it has to draw. See the class comment.
-    public bool Muted { get; set; }
+    /// Keeps this renderer's node hidden no matter what it has to draw.
+    ///
+    /// **The setter hides the node itself.** Leaving that to `Upload` works only
+    /// for as long as `Upload` runs every frame, and once a muted renderer stopped
+    /// being synced at all the node kept whatever visibility it was built with —
+    /// which is `true` — and every enemy in the game was drawn twice again, from a
+    /// different cause, three commits after the first one was fixed. `BodyProbe`
+    /// caught it inside a minute.
+    public bool Muted
+    {
+        get => _muted;
+        set
+        {
+            _muted = value;
+            if (value)
+                Node.Visible = false;
+        }
+    }
+
+    private bool _muted;
 
     public int Count { get; private set; }
 

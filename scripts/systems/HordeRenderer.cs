@@ -233,7 +233,23 @@ public sealed class HordeRenderer
     /// every screenshot, because at the distance a screenshot is framed at the two
     /// silhouettes overlap into one slightly odd shape. What found it was a single
     /// frame of the proof video with a runner close to the camera.
-    public bool Muted { get; set; }
+    public bool Muted
+    {
+        get => _muted;
+        set
+        {
+            _muted = value;
+
+            // Hidden here, not left to `Upload`. That worked only while a muted
+            // renderer was still synced every frame; the moment it stopped being,
+            // the node kept the visibility it was built with — `true` — and every
+            // enemy was drawn twice again, three commits after the first fix.
+            if (value)
+                Node.Visible = false;
+        }
+    }
+
+    private bool _muted;
 
     private void Upload(int count)
     {

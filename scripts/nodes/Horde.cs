@@ -741,12 +741,26 @@ public partial class Horde : Node3D
             _bodies.Sync(Pool, Types);
         }
 
-        _renderer.Sync(Pool, Types);
+        // A muted renderer is not synced at all.
+        //
+        // It used to be, on the argument that a fallback which has not run since
+        // startup is not a fallback — which was right, and cost two full buffer
+        // writes and two uploads per frame for two hundred instances nobody could
+        // see, forever, in every shipping run.
+        //
+        // What changed is that the fallback is now *tested*: `ShadowProbe` builds
+        // the scene with `SolidBodies` off and runs the whole billboard path, and
+        // `test/Screenshot.cs -- sprites` photographs it. A probe in the sweep is a
+        // stronger guarantee than code that executes every frame with nothing
+        // looking at the result.
+        if (!_renderer.Muted)
+            _renderer.Sync(Pool, Types);
 
         // Culled around the player rather than the camera. The rig is thirteen
         // metres behind the body and the difference is a metre of blobs at the
         // very edge of the fog, which is not worth reaching across two nodes for.
-        _shadows?.Sync(Pool, Types, _player?.GlobalPosition ?? Vector3.Zero);
+        if (_shadows is { Muted: false })
+            _shadows.Sync(Pool, Types, _player?.GlobalPosition ?? Vector3.Zero);
     }
 
     /// The solid-body renderer, or null on the sprite path. Only a probe asks.
