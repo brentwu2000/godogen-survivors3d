@@ -269,8 +269,16 @@ public partial class MetaManager : Node
         // numbers, three consumers — a contract that counted kills its own way
         // would disagree with the screen reporting them, and the player would be
         // right to trust neither.
-        LastRun = _log?.Freeze(runState, bankedValue, practice, hits, lost)
-                  ?? new RunRecord { Outcome = runState, Banked = bankedValue };
+        string[] curiosities = _foundThisRun.ToArray();
+
+        LastRun = _log?.Freeze(runState, bankedValue, practice, hits, lost, curiosities, _bountyThisRun)
+                  ?? new RunRecord
+                  {
+                      Outcome = runState,
+                      Banked = bankedValue,
+                      CuriositiesFound = curiosities,
+                      SetBounty = _bountyThisRun,
+                  };
 
         // Records and unlocks are part of settling too. A daily that could set a
         // personal best would let a favourable fixed seed stand in for a run the
@@ -412,12 +420,24 @@ public partial class MetaManager : Node
         for (int i = 0; i < inventory.EntryCount; i++)
         {
             string name = inventory.ItemAt(i).ItemName;
+
+            // Noted before `Record`, which is what makes it "for the first time":
+            // afterwards the profile already knows and the run cannot say what it
+            // contributed.
+            if (CollectionBook.SetOf(name) >= 0 && !Profile.Collected.Contains(name))
+                _foundThisRun.Add(name);
+
             Profile.AddToStash(name, inventory.CountAt(i));
             Profile.Record(name);
         }
 
-        CollectionBook.Claim(Profile);
+        _bountyThisRun += CollectionBook.Claim(Profile);
     }
+
+    /// What this run added to the collection. Cleared when a run begins, because
+    /// a manager that outlives one run would report the last one's finds.
+    private readonly System.Collections.Generic.List<string> _foundThisRun = new();
+    private int _bountyThisRun;
 
     private void Persist()
     {

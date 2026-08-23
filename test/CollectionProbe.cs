@@ -21,6 +21,8 @@ public partial class CollectionProbe : SceneTree
         Stage("selling the stash does not lose the set", SellingKeepsIt);
         Stage("a dropped cache pays supplies, not collectibles", CachesCarryNone);
         Stage("the collection survives a save and a load", SurvivesRoundTrip);
+        Stage("the room-making key does not throw away the set", DroppingSparesThePiece);
+        Stage("the safe box takes the set first", SecuringPrefersThePiece);
 
         GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
         Quit(_failed ? 1 : 0);
@@ -44,6 +46,130 @@ public partial class CollectionProbe : SceneTree
     }
 
     /// A set naming a piece that does not exist is a set nobody can finish.
+    /// `[R] drop worst` spares a piece of an unfinished set.
+    ///
+    /// **The bag here is built to make the guard matter, and the first version of
+    /// this stage was not.** It paired a wedding ring with rifle rounds and
+    /// reported that both the guarded and unguarded calls chose the rounds — which
+    /// is true, proves nothing, and passed. The drop key picks by value *per
+    /// bulk*, and every piece in the book is 65 to 160 a bulk against 18 for
+    /// rounds; the key was never reaching a curiosity in an ordinary bag.
+    ///
+    /// So the pair is a crayon drawing at 65 a bulk against an antiviral serum at
+    /// 220, where the unguarded answer *is* the piece. That is the bag where being
+    /// wrong cannot be undone: nothing cheap left to jettison, a cache on the
+    /// floor, and one press.
+    private bool DroppingSparesThePiece()
+    {
+        var profile = new Profile();
+        var bag = new Inventory(30);
+
+        ItemResource? ring = Piece(0, 1);
+        ItemResource? bulk = GD.Load<ItemResource>("res://resources/items/antiviral_serum.tres");
+
+        if (ring == null || bulk == null)
+        {
+            GD.PushError("  could not load a piece and a dearer ordinary item to compare");
+            return false;
+        }
+
+        bag.TryAdd(ring, 1);
+        bag.TryAdd(bulk, 1);
+
+        bool Wanted(ItemResource item) => CollectionBook.Wanted(profile, item.ItemName);
+
+        int unguarded = bag.LeastValuableIndex();
+        int guarded = bag.LeastValuableIndex(Wanted);
+
+        // The premise, stated. Without this the stage passes on a bag where the
+        // guard never had to do anything, which is what it did the first time.
+        if (bag.ItemAt(unguarded).ItemName != ring.ItemName)
+        {
+            GD.PushError($"  unguarded already spares {ring.ItemName} — this bag proves nothing");
+            return false;
+        }
+
+        bool sparesIt = bag.ItemAt(guarded).ItemName != ring.ItemName;
+
+        // And a bag with nothing *but* pieces still has to be able to make room.
+        // A key that silently does nothing under pressure is worse than one that
+        // costs something.
+        var onlyPieces = new Inventory(30);
+        onlyPieces.TryAdd(ring, 1);
+        int forced = onlyPieces.LeastValuableIndex(Wanted);
+
+        GD.Print($"  unguarded picks {bag.ItemAt(unguarded).ItemName}, "
+               + $"guarded picks {bag.ItemAt(guarded).ItemName}; "
+               + $"a bag of pieces alone still yields index {forced}");
+
+        if (!sparesIt)
+            GD.PushError("  the drop key still chooses the collection piece");
+
+        if (forced < 0)
+            GD.PushError("  a bag holding only pieces cannot make room at all");
+
+        return sparesIt && forced >= 0;
+    }
+
+    /// `[F] secure` picks by value, and the safe box is what survives dying.
+    ///
+    /// A wedding ring worth forty credits sat behind a circuit board worth two
+    /// hundred, so the one thing in the bag that cannot be bought again was the
+    /// last thing put somewhere safe.
+    private bool SecuringPrefersThePiece()
+    {
+        var profile = new Profile();
+        var bag = new Inventory(30);
+
+        // The cheapest piece in the book against the dearest ordinary item,
+        // because every piece is worth more than most loot and a badly chosen
+        // pair makes this stage prove itself.
+        ItemResource? ring = Piece(0, 1);
+        ItemResource? dear = GD.Load<ItemResource>("res://resources/items/antiviral_serum.tres");
+
+        if (ring == null || dear == null)
+        {
+            GD.PushError("  could not load a piece and a more valuable ordinary item");
+            return false;
+        }
+
+        bag.TryAdd(ring, 1);
+        bag.TryAdd(dear, 1);
+
+        bool Wanted(ItemResource item) => CollectionBook.Wanted(profile, item.ItemName);
+
+        int plain = bag.MostValuableIndex();
+        int preferred = bag.MostValuableIndex(Wanted);
+
+        // The premise, stated: if the ring were the dearer of the two this stage
+        // would pass without the filter doing anything.
+        if (ring.Value >= dear.Value)
+        {
+            GD.PushError($"  {ring.ItemName} is worth {ring.Value} against {dear.ItemName}'s "
+                       + $"{dear.Value} — the comparison proves nothing");
+            return false;
+        }
+
+        // And once the piece has been banked it is ordinary loot again, because
+        // it is: the set remembers it and the copy in the bag is worth credits.
+        profile.Record(ring.ItemName);
+        int afterBanking = bag.MostValuableIndex(Wanted);
+
+        GD.Print($"  by value alone {bag.ItemAt(plain).ItemName}; "
+               + $"with the set unfinished {bag.ItemAt(preferred).ItemName}; "
+               + $"once banked {bag.ItemAt(afterBanking).ItemName}");
+
+        return bag.ItemAt(preferred).ItemName == ring.ItemName
+            && bag.ItemAt(afterBanking).ItemName == dear.ItemName;
+    }
+
+    /// One piece of one set, by index.
+    private static ItemResource? Piece(int set, int index)
+    {
+        string name = CollectionBook.All[set].Pieces[index];
+        return GD.Load<ItemResource>($"res://resources/items/{name.ToLower().Replace(' ', '_')}.tres");
+    }
+
     private bool PiecesExist()
     {
         bool ok = true;

@@ -146,7 +146,11 @@ public partial class RunLog : Node
     /// passed in, because those are decisions made after the run ended and the
     /// log has no business guessing at them.
     public RunRecord Freeze(RunState outcome, int banked, int[] proficiencyGained, int[] hitsByCategory,
-                            string[] lostEquipment)
+                            string[] lostEquipment,
+                            // Defaulted, so the several probes that freeze a
+                            // record to read one field off it do not each have to
+                            // pass two empty collections they do not care about.
+                            string[]? curiosities = null, int setBounty = 0)
     {
         var kills = new int[_killsByType.Length];
         System.Array.Copy(_killsByType, kills, kills.Length);
@@ -174,6 +178,8 @@ public partial class RunLog : Node
             ProficiencyGained = proficiencyGained,
             HitsByCategory = hitsByCategory,
             LostEquipment = lostEquipment,
+            CuriositiesFound = curiosities ?? System.Array.Empty<string>(),
+            SetBounty = setBounty,
         };
     }
 

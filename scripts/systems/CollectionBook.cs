@@ -36,6 +36,44 @@ public static class CollectionBook
             900),
     };
 
+    /// Whether this item is a piece the player has not banked yet.
+    ///
+    /// **The question the rest of the game needed and could not ask.** A
+    /// curiosity was an item with a value like any other, so the convenience keys
+    /// treated it like one — and `[F] secure` picks by total value, which puts a
+    /// 130-credit crayon drawing behind a 440-credit antiviral serum. The safe box
+    /// is what survives dying, so the one item in the bag that cannot be bought
+    /// again was the last thing put somewhere safe.
+    ///
+    /// `[R] drop worst` was the other suspect and turned out to be innocent: it
+    /// picks by value *per bulk*, and every piece in the book is 65 to 160 a bulk
+    /// against 18 for rifle rounds and 14 for canned food. The guard is kept
+    /// anyway, because it costs nothing and a bag holding only expensive things
+    /// is exactly when the wrong answer would be unrecoverable — but the probe
+    /// that proves it has to build that bag on purpose, or it proves nothing.
+    ///
+    /// A piece already recorded is ordinary loot again, because it is: the set
+    /// remembers it, and the copy in the bag is worth its credits and nothing
+    /// more.
+    public static bool Wanted(Profile? profile, string itemName)
+    {
+        if (SetOf(itemName) < 0)
+            return false;
+
+        return profile == null || !profile.Collected.Contains(itemName);
+    }
+
+    /// How many pieces of `itemName`'s set are recorded, and how many there are.
+    /// Zero pieces for an item that belongs to no set.
+    public static (int Found, int Total, string Name) Progress(Profile? profile, string itemName)
+    {
+        int set = SetOf(itemName);
+        if (set < 0)
+            return (0, 0, string.Empty);
+
+        return (profile == null ? 0 : Found(profile, set), All[set].Pieces.Length, All[set].Name);
+    }
+
     /// Which set a piece belongs to, or -1.
     public static int SetOf(string itemName)
     {

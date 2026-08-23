@@ -143,6 +143,28 @@ public partial class DebriefScreen : CanvasLayer
         if (run.LostEquipment.Length > 0)
             text.AppendLine($"lost: {Names(run.LostEquipment)}");
 
+        // The collection, at the one moment the player is looking at what the run
+        // was worth. It used to appear nowhere except a line on the base screen,
+        // so a piece recovered was indistinguishable from any other item in the
+        // haul and a *set completed* — which pays most of a tier-2 weapon — went
+        // by without a word.
+        if (run.CuriositiesFound.Length > 0)
+        {
+            text.AppendLine($"recovered: {string.Join(", ", run.CuriositiesFound)}");
+
+            foreach (string piece in run.CuriositiesFound)
+            {
+                int set = CollectionBook.SetOf(piece);
+                if (set < 0)
+                    continue;
+
+                text.AppendLine($"  {piece} — {CollectionBook.All[set].Name}");
+            }
+        }
+
+        if (run.SetBounty > 0)
+            text.AppendLine($"SET COMPLETE — +{run.SetBounty} credits");
+
         text.AppendLine();
         text.AppendLine(ContractLine(meta, run, log));
 

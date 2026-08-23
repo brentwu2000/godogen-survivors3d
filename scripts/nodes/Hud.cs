@@ -223,6 +223,12 @@ public partial class Hud : CanvasLayer
 
     /// A line that says itself and then gets out of the way. Anything permanent
     /// in the upper third competes with the thing it is warning about.
+    /// What the banner currently says, or empty when it is not showing. Only a
+    /// probe asks — an announcement is the one kind of feedback with no other
+    /// trace, so without this "did the player get told" is unanswerable outside a
+    /// screenshot.
+    public string AlertText => _alert.Visible ? _alert.Text : string.Empty;
+
     public void Announce(string text, float seconds)
     {
         _alert.Text = text;

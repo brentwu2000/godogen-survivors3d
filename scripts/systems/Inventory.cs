@@ -73,18 +73,42 @@ public sealed class Inventory
     /// Index of the entry worth most per unit, or -1 when empty. This is what
     /// "secure the best thing" means under pressure: raw value, not value per
     /// bulk, because the safe box is small enough that bulk rarely decides.
-    public int MostValuableIndex()
+    /// Index of the entry worth most, or -1 when empty.
+    ///
+    /// `prefer` names entries that jump the queue: if anything in the bag matches
+    /// it, the answer comes from among those and value only breaks the tie. It
+    /// exists for the collection — a wedding ring is worth almost nothing and is
+    /// the one thing in the bag that cannot be bought again, so "most valuable"
+    /// is the wrong question to ask about it.
+    public int MostValuableIndex(System.Func<ItemResource, bool>? prefer = null)
     {
+        int best = Scan(prefer, wanted: true);
+        return best >= 0 ? best : Scan(prefer, wanted: false);
+    }
+
+    private int Scan(System.Func<ItemResource, bool>? prefer, bool wanted)
+    {
+        // A null filter has nothing to prefer, so the first pass is skipped
+        // entirely rather than matching everything and making the second dead.
+        if (wanted && prefer == null)
+            return -1;
+
         int best = -1;
-        int bestValue = 0;
+        int bestValue = -1;
 
         for (int i = 0; i < EntryCount; i++)
         {
-            if (_counts[i] > 0 && _items[i].Value > bestValue)
-            {
-                bestValue = _items[i].Value;
-                best = i;
-            }
+            if (_counts[i] <= 0)
+                continue;
+
+            if (wanted && !prefer!(_items[i]))
+                continue;
+
+            if (_items[i].Value <= bestValue)
+                continue;
+
+            bestValue = _items[i].Value;
+            best = i;
         }
 
         return best;
@@ -99,7 +123,18 @@ public sealed class Inventory
     /// different answer: four boxes of rifle rounds are worth more in total than
     /// one circuit board and are exactly what should go over the side when a
     /// cache is on the ground in front of you.
-    public int LeastValuableIndex()
+    /// `protect` names entries to leave alone. If *everything* is protected the
+    /// filter is dropped rather than the call failing — a bag full of curiosities
+    /// with a cache on the floor in front of it still has to be able to make
+    /// room, and a key that silently did nothing under pressure is worse than one
+    /// that costs something.
+    public int LeastValuableIndex(System.Func<ItemResource, bool>? protect = null)
+    {
+        int index = Cheapest(protect);
+        return index >= 0 ? index : Cheapest(null);
+    }
+
+    private int Cheapest(System.Func<ItemResource, bool>? protect)
     {
         int worst = -1;
         float worstRate = float.MaxValue;
@@ -107,6 +142,9 @@ public sealed class Inventory
         for (int i = 0; i < EntryCount; i++)
         {
             if (_counts[i] <= 0 || _items[i].Bulk <= 0)
+                continue;
+
+            if (protect != null && protect(_items[i]))
                 continue;
 
             float rate = _items[i].Value / (float)_items[i].Bulk;

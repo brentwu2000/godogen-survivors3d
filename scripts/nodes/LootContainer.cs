@@ -174,6 +174,7 @@ public partial class LootContainer : Node3D
         _remains ??= RollAll();
 
         int taken = Transfer(_remains, _player.Backpack);
+        AnnounceCuriosities();
         Looted = _remains.EntryCount == 0;
 
         // Reset rather than held at 1. Held, the search completes again on the
@@ -190,6 +191,55 @@ public partial class LootContainer : Node3D
         if (taken > 0 || Looted)
             EmitSignal(SignalName.Emptied, taken, Looted);
     }
+
+    /// Calls out any piece of a collection that just arrived in the bag.
+    ///
+    /// **The moment it matters is the pickup, not the debrief.** A curiosity was
+    /// recorded when it reached the stash and reported on the base screen an hour
+    /// later, so during the run it was an item with a name and a low value among
+    /// twenty others — nothing marked it, nothing said which set it belonged to,
+    /// and the decision the collection is supposed to create ("do I carry this or
+    /// the ammunition?") was made without the player knowing there was one.
+    ///
+    /// Compared against the bag before and after, rather than against what the
+    /// crate rolled: a piece the bag had no room for was never picked up, and
+    /// announcing it would be announcing something the player does not have.
+    private void AnnounceCuriosities()
+    {
+        // The HUD is a sibling of this crate's parent rather than of the crate,
+        // and it is looked up lazily because the crate is created by the level
+        // generator before the HUD exists.
+        _hud ??= GetParent()?.GetParent()?.GetNodeOrNull<Hud>("Hud");
+
+        if (_player == null || _hud == null)
+            return;
+
+        Inventory bag = _player.Backpack;
+
+        for (int i = 0; i < bag.EntryCount; i++)
+        {
+            ItemResource item = bag.ItemAt(i);
+            string name = item.ItemName;
+
+            if (_announced.Contains(name) || !_player.StillNeeded(item))
+                continue;
+
+            _announced.Add(name);
+
+            (int found, int total, string set) = _player.CollectionProgress(name);
+
+            // The count includes this piece, which is not yet recorded anywhere:
+            // the record is written at the door. Saying "1/3" while holding the
+            // second piece would be technically true and read as a bug.
+            _hud.Announce($"CURIOSITY — {name.ToUpper()}  ({set} {found + 1}/{total})", 3.2f);
+        }
+    }
+
+    /// Pieces already called out this run, so a crate searched twice does not
+    /// announce the same ring again.
+    private readonly System.Collections.Generic.HashSet<string> _announced = new();
+
+    private Hud? _hud;
 
     /// Moves as much as fits, and returns what it was worth.
     private int Transfer(Inventory from, Inventory into)

@@ -79,6 +79,18 @@ public sealed class RunRecord
     /// dying costs the kit.
     public string[] LostEquipment { get; init; } = System.Array.Empty<string>();
 
+    /// Pieces of a collection brought home for the first time, and the bounty any
+    /// set completed by them paid.
+    ///
+    /// On the record rather than read off the profile at debrief time, because by
+    /// then the profile has already been updated and "what did *this run* add"
+    /// is no longer answerable from it. Without these two the collection was
+    /// invisible at the only moment the player is looking at what the run was
+    /// worth.
+    public string[] CuriositiesFound { get; init; } = System.Array.Empty<string>();
+
+    public int SetBounty { get; init; }
+
     public bool Survived => Outcome == RunState.Extracted;
 
     public int ProficiencyTotal

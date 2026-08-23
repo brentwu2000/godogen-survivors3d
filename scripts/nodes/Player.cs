@@ -317,9 +317,32 @@ public partial class Player : CharacterBody3D
     ///
     /// One unit per press on purpose: securing a haul costs real seconds while
     /// the horde closes, which is the decision the safe box exists to create.
+    /// The profile this run belongs to, for the one question the run asks of it.
+    ///
+    /// Looked up lazily rather than injected: `Player` is built before
+    /// `MetaManager` in `BuildMain` and a reference taken in `_Ready` would be
+    /// null. Null is a legitimate answer — several probes build a player with no
+    /// meta manager at all — and `CollectionBook.Wanted` treats a null profile as
+    /// "nothing collected yet", which errs toward protecting a piece.
+    private Profile? RunProfile =>
+        (_meta ??= GetParent()?.GetNodeOrNull<MetaManager>("MetaManager"))?.Profile;
+
+    private MetaManager? _meta;
+
+    /// True for a collection piece this profile has not banked yet.
+    public bool StillNeeded(ItemResource item) => CollectionBook.Wanted(RunProfile, item.ItemName);
+
+    /// How far along the set an item belongs to is, for a readout.
+    public (int Found, int Total, string Name) CollectionProgress(string itemName) =>
+        CollectionBook.Progress(RunProfile, itemName);
+
     public int TrySecureBest()
     {
-        int index = Backpack.MostValuableIndex();
+        // A piece of an unfinished set goes in the safe box before anything else,
+        // whatever it is worth. The safe box is what survives dying, and a wedding
+        // ring worth forty credits is the only thing in the bag that cannot be
+        // bought again.
+        int index = Backpack.MostValuableIndex(StillNeeded);
         if (index < 0)
             return 0;
 
@@ -587,7 +610,13 @@ public partial class Player : CharacterBody3D
     /// under pressure is indistinguishable from a key that did nothing.
     public int TryDropWorst()
     {
-        int index = Backpack.LeastValuableIndex();
+        // And it is the last thing thrown away.
+        //
+        // Rarely load-bearing: by value per bulk a piece is 65 to 160 against
+        // rifle rounds at 18, so the drop key was not reaching it in an ordinary
+        // bag. It reaches it in a bag holding nothing but dear things, which is
+        // the situation where being wrong cannot be undone.
+        int index = Backpack.LeastValuableIndex(StillNeeded);
         if (index < 0)
             return 0;
 

@@ -89,6 +89,7 @@ public partial class CarryProbe : SceneTree
             case 2: return RunStage(StageDroppingMakesRoom, "dropping makes room, and the crate still has it");
             case 3: return RunStage(StageNoReroll, "coming back does not re-roll the crate");
             case 4: return RunStage(StageCountedOnce, "the crate is counted once and valued every visit");
+            case 5: return RunStage(StageCuriosityIsAnnounced, "picking up a curiosity says so, with the set");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -119,6 +120,67 @@ public partial class CarryProbe : SceneTree
     /// The case that distinguishes them: a crate is worth more in total *and*
     /// less per unit of room. Securing should want it; dropping should want it
     /// gone. Anything that reads the raw value picks the wrong one.
+    /// A piece of a set announces itself when it lands in the bag.
+    ///
+    /// **The moment that matters is the pickup, not the debrief.** A curiosity was
+    /// recorded when it reached the stash and reported on the base screen an hour
+    /// later; during the run it was an item with a name and a value among twenty
+    /// others. The decision the collection exists to create — carry this or the
+    /// ammunition — was being made by a player who did not know there was one.
+    ///
+    /// The crate is loaded with a piece rather than searched until one appears:
+    /// the roll is weighted and a probe that waited for the right item would be a
+    /// probe that sometimes takes forty crates.
+    private bool? StageCuriosityIsAnnounced(int tick)
+    {
+        Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+        var hud = scene.GetNodeOrNull<Hud>("Hud");
+
+        if (hud == null)
+        {
+            GD.PushError("  no Hud to announce into");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            string first = CollectionBook.All[0].Pieces[0];
+            var piece = GD.Load<ItemResource>(
+                $"res://resources/items/{first.ToLower().Replace(' ', '_')}.tres");
+
+            if (piece == null)
+            {
+                GD.PushError($"  {first} has no item resource");
+                return false;
+            }
+
+            // Straight into the bag, and then the crate is searched: the announce
+            // reads the bag rather than the roll, because a piece the bag had no
+            // room for was never picked up and saying so would be a lie.
+            _player!.Backpack.TryAdd(piece, 1);
+            _crate!.SearchSeconds = 0.05f;
+            _player.GlobalPosition = _crate.GlobalPosition;
+            return null;
+        }
+
+        if (tick < 30)
+            return null;
+
+        string said = hud.AlertText;
+        GD.Print($"  banner says \"{said}\"");
+
+        bool named = said.Contains("CURIOSITY", System.StringComparison.Ordinal);
+        bool counted = said.Contains("/", System.StringComparison.Ordinal);
+
+        if (!named)
+            GD.PushError("  nothing on screen said a collection piece had been found");
+
+        if (!counted)
+            GD.PushError("  the banner does not say how far along the set is");
+
+        return named && counted;
+    }
+
     private bool? StageWorstIsPerBulk(int tick)
     {
         var crate = new ItemResource { ItemName = "Heavy Crate", Value = 100, Bulk = 20 };
