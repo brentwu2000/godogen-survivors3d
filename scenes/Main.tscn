@@ -1,25 +1,26 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_bb450"]
-[ext_resource type="Shader" path="res://assets/shaders/ground.gdshader" id="2_nfivy"]
-[ext_resource type="Texture2D" path="res://assets/textures/ground.png" id="3_1nqs0"]
-[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="4_1iba3"]
-[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="5_yxlcp"]
-[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="6_ebg2g"]
-[ext_resource type="Script" path="res://scripts/nodes/LevelGenerator.cs" id="7_2ofn6"]
-[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="8_xa025"]
-[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="9_36rkl"]
-[ext_resource type="Script" path="res://scripts/nodes/RunGrowth.cs" id="10_fs0b5"]
-[ext_resource type="Script" path="res://scripts/nodes/RunLog.cs" id="11_ma7h6"]
-[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="12_e2s0e"]
-[ext_resource type="Script" path="res://scripts/nodes/DebriefScreen.cs" id="13_gsxep"]
-[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="14_v0vrg"]
-[ext_resource type="Script" path="res://scripts/nodes/SoundDirector.cs" id="15_dg70y"]
-[ext_resource type="Script" path="res://scripts/nodes/MusicDirector.cs" id="16_pnhog"]
-[ext_resource type="Script" path="res://scripts/nodes/EffectDirector.cs" id="17_2c4at"]
-[ext_resource type="Script" path="res://scripts/nodes/TouchHud.cs" id="18_g6wdg"]
+[ext_resource type="Script" path="res://scripts/nodes/GameRoot.cs" id="1_nfivy"]
+[ext_resource type="Shader" path="res://assets/shaders/ground.gdshader" id="2_1nqs0"]
+[ext_resource type="Texture2D" path="res://assets/textures/ground.png" id="3_1iba3"]
+[ext_resource type="PackedScene" path="res://scenes/Player.tscn" id="4_yxlcp"]
+[ext_resource type="Script" path="res://scripts/nodes/Player.cs" id="5_ebg2g"]
+[ext_resource type="Script" path="res://scripts/nodes/CameraRig.cs" id="6_2ofn6"]
+[ext_resource type="Script" path="res://scripts/nodes/LevelGenerator.cs" id="7_xa025"]
+[ext_resource type="Script" path="res://scripts/nodes/Horde.cs" id="8_36rkl"]
+[ext_resource type="Script" path="res://scripts/nodes/RunDirector.cs" id="9_fs0b5"]
+[ext_resource type="Script" path="res://scripts/nodes/RunGrowth.cs" id="10_ma7h6"]
+[ext_resource type="Script" path="res://scripts/nodes/RunLog.cs" id="11_e2s0e"]
+[ext_resource type="Script" path="res://scripts/nodes/MetaManager.cs" id="12_gsxep"]
+[ext_resource type="Script" path="res://scripts/nodes/DebriefScreen.cs" id="13_v0vrg"]
+[ext_resource type="Script" path="res://scripts/nodes/Hud.cs" id="14_dg70y"]
+[ext_resource type="Script" path="res://scripts/nodes/Minimap.cs" id="15_pnhog"]
+[ext_resource type="Script" path="res://scripts/nodes/SoundDirector.cs" id="16_2c4at"]
+[ext_resource type="Script" path="res://scripts/nodes/MusicDirector.cs" id="17_g6wdg"]
+[ext_resource type="Script" path="res://scripts/nodes/EffectDirector.cs" id="18_hq6as"]
+[ext_resource type="Script" path="res://scripts/nodes/TouchHud.cs" id="19_kxyth"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_hq6as"]
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_cobve"]
 sky_top_color = Color(0.07, 0.09, 0.14, 1)
 sky_horizon_color = Color(0.11, 0.11, 0.13, 1)
 ground_bottom_color = Color(0.05, 0.05, 0.07, 1)
@@ -27,12 +28,12 @@ ground_horizon_color = Color(0.09, 0.09, 0.11, 1)
 sun_angle_max = 0.0
 sun_curve = 0.0
 
-[sub_resource type="Sky" id="Sky_kxyth"]
-sky_material = SubResource("ProceduralSkyMaterial_hq6as")
+[sub_resource type="Sky" id="Sky_cmqll"]
+sky_material = SubResource("ProceduralSkyMaterial_cobve")
 
-[sub_resource type="Environment" id="Environment_cobve"]
+[sub_resource type="Environment" id="Environment_8cp6k"]
 background_mode = 2
-sky = SubResource("Sky_kxyth")
+sky = SubResource("Sky_cmqll")
 ambient_light_source = 2
 ambient_light_color = Color(0.42, 0.5, 0.62, 1)
 ambient_light_energy = 0.55
@@ -49,26 +50,30 @@ adjustment_enabled = true
 adjustment_contrast = 1.08
 adjustment_saturation = 1.12
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_cmqll"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_8b871"]
 render_priority = 0
-shader = ExtResource("2_nfivy")
-shader_parameter/detail = ExtResource("3_1nqs0")
+shader = ExtResource("2_1nqs0")
+shader_parameter/detail = ExtResource("3_1iba3")
 shader_parameter/detail_scale = null
 shader_parameter/arena_extent = null
+shader_parameter/slab_metres = null
+shader_parameter/seam_darkness = null
+shader_parameter/seam_width = null
+shader_parameter/slab_variation = null
 
-[sub_resource type="PlaneMesh" id="PlaneMesh_8cp6k"]
+[sub_resource type="PlaneMesh" id="PlaneMesh_pdwbg"]
 size = Vector2(120, 120)
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_8b871"]
+[sub_resource type="BoxShape3D" id="BoxShape3D_5grtr"]
 size = Vector3(120, 1, 120)
 
-[node name="Main" type="Node3D" unique_id=1189077136]
-script = ExtResource("1_bb450")
+[node name="Main" type="Node3D" unique_id=2104077889]
+script = ExtResource("1_nfivy")
 
-[node name="Environment" type="WorldEnvironment" parent="." unique_id=1770284072]
-environment = SubResource("Environment_cobve")
+[node name="Environment" type="WorldEnvironment" parent="." unique_id=1327318974]
+environment = SubResource("Environment_8cp6k")
 
-[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1495532114]
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=2047136764]
 transform = Transform3D(0.81915206, 0.46984634, -0.32898995, 0, 0.57357645, 0.81915206, 0.57357645, -0.6710101, 0.46984634, 0, 0, 0)
 light_color = Color(1, 0.94, 0.83, 1)
 light_energy = 1.25
@@ -76,275 +81,284 @@ shadow_enabled = true
 shadow_blur = 1.4
 directional_shadow_max_distance = 90.0
 
-[node name="Ground" type="StaticBody3D" parent="." unique_id=1163578814]
+[node name="Ground" type="StaticBody3D" parent="." unique_id=229046236]
 
-[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=1112212267]
-material_override = SubResource("ShaderMaterial_cmqll")
-mesh = SubResource("PlaneMesh_8cp6k")
+[node name="Mesh" type="MeshInstance3D" parent="Ground" unique_id=230979912]
+material_override = SubResource("ShaderMaterial_8b871")
+mesh = SubResource("PlaneMesh_pdwbg")
 
-[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=405709529]
+[node name="Collision" type="CollisionShape3D" parent="Ground" unique_id=1271147052]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
-shape = SubResource("BoxShape3D_8b871")
+shape = SubResource("BoxShape3D_5grtr")
 
-[node name="Player" type="CharacterBody3D" parent="." unique_id=578818177 instance=ExtResource("4_1iba3")]
-script = ExtResource("5_yxlcp")
+[node name="Player" type="CharacterBody3D" parent="." unique_id=578818177 instance=ExtResource("4_yxlcp")]
+script = ExtResource("5_ebg2g")
 
-[node name="CameraRig" type="Node3D" parent="." unique_id=747669496]
-script = ExtResource("6_ebg2g")
+[node name="CameraRig" type="Node3D" parent="." unique_id=483340207]
+script = ExtResource("6_2ofn6")
 TargetPath = NodePath("../Player")
 
-[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=1161607459]
+[node name="Camera" type="Camera3D" parent="CameraRig" unique_id=1168901525]
 transform = Transform3D(1, 0, 0, 0, 0.89879405, 0.43837115, 0, -0.43837115, 0.89879405, 0, 5.698825, 11.684322)
 fov = 52.0
 near = 0.15
 far = 260.0
 
-[node name="Obstacles" type="Node3D" parent="." unique_id=1586872133]
+[node name="Obstacles" type="Node3D" parent="." unique_id=2087197882]
 
-[node name="LootContainers" type="Node3D" parent="." unique_id=820277984]
+[node name="LootContainers" type="Node3D" parent="." unique_id=1245646710]
 
-[node name="ExtractionZones" type="Node3D" parent="." unique_id=59735944]
+[node name="ExtractionZones" type="Node3D" parent="." unique_id=1065662419]
 
-[node name="DangerZones" type="Node3D" parent="." unique_id=589659229]
+[node name="DangerZones" type="Node3D" parent="." unique_id=544173477]
 
-[node name="Level" type="Node3D" parent="." unique_id=2095214282]
-script = ExtResource("7_2ofn6")
+[node name="Level" type="Node3D" parent="." unique_id=1641766467]
+script = ExtResource("7_xa025")
 
-[node name="Horde" type="Node3D" parent="." unique_id=1250467288]
-script = ExtResource("8_xa025")
+[node name="Horde" type="Node3D" parent="." unique_id=764023282]
+script = ExtResource("8_36rkl")
 InitialSpawn = 24
 
-[node name="RunDirector" type="Node3D" parent="." unique_id=1936847141]
-script = ExtResource("9_36rkl")
+[node name="RunDirector" type="Node3D" parent="." unique_id=395612803]
+script = ExtResource("9_fs0b5")
 
-[node name="RunGrowth" type="Node" parent="." unique_id=302579918]
-script = ExtResource("10_fs0b5")
+[node name="RunGrowth" type="Node" parent="." unique_id=1367831822]
+script = ExtResource("10_ma7h6")
 
-[node name="RunLog" type="Node" parent="." unique_id=720048352]
-script = ExtResource("11_ma7h6")
+[node name="RunLog" type="Node" parent="." unique_id=99717258]
+script = ExtResource("11_e2s0e")
 
-[node name="MetaManager" type="Node" parent="." unique_id=1249527138]
-script = ExtResource("12_e2s0e")
+[node name="MetaManager" type="Node" parent="." unique_id=675902873]
+script = ExtResource("12_gsxep")
 
-[node name="Debrief" type="CanvasLayer" parent="." unique_id=1143578427]
+[node name="Debrief" type="CanvasLayer" parent="." unique_id=874099388]
 layer = 2
-script = ExtResource("13_gsxep")
+script = ExtResource("13_v0vrg")
 
-[node name="Panel" type="ColorRect" parent="Debrief" unique_id=412492510]
+[node name="Panel" type="ColorRect" parent="Debrief" unique_id=54531403]
 offset_left = 320.0
 offset_top = 150.0
 offset_right = 1600.0
 offset_bottom = 880.0
 mouse_filter = 2
 
-[node name="Title" type="Label" parent="Debrief" unique_id=1916789011]
+[node name="Title" type="Label" parent="Debrief" unique_id=538688851]
 offset_left = 320.0
 offset_top = 186.0
 offset_right = 1600.0
 offset_bottom = 246.0
 
-[node name="Body" type="Label" parent="Debrief" unique_id=12773565]
+[node name="Body" type="Label" parent="Debrief" unique_id=597077488]
 offset_left = 380.0
 offset_top = 286.0
 offset_right = 1540.0
 offset_bottom = 766.0
 
-[node name="Footer" type="Label" parent="Debrief" unique_id=339239766]
+[node name="Footer" type="Label" parent="Debrief" unique_id=1214893911]
 offset_left = 320.0
 offset_top = 818.0
 offset_right = 1600.0
 offset_bottom = 858.0
 
-[node name="Hud" type="CanvasLayer" parent="." unique_id=2076741313]
-script = ExtResource("14_v0vrg")
+[node name="Hud" type="CanvasLayer" parent="." unique_id=1639819037]
+script = ExtResource("14_dg70y")
 
-[node name="Vignette" type="ColorRect" parent="Hud" unique_id=1569453208]
+[node name="Vignette" type="ColorRect" parent="Hud" unique_id=53448212]
 offset_right = 1920.0
 offset_bottom = 1080.0
 mouse_filter = 2
 
-[node name="HealthBack" type="ColorRect" parent="Hud" unique_id=1414837338]
+[node name="Minimap" type="TextureRect" parent="Hud" unique_id=1835479918]
+modulate = Color(1, 1, 1, 0.88)
+offset_left = 24.0
+offset_top = 828.0
+offset_right = 252.0
+offset_bottom = 1056.0
+mouse_filter = 2
+script = ExtResource("15_pnhog")
+
+[node name="HealthBack" type="ColorRect" parent="Hud" unique_id=564574337]
 offset_left = 24.0
 offset_top = 22.0
 offset_right = 384.0
 offset_bottom = 48.0
 mouse_filter = 2
 
-[node name="HealthFill" type="ColorRect" parent="Hud" unique_id=1554298519]
+[node name="HealthFill" type="ColorRect" parent="Hud" unique_id=1424274338]
 offset_left = 26.0
 offset_top = 24.0
 offset_right = 382.0
 offset_bottom = 46.0
 mouse_filter = 2
 
-[node name="HealthText" type="Label" parent="Hud" unique_id=1516754709]
+[node name="HealthText" type="Label" parent="Hud" unique_id=1231054986]
 offset_left = 32.0
 offset_top = 21.0
 offset_right = 392.0
 offset_bottom = 47.0
 
-[node name="BagBack" type="ColorRect" parent="Hud" unique_id=188072414]
+[node name="BagBack" type="ColorRect" parent="Hud" unique_id=1863550300]
 offset_left = 24.0
 offset_top = 58.0
 offset_right = 384.0
 offset_bottom = 76.0
 mouse_filter = 2
 
-[node name="BagFill" type="ColorRect" parent="Hud" unique_id=1532626252]
+[node name="BagFill" type="ColorRect" parent="Hud" unique_id=1918196489]
 offset_left = 26.0
 offset_top = 60.0
 offset_right = 382.0
 offset_bottom = 74.0
 mouse_filter = 2
 
-[node name="BagText" type="Label" parent="Hud" unique_id=951007373]
+[node name="BagText" type="Label" parent="Hud" unique_id=1131604820]
 offset_left = 32.0
 offset_top = 57.0
 offset_right = 392.0
 offset_bottom = 80.0
 
-[node name="LevelBack" type="ColorRect" parent="Hud" unique_id=718792903]
+[node name="LevelBack" type="ColorRect" parent="Hud" unique_id=1180413954]
 offset_left = 24.0
 offset_top = 122.0
 offset_right = 384.0
 offset_bottom = 132.0
 mouse_filter = 2
 
-[node name="LevelFill" type="ColorRect" parent="Hud" unique_id=1374099233]
+[node name="LevelFill" type="ColorRect" parent="Hud" unique_id=890651826]
 offset_left = 26.0
 offset_top = 124.0
 offset_right = 382.0
 offset_bottom = 130.0
 mouse_filter = 2
 
-[node name="LevelText" type="Label" parent="Hud" unique_id=1084114314]
+[node name="LevelText" type="Label" parent="Hud" unique_id=777130582]
 offset_left = 32.0
 offset_top = 121.0
 offset_right = 392.0
 offset_bottom = 144.0
 
-[node name="Arms" type="Label" parent="Hud" unique_id=1235292815]
+[node name="Arms" type="Label" parent="Hud" unique_id=121576479]
 offset_left = 24.0
 offset_top = 84.0
 offset_right = 584.0
 offset_bottom = 120.0
 
-[node name="Keys" type="Label" parent="Hud" unique_id=602083904]
+[node name="Keys" type="Label" parent="Hud" unique_id=1766325443]
 offset_left = 24.0
 offset_top = 140.0
 offset_right = 704.0
 offset_bottom = 170.0
 
-[node name="Clock" type="Label" parent="Hud" unique_id=606880470]
+[node name="Clock" type="Label" parent="Hud" unique_id=1716468891]
 offset_left = 660.0
 offset_top = 16.0
 offset_right = 1260.0
 offset_bottom = 68.0
 
-[node name="Payout" type="Label" parent="Hud" unique_id=437429556]
+[node name="Payout" type="Label" parent="Hud" unique_id=1185677225]
 offset_left = 660.0
 offset_top = 66.0
 offset_right = 1260.0
 offset_bottom = 100.0
 
-[node name="Exit" type="Label" parent="Hud" unique_id=1547929305]
+[node name="Exit" type="Label" parent="Hud" unique_id=122852048]
 offset_left = 1396.0
 offset_top = 22.0
 offset_right = 1896.0
 offset_bottom = 112.0
 
-[node name="HoldBack" type="ColorRect" parent="Hud" unique_id=1867737333]
+[node name="HoldBack" type="ColorRect" parent="Hud" unique_id=1835608818]
 offset_left = 720.0
 offset_top = 972.0
 offset_right = 1200.0
 offset_bottom = 994.0
 mouse_filter = 2
 
-[node name="HoldFill" type="ColorRect" parent="Hud" unique_id=1090265249]
+[node name="HoldFill" type="ColorRect" parent="Hud" unique_id=1114198525]
 offset_left = 722.0
 offset_top = 974.0
 offset_right = 1198.0
 offset_bottom = 992.0
 mouse_filter = 2
 
-[node name="HoldText" type="Label" parent="Hud" unique_id=218450868]
+[node name="HoldText" type="Label" parent="Hud" unique_id=1421132178]
 offset_left = 728.0
 offset_top = 971.0
 offset_right = 1208.0
 offset_bottom = 994.0
 
-[node name="Card0" type="ColorRect" parent="Hud" unique_id=158209779]
+[node name="Card0" type="ColorRect" parent="Hud" unique_id=1410490308]
 offset_left = 492.0
 offset_top = 854.0
 offset_right = 792.0
 offset_bottom = 950.0
 mouse_filter = 2
 
-[node name="Card0Text" type="Label" parent="Hud" unique_id=2078640654]
+[node name="Card0Text" type="Label" parent="Hud" unique_id=1130853766]
 offset_left = 492.0
 offset_top = 870.0
 offset_right = 792.0
 offset_bottom = 940.0
 
-[node name="Card1" type="ColorRect" parent="Hud" unique_id=89595468]
+[node name="Card1" type="ColorRect" parent="Hud" unique_id=2000477059]
 offset_left = 810.0
 offset_top = 854.0
 offset_right = 1110.0
 offset_bottom = 950.0
 mouse_filter = 2
 
-[node name="Card1Text" type="Label" parent="Hud" unique_id=888223584]
+[node name="Card1Text" type="Label" parent="Hud" unique_id=1095441736]
 offset_left = 810.0
 offset_top = 870.0
 offset_right = 1110.0
 offset_bottom = 940.0
 
-[node name="Card2" type="ColorRect" parent="Hud" unique_id=287753598]
+[node name="Card2" type="ColorRect" parent="Hud" unique_id=2115409802]
 offset_left = 1128.0
 offset_top = 854.0
 offset_right = 1428.0
 offset_bottom = 950.0
 mouse_filter = 2
 
-[node name="Card2Text" type="Label" parent="Hud" unique_id=528431226]
+[node name="Card2Text" type="Label" parent="Hud" unique_id=1108301838]
 offset_left = 1128.0
 offset_top = 870.0
 offset_right = 1428.0
 offset_bottom = 940.0
 
-[node name="Banner" type="Label" parent="Hud" unique_id=874672307]
+[node name="Banner" type="Label" parent="Hud" unique_id=1366101234]
 offset_top = 170.0
 offset_right = 1920.0
 offset_bottom = 370.0
 
-[node name="Alert" type="Label" parent="Hud" unique_id=1672967973]
+[node name="Alert" type="Label" parent="Hud" unique_id=304797462]
 offset_top = 96.0
 offset_right = 1920.0
 offset_bottom = 156.0
 
-[node name="BossBarBack" type="ColorRect" parent="Hud" unique_id=320078573]
+[node name="BossBarBack" type="ColorRect" parent="Hud" unique_id=1928003555]
 offset_left = 540.0
 offset_top = 150.0
 offset_right = 1380.0
 offset_bottom = 164.0
 mouse_filter = 2
 
-[node name="BossBarFill" type="ColorRect" parent="Hud" unique_id=534786242]
+[node name="BossBarFill" type="ColorRect" parent="Hud" unique_id=1972267458]
 offset_left = 540.0
 offset_top = 150.0
 offset_right = 1380.0
 offset_bottom = 164.0
 mouse_filter = 2
 
-[node name="Sound" type="Node" parent="." unique_id=942387406]
-script = ExtResource("15_dg70y")
+[node name="Sound" type="Node" parent="." unique_id=1685532041]
+script = ExtResource("16_2c4at")
 
-[node name="Music" type="Node" parent="." unique_id=309568609]
-script = ExtResource("16_pnhog")
+[node name="Music" type="Node" parent="." unique_id=43658086]
+script = ExtResource("17_g6wdg")
 
-[node name="Effects" type="Node3D" parent="." unique_id=706015348]
-script = ExtResource("17_2c4at")
+[node name="Effects" type="Node3D" parent="." unique_id=422177524]
+script = ExtResource("18_hq6as")
 
-[node name="TouchHud" type="CanvasLayer" parent="." unique_id=1382854136]
+[node name="TouchHud" type="CanvasLayer" parent="." unique_id=1086318983]
 layer = 3
-script = ExtResource("18_g6wdg")
+script = ExtResource("19_kxyth")

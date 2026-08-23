@@ -376,6 +376,20 @@ public partial class BuildMain : SceneTree
             MouseFilter = Control.MouseFilterEnum.Ignore,
         });
 
+        // Bottom-left, away from the health bar and out of the way of the
+        // level-up cards, which own the middle of the screen when they appear.
+        var minimap = new TextureRect
+        {
+            Name = "Minimap",
+            Position = new Vector2(24.0f, ScreenHeight - 252.0f),
+            Size = new Vector2(228.0f, 228.0f),
+            StretchMode = TextureRect.StretchModeEnum.Scale,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Modulate = new Color(1.0f, 1.0f, 1.0f, 0.88f),
+        };
+
+        hud.AddChild(SceneBuildUtil.AttachScriptToRoot(minimap, "res://scripts/nodes/Minimap.cs"));
+
         AddBar(hud, "Health", new Vector2(24.0f, 22.0f), new Vector2(360.0f, 26.0f));
         AddBar(hud, "Bag", new Vector2(24.0f, 58.0f), new Vector2(360.0f, 18.0f));
         AddBar(hud, "Level", new Vector2(24.0f, 122.0f), new Vector2(360.0f, 10.0f));
