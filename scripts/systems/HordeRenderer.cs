@@ -218,6 +218,23 @@ public sealed class HordeRenderer
         _buffer[c + 3] = layer;
     }
 
+    /// Keeps this renderer's node hidden no matter what it has to draw.
+    ///
+    /// For the enemy billboards on the solid-body path. They are still synced
+    /// every frame on purpose — a fallback that has not run since startup is not
+    /// a fallback — but they must not be *seen*, and `Upload` used to decide that
+    /// on its own.
+    ///
+    /// The failure was silent and total: `Horde._Ready` set `Node.Visible = false`
+    /// once, and the first `Sync` set it back to `count > 0`. Every enemy in the
+    /// game was drawn twice, a low-poly body and a pixel-art billboard standing in
+    /// the same place, for as long as both renderers have existed. It survived
+    /// every probe, because no probe asks what is on the screen, and it survived
+    /// every screenshot, because at the distance a screenshot is framed at the two
+    /// silhouettes overlap into one slightly odd shape. What found it was a single
+    /// frame of the proof video with a runner close to the camera.
+    public bool Muted { get; set; }
+
     private void Upload(int count)
     {
         _multiMesh.Buffer = _buffer;
@@ -225,6 +242,6 @@ public sealed class HordeRenderer
 
         // An empty MultiMesh still costs a draw call; hiding it gives that back
         // during the stretches when nothing is in flight.
-        Node.Visible = count > 0;
+        Node.Visible = !Muted && count > 0;
     }
 }

@@ -61,6 +61,7 @@ public partial class BodyProbe : SceneTree
             case 4: return RunStage(StagePackRoundTrips, "pace and phase survive sharing one float");
             case 5: return RunStage(StageStrideFollowsWalking, "the stride advances by walking, not by being somewhere");
             case 6: return RunStage(StagePlayerHasABody, "the player is a body too, and not one of theirs");
+            case 7: return RunStage(StageBillboardsStayOff, "the billboards stay off while the bodies are on");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -79,6 +80,55 @@ public partial class BodyProbe : SceneTree
         _stage++;
         _stageTick = 0;
         return false;
+    }
+
+    /// One enemy, one silhouette.
+    ///
+    /// Asked after a hundred ticks of a live horde rather than at startup, and
+    /// that is the entire point of the stage. `Horde._Ready` hides the billboard
+    /// node when the solid bodies are on, and `HordeRenderer.Upload` used to
+    /// assign `Node.Visible = count > 0` on every single sync — so the node came
+    /// back on the first tick and every enemy in the game was drawn twice, a
+    /// low-poly body and a pixel-art billboard standing in the same place.
+    ///
+    /// It survived every probe here, because none of them asked what was on the
+    /// screen, and it survived every screenshot, because at the distance those
+    /// are framed at the two silhouettes overlap into one slightly odd shape. It
+    /// was found in a single frame of the proof video, with a runner close enough
+    /// to the camera to see both.
+    private bool? StageBillboardsStayOff(int tick)
+    {
+        Horde horde = _horde!;
+
+        if (tick == 1)
+        {
+            // A crowd of this probe's own, because the stages above leave the
+            // pool however they left it and "0 enemies, billboards hidden" is a
+            // pass that proves nothing.
+            for (int i = 0; i < 12; i++)
+            {
+                float angle = Mathf.Tau * i / 12.0f;
+                horde.Spawn(new Vector3(Mathf.Cos(angle) * 6.0f, 0.0f, Mathf.Sin(angle) * 6.0f),
+                            i % horde.Types.Length);
+            }
+        }
+
+        if (tick < 100)
+            return null;
+
+        bool solid = horde.Bodies != null;
+        bool showing = horde.Billboards.Node.Visible;
+
+        GD.Print($"  {horde.Pool.Count} enemies, bodies {(solid ? "on" : "off")}, "
+               + $"billboards {(showing ? "VISIBLE" : "hidden")} after {tick} ticks");
+
+        // Only one of the two may draw, and which one depends on which path the
+        // horde took. Requiring "hidden" outright would fail on the fallback,
+        // where the billboards are the only thing there is.
+        if (!solid)
+            return showing || horde.Pool.Count == 0;
+
+        return !showing && horde.Pool.Count > 0;
     }
 
     private bool? StageBodiesExist(int tick)

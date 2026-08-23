@@ -211,7 +211,13 @@ public partial class Horde : Node3D
 
             // The billboards stay built either way, so the toggle is a property
             // rather than a rebuild — but only one of them draws.
-            _renderer.Node.Visible = !SolidBodies;
+            //
+            // `Muted`, not `Visible`. Setting the node's visibility here is the
+            // obvious version and it does not work for longer than one frame:
+            // `HordeRenderer.Upload` assigns `Node.Visible = count > 0` on every
+            // sync, so the first tick turns the billboards straight back on and
+            // every enemy is drawn twice from then on. That shipped.
+            _renderer.Muted = SolidBodies;
         }
 
         Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
@@ -724,6 +730,9 @@ public partial class Horde : Node3D
 
     /// The solid-body renderer, or null on the sprite path. Only a probe asks.
     public BodyRenderer? Bodies => _bodies;
+
+    /// The billboard renderer, muted on the solid-body path. Only a probe asks.
+    public HordeRenderer Billboards => _renderer;
 
     /// Ranged behaviour: hold at standoff and shoot. Returns true when the
     /// enemy should stop closing.

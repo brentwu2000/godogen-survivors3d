@@ -28,9 +28,10 @@ Read this before starting work. Update it as phases land.
 | ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
 | ✅ B3 | `RunKit` — Orbit, Shockwave, Chain and Chill; cards that fight on their own | `4d93557` |
 | ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | `3641daf` |
-| ✅ B10 | Three glTF landmarks, authored offline in three.js | *this* |
+| ✅ B10 | Three glTF landmarks, authored offline in three.js | `3c65831` |
+| ✅ B14 | The proof video, and the double-draw it found | *this* |
 
-**Next: B14** (the proof video), then A4 last.
+**Next: A4**, the last item in either half.
 
 **Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
 bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
@@ -526,15 +527,58 @@ worst case: 4 music layers sum to 0.41, 14 voices at 0.90 sum to 5.63, total 6.0
 
 Six times over unity. Four simultaneous impacts already pass it.
 
-### B14 — The proof video  ·  *needs B8, and everything you want filmed*
+### ✅ B14 — The proof video, and the double-draw it found  ·  *done*
 
-`Presentation.cs` drives through `BotDrive`. One of each elite mark at 8 s and the boss at 32 s,
-placed relative to the **camera's** heading (`_rig.Yaw`), not `Player.Facing` — the camera is 13 m
-behind the body with its own yaw, so "in front of the player" is not "on screen". The boss at 13 s had
-27 seconds to cross 22 m at 1.15 m/s, did, and killed the take.
+```bash
+godot --write-movie screenshots/result/run.avi --fixed-fps 30 --quit-after 1200 \
+      --script test/Presentation.cs
+ffmpeg -i screenshots/result/run.avi -c:v libx264 -preset slow -crf 25 \
+       -pix_fmt yuv420p -movflags +faststart screenshots/result/run.mp4
+```
 
-`--quit-after 1200` (40 s). `_tick` counts **physics** ticks (60 Hz) while `--fixed-fps 30` fixes the
-render rate, so a 1200-frame clip is 2400 ticks.
+**Write `.avi`, not a PNG sequence.** Godot's PNG writer spends 430 ms per frame encoding; the same
+1200 frames as AVI take 55 seconds instead of nine minutes.
+
+`Presentation.cs` drives through `BotDrive`. One of each elite mark at 8 s, and the boss when the bot
+reaches the pad, placed relative to the **camera's** heading (`CameraRig.Forward`), not
+`Player.Facing`.
+
+Three things about that placement, each of which cost a take:
+
+- The camera is 13 m behind the body, and the fog closes about 24 m from the *lens*. Sixteen metres
+  in front of the player is 29 m from the camera, which is black. Nine puts the elites inside it.
+- The boss is 5.5 m tall. At ten metres it filled the frame from below and reached the pad, taking
+  the player from 90 hp to 32 during the hold. It keeps sixteen.
+- **Cue the boss off the stage, not off the clock.** The run ends when the extraction completes, and
+  where that lands depends on how long the route took — which changed when the map got cover, and
+  again when it got terrain. A boss cued at a fixed 32 s against an extraction that finished at 31.4 s
+  spawned into a run that had already ended.
+
+**`FilmedEnemyCap = 90` is what decides whether the take ends in an extraction or a death.** The
+shipping cap is 160 and a compressed run reaches it: the bot arrived at the pad with 67 hp and 156
+enemies on the field and lost all 67 in the 4.3 s before the five-second hold finished. Lowering the
+opening crowd does not help (the director refills it in ten seconds) and lengthening the run moved the
+death by 2.6 s. What matters is how many bodies are touching the player while it stands still.
+
+Take timeline, for comparison when it next drifts: crate at 10.8 s, looted at 13.1 s, pad at 26.8 s,
+extracted at 31.4 s with 514 banked and 77 killed.
+
+`--quit-after` counts **rendered** frames; `_tick` counts **physics** ticks. Physics is 60 Hz and the
+capture renders at 30, so the 1200-frame clip is 2400 ticks.
+
+#### What the video found
+
+**Every enemy in the game was being drawn twice** — a low-poly body and a pixel-art billboard standing
+in the same place — for as long as both renderers have existed. `Horde._Ready` set
+`_renderer.Node.Visible = false` once; `HordeRenderer.Upload` assigned `Node.Visible = count > 0` on
+every sync and turned it straight back on. It is `Muted` now, a flag `Upload` respects.
+
+It survived every probe, because none of them asked what was on the screen, and it survived every
+screenshot, because at the distance those are framed at the two silhouettes overlap into one slightly
+odd shape. One frame of the video with a runner close to the lens made it obvious.
+
+`BodyProbe` stage 7 catches it: 12 spawned enemies, 100 ticks, and the billboard node must still be
+hidden. Verified by reintroducing the bug.
 
 ---
 
