@@ -85,6 +85,15 @@ public partial class LevelGenerator : Node3D
 
     private ulong _rng;
     private PropRenderer? _props;
+    private ScatterField? _scatter;
+
+    /// Ankle-high decoration per map, across all three kinds.
+    ///
+    /// Nine hundred, which sounds like a lot and is three MultiMeshes. Cover is
+    /// what the player walks around and the ground shader is what they walk on;
+    /// between the two there was nothing, so the arena had no object small enough
+    /// to measure itself against and read as large and empty at every distance.
+    [Export] public int ScatterCount { get; set; } = 900;
 
     /// The tile kind each grid cell drew, for the ground to tint by. Written by
     /// BuildCover and read by the material — the layout the generator chose is
@@ -150,7 +159,7 @@ public partial class LevelGenerator : Node3D
 
         GD.Print($"level seed {Seed}: {blocks.Count} blocks, {crates.GetChildCount()} crates, " +
                  $"{OpenPadCount}/{pads.GetChildCount()} pads will open, {CarvedLastRun} carved, " +
-                 $"{_props?.Total ?? 0} props");
+                 $"{_props?.Total ?? 0} props, {_scatter?.Total ?? 0} scatter");
     }
 
     /// Random cover can seal a corner off, and a run whose exit is behind a wall
@@ -500,7 +509,76 @@ public partial class LevelGenerator : Node3D
 
         PlaceLandmarks();
         _props.Commit();
+        Scatter(blocks);
         PaintGround();
+    }
+
+    /// Sprinkles the floor.
+    ///
+    /// Rejection-sampled against the blocks with a small margin, so nothing sits
+    /// half inside a wall — visible from a metre away and impossible to explain,
+    /// because the object it is inside was never something the player could see
+    /// through. A fixed number of *attempts* rather than a fixed number of
+    /// placements: on a crowded map some are refused, and a loop that insisted on
+    /// the count would spin against a layout that has no room for it.
+    ///
+    /// Tinted by the tile it lands on, so a piece of rubble in the oil-stained
+    /// yard is a different colour from one on bleached open ground. Uniform
+    /// scatter over four differently-tinted zones would fight the one thing the
+    /// ground shader exists to do.
+    private void Scatter(System.Collections.Generic.List<Block> blocks)
+    {
+        _scatter ??= new ScatterField(ScatterCount, Extent + 6.0f);
+        _scatter.Clear();
+
+        if (_scatter.Node.GetParent() == null)
+            Container("Ground").AddChild(_scatter.Node);
+
+        var kinds = System.Enum.GetValues<ScatterKind>();
+
+        for (int i = 0; i < ScatterCount; i++)
+        {
+            var spot = new Vector2((NextFloat() - 0.5f) * 2.0f * Extent,
+                                   (NextFloat() - 0.5f) * 2.0f * Extent);
+
+            // Half a metre, which is less than the crates get. Scatter touching a
+            // wall looks like it collected there; scatter *inside* one does not.
+            if (InsideAnyBlock(spot, blocks, 0.5f))
+                continue;
+
+            var kind = (ScatterKind)(int)(NextFloat() * kinds.Length);
+
+            Color tile = TintFor(TileAt(spot));
+
+            // One factor for all three channels, not three.
+            //
+            // Rolling each channel separately does not vary the brightness, it
+            // varies the *hue* — and independently, so the results are spread
+            // over the whole colour wheel. The first version of this produced
+            // pink, green and orange debris on a sand-coloured floor, which reads
+            // as litter from another game. Brightness is the only axis that
+            // should move: the tile tints are near-white multipliers rather than
+            // colours, so they are dimmed to something a piece of debris could
+            // plausibly be made of and left the colour the ground is.
+            float shade = Mathf.Lerp(0.28f, 0.48f, NextFloat());
+            var tint = new Color(tile.R * shade, tile.G * shade, tile.B * shade);
+
+            _scatter.Add(kind, spot, NextFloat() * Mathf.Tau,
+                         Mathf.Lerp(0.55f, 1.35f, NextFloat()), tint);
+        }
+
+        _scatter.Commit();
+    }
+
+    /// Which tile of the layout grid a world point falls in.
+    private int TileAt(Vector2 point)
+    {
+        if (_tiles == null || _tiles.Length == 0)
+            return 0;
+
+        int x = Mathf.Clamp((int)((point.X / Extent + 1.0f) * 0.5f * GridSize), 0, GridSize - 1);
+        int z = Mathf.Clamp((int)((point.Y / Extent + 1.0f) * 0.5f * GridSize), 0, GridSize - 1);
+        return _tiles[z * GridSize + x];
     }
 
     /// Hands the ground shader one texel per grid cell.
