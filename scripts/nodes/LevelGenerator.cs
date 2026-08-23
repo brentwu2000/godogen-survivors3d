@@ -23,6 +23,10 @@ public partial class LevelGenerator : Node3D
     [Export] public int CrateCount { get; set; } = 8;
     [Export] public int PadCount { get; set; } = 3;
 
+    /// Danger zones per map. Three: one of each kind, so a run always offers a
+    /// choice between two ways of being paid rather than one.
+    [Export] public int ZoneCount { get; set; } = 3;
+
     /// How many of the pads will actually open. Fewer than PadCount is the
     /// point: the walk home is a decision only when some of the exits are shut.
     [Export] public int OpenPadCount { get; set; } = 2;
@@ -34,6 +38,12 @@ public partial class LevelGenerator : Node3D
     /// far the crate is from the spawn. Depth has to pay, or the whole map past
     /// the first ring is risk with no reason.
     [Export] public float DepthRarityBias { get; set; } = 1.9f;
+
+    /// Where this seed put its danger zones. Read by anything that needs to
+    /// know about them without walking the scene tree for nodes.
+    public System.Collections.Generic.IReadOnlyList<ZonePlan> Zones => _zones;
+
+    private ZonePlan[] _zones = System.Array.Empty<ZonePlan>();
 
     /// Blocks removed by the last generation to open a sealed objective. Zero on
     /// most seeds; a probe watches it to confirm the rescue is not dead code.
@@ -113,14 +123,21 @@ public partial class LevelGenerator : Node3D
         Node3D obstacles = Container("Obstacles");
         Node3D crates = Container("LootContainers");
         Node3D pads = Container("ExtractionZones");
+        Node3D zones = Container("DangerZones");
 
         Clear(obstacles);
         Clear(crates);
         Clear(pads);
+        Clear(zones);
 
         var blocks = new System.Collections.Generic.List<Block>();
         BuildCover(blocks);
         BuildPads(pads, blocks);
+
+        // Before the crates, so a crate is never sited on top of a zone marker.
+        // After the pads, because a zone that overlapped the way out would let
+        // the player finish it by standing where they were going anyway.
+        BuildZones(zones, blocks);
         BuildCrates(crates, blocks);
 
         CarvedLastRun = EnsureReachable(blocks, pads, crates);
@@ -258,14 +275,28 @@ public partial class LevelGenerator : Node3D
         return false;
     }
 
+    /// The scene's container for one kind of generated thing.
+    ///
+    /// Creating one is a fallback for a scene that predates it, and it does not
+    /// work from `_Ready` — which is the only place this is ever called from.
+    /// Godot refuses `add_child()` while a parent is still setting up its
+    /// children, prints "Parent node is busy setting up children", and carries
+    /// on. Everything after that constructs correctly into a subtree that is not
+    /// in the tree: no exception, no missing reference, and nothing on screen.
+    ///
+    /// So the fallback warns. `BuildMain` is the fix, and the warning is what
+    /// says to go and add the node there.
     private Node3D Container(string name)
     {
         var existing = GetParent().GetNodeOrNull<Node3D>(name);
         if (existing != null)
             return existing;
 
+        GD.PushWarning($"LevelGenerator: no '{name}' in the scene — add it to BuildMain. " +
+                       "Creating one from _Ready is refused and everything put in it will be invisible.");
+
         var created = new Node3D { Name = name };
-        GetParent().AddChild(created);
+        GetParent().CallDeferred(Node.MethodName.AddChild, created);
         return created;
     }
 
@@ -629,6 +660,95 @@ public partial class LevelGenerator : Node3D
 
     /// Crates get better the further out they are. Bias is applied per rarity
     /// step, so the far corners are where the serum actually lives.
+    /// Sites the danger zones and builds a node for each.
+    ///
+    /// Here rather than in the run director because siting a thirteen-metre
+    /// rectangle needs the map, and the map exists for one function inside this
+    /// class. The director never learns where they are; the zones find the horde
+    /// and the player themselves.
+    private void BuildZones(Node3D parent, System.Collections.Generic.List<Block> blocks)
+    {
+        _zones = ZonePlan.Plan(ZoneCount, Extent, NextFloat);
+
+        for (int i = 0; i < _zones.Length; i++)
+        {
+            ZonePlan plan = _zones[i];
+
+            // Pushed clear by the zone's own half-extent, so the rectangle does
+            // not swallow a wall. A zone with a building inside it is not
+            // unfair, but it is a rectangle whose edge the player cannot walk,
+            // and the edge is where the enemies come from.
+            Vector2 centre = PushOutOfBlocks(plan.Centre, blocks,
+                                             Mathf.Max(plan.HalfExtent.X, plan.HalfExtent.Y) * 0.5f);
+
+            _zones[i] = plan with { Centre = centre };
+
+            var zone = new DangerZone
+            {
+                Name = $"Zone{i}",
+                Position = new Vector3(centre.X, 0.0f, centre.Y),
+                HalfExtent = plan.HalfExtent,
+                Kind = (int)plan.Kind,
+                Tier = plan.Tier,
+                HoldSeconds = plan.HoldSeconds,
+                PurgeKills = plan.PurgeKills,
+                Rolls = plan.Rolls,
+                Rounds = plan.Rounds,
+                SpawnRate = plan.SpawnRate,
+                OpeningBurst = plan.OpeningBurst,
+                Title = plan.Title,
+            };
+
+            zone.AddChild(BuildZoneMarker(plan));
+            parent.AddChild(zone);
+        }
+    }
+
+    /// The rectangle on the ground.
+    ///
+    /// Hollow, so it is a boundary rather than a sticker — the player has to be
+    /// able to see the floor they are standing on, and the edge is the only part
+    /// that means anything. Dormant colours: cold and dim, because an unwoken
+    /// zone should read as somewhere to consider rather than somewhere on fire.
+    private static MeshInstance3D BuildZoneMarker(ZonePlan plan)
+    {
+        var material = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.45f, 0.50f, 0.62f, 0.5f),
+            Transparency = BaseMaterial3D.TransparencyEnum.Alpha,
+            ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
+        };
+
+        Material chosen = material;
+        var shader = GD.Load<Shader>("res://assets/shaders/ground_marker.gdshader");
+
+        if (shader != null)
+        {
+            var live = new ShaderMaterial { Shader = shader };
+            live.SetShaderParameter("inner_colour", new Color(0.62f, 0.68f, 0.82f));
+            live.SetShaderParameter("outer_colour", new Color(0.20f, 0.26f, 0.40f));
+            live.SetShaderParameter("strength", 0.30f);
+            live.SetShaderParameter("churn", 0.35f);
+            live.SetShaderParameter("flicker", 0.05f);
+            live.SetShaderParameter("hollow", 0.82f);
+            live.SetShaderParameter("seed", plan.Centre.X * 0.37f + plan.Centre.Y * 0.11f);
+            chosen = live;
+        }
+
+        return new MeshInstance3D
+        {
+            Name = "Marker",
+            Mesh = new PlaneMesh { Size = plan.HalfExtent * 2.0f },
+
+            // Clear of the ground by a couple of centimetres. Coplanar with it
+            // and the two fight for the same depth, which flickers per pixel as
+            // the camera moves and reads as the marker being broken.
+            Position = new Vector3(0.0f, 0.03f, 0.0f),
+            MaterialOverride = chosen,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+    }
+
     private void BuildCrates(Node3D parent, System.Collections.Generic.List<Block> blocks)
     {
         for (int i = 0; i < Biome.CrateCount; i++)

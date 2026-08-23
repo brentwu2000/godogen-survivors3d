@@ -20,7 +20,18 @@ public partial class RunDirector : Node3D
     /// rather than a number that never arrives.
     [Export] public float RunSeconds { get; set; } = 300.0f;
 
-    [Export] public float StartSpawnRate { get; set; } = 2.0f;
+    /// The ambient trickle, in enemies per second at the start of a run.
+    ///
+    /// Halved from 2.0 when the danger zones arrived, and the halving is the
+    /// point rather than a tuning nudge. This curve *was* the game's threat: it
+    /// interpolated from here to `EndSpawnRate` on elapsed time alone, so the
+    /// same pressure found the player wherever they stood and whatever they did.
+    /// The only decision it offered was whether to keep moving.
+    ///
+    /// It is a background now — enough that the map is inhabited and standing
+    /// still is never free, little enough that the dangerous places are the ones
+    /// the player chose to walk into. See `ZonePlan`.
+    [Export] public float StartSpawnRate { get; set; } = 1.0f;
 
     /// A maxed weapon clears roughly three a second against the late roster, so
     /// anything past about twice that is escalation the player cannot read: the
@@ -28,7 +39,7 @@ public partial class RunDirector : Node3D
     /// only changes how fast the number climbs. Eight keeps the curve visible —
     /// four times the opening — while leaving the last stretch somewhere skill
     /// still moves the outcome.
-    [Export] public float EndSpawnRate { get; set; } = 8.0f;
+    [Export] public float EndSpawnRate { get; set; } = 4.0f;
 
     [Export] public float EndSpeedScale { get; set; } = 1.6f;
 
@@ -301,10 +312,11 @@ public partial class RunDirector : Node3D
 
     /// A crate that was not on the map when the run started.
     ///
-    /// Shared by the boss reward and the supply drops, because they are the same
-    /// object with different numbers and two copies of it would drift the first
-    /// time one of them changed.
-    private bool DropCache(string name, Vector3 at, float bias, int rolls, float seconds)
+    /// Shared by the boss reward, the supply drops and the danger zones, because
+    /// they are the same object with different numbers and three copies of it
+    /// would drift the first time one of them changed. Public for the zones,
+    /// which are children of the level rather than of this node.
+    public bool DropCache(string name, Vector3 at, float bias, int rolls, float seconds)
     {
         Node? crates = GetParent().GetNodeOrNull("LootContainers");
         if (crates == null)

@@ -97,9 +97,19 @@ public partial class BuildMain : SceneTree
         // Empty containers, filled at runtime. The layout is a per-run decision
         // and cannot live in a packed scene; what the scene owes it is somewhere
         // to put the results, in the tree, before anything goes looking.
+        // The generator fills these; they have to exist in the saved scene.
+        //
+        // `LevelGenerator.Container` creates one if it is missing, and that path
+        // does not work from `_Ready`: Godot refuses `add_child()` while a parent
+        // is still setting up its children, prints "Parent node is busy setting up
+        // children", and carries on. The generator then builds a whole subtree
+        // into a node that is not in the tree — everything constructs, nothing
+        // errors, and the contents simply do not exist. Danger zones spent their
+        // first run that way.
         root.AddChild(new Node3D { Name = "Obstacles" });
         root.AddChild(new Node3D { Name = "LootContainers" });
         root.AddChild(new Node3D { Name = "ExtractionZones" });
+        root.AddChild(new Node3D { Name = "DangerZones" });
 
         // Before the horde, whose flow field bakes obstacles once in _Ready.
         // Generating after that bake gives enemies a map they walk straight
