@@ -131,10 +131,10 @@ public readonly record struct ZonePlan(
     /// the player ever standing still to reload.
     public float SpawnRate => Kind switch
     {
-        ZoneKind.Hold => 1.95f + Tier * 1.05f,
-        ZoneKind.Purge => 2.45f + Tier * 1.30f,
-        ZoneKind.Breach => 0.90f + Tier * 0.50f,
-        _ => 1.8f,
+        ZoneKind.Hold => 2.85f + Tier * 1.50f,
+        ZoneKind.Purge => 3.55f + Tier * 1.90f,
+        ZoneKind.Breach => 1.30f + Tier * 0.70f,
+        _ => 2.6f,
     };
 
     /// Enemies delivered at once when it starts. The whole encounter for a
