@@ -22,15 +22,16 @@ Read this before starting work. Update it as phases land.
 | ✅ A5c | `AutoPlay --zone`, and three balance corrections it found | `8871b4c` |
 | ✅ A5d | `BalanceSweep zones:both`, and the zone tuned against the table | `ac006d1` |
 | ✅ A6 | `Shelter` — the base is a walkable room; the input map is repaired | `188f64b` |
+| ✅ A9 A10 | Slab seams in the ground shader, and 843 pieces of `ScatterField` | `a885481` |
+| ✅ A7 | `Minimap` — explored, not revealed | `22a5004` |
+| ✅ B5 | Spread, Charge and Blast; three weapons that resolve differently | `82ac068` |
+| ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
 
-**Next: A9/A10** (ground shader and scatter props), then A7 (minimap), A4 (blob shadows).
+**Next: B3** (a third kind of growth card), then B4 (trinkets), B7 (curiosities), B2, B9–B12, B14.
 
-A4 matters least now — shadows were the billboard path's only ground contact and solid bodies cast
-real ones, so it is a fallback-path fix rather than a visual one.
-
-**Half A is nearly done.** A1 A2 A3 A5 A6 A8 A10 A11 are in; A4, A7 and A9 remain. After those the
-queue is Half B: B2 (emerge + fog is partly done by A8), B3–B7 (growth cards, trinkets, weapons,
-carry, curiosities), B9–B12, B14.
+**Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
+bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
+left in either half.
 
 ### The three bugs that repeat
 
@@ -46,6 +47,23 @@ Every one of these has now bitten more than once in a single session, all silent
 3. **`ProjectSettings.Save()` writes and never removes.** A setting this repo stops defining stays in
    `project.godot`, bound and pollable. Clear it with `default`.
 
+### Probes that pass by testing nothing
+
+A separate failure mode from the three above, and by now the commoner one. Every case was green.
+
+- `TraitProbe` checked six hardcoded weapon names; three weapons were added and it never loaded them.
+  **Read the directory.**
+- `CarryProbe`'s value-per-bulk stage used two items that both have a bulk of 1, which makes the two
+  orderings identical. **Build the case that distinguishes them, even if it has to be invented.**
+- `CarryProbe`'s drop stage emptied the bag, which emptied the crate, so the next stage had nothing
+  left to check. **Order stages so the later ones still have something to measure**, and fail loudly
+  when they do not.
+- `MinimapProbe` checked unvisited zones *after* walking across the map, by which time none were
+  unvisited. Moving it earlier immediately failed and exposed a 30 m sight radius that gave the whole
+  map away.
+- `ZoneProbe` counted an opening burst while the player's rifle was killing it. **Turn off what you
+  are not measuring.**
+
 ### Where the balance stands
 
 Five seeds, both arms, `lingers:0`:
@@ -53,7 +71,14 @@ Five seeds, both arms, `lingers:0`:
 | arm | survived | median banked | median seconds | median lowest HP | worst peak |
 | :--- | :--- | ---: | ---: | ---: | ---: |
 | past | 5/5 | 485 | 37s | 98 | 65 |
-| zone | 4/5 | 1120 | 60s | 95 | 136 |
+| zone | 4/5 | 1289 | 60s | 95 | 136 |
+
+Unchanged by B6 in survival, time and peak. The zone arm's median rose from 1120 because on one seed
+the bag filled and the loot that used to be destroyed now reaches the player.
+
+The one death is seed `1374015655`, whose nearest zone is the tier-1 Deep Holdout. It has died since
+A5d raised the pressure 30%; it is not a regression from anything after that. **Check the table in
+`ac006d1` before blaming a new change for it** — that mistake has already been made once.
 
 ```bash
 godot --headless --script test/BalanceSweep.cs -- seeds:5 lingers:0 zones:both
