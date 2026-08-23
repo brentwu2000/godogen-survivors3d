@@ -131,9 +131,29 @@ public readonly record struct ZonePlan(
     /// the player ever standing still to reload.
     public float SpawnRate => Kind switch
     {
-        ZoneKind.Hold => 2.85f + Tier * 1.50f,
-        ZoneKind.Purge => 3.55f + Tier * 1.90f,
-        ZoneKind.Breach => 1.30f + Tier * 0.70f,
+        // Tier 0 raised, tier 1 left exactly where it was.
+        //
+        // Measured over twelve layouts with `BalanceSweep -- zones:tiers`, which
+        // is the first table that could tell the tiers apart at all — before it,
+        // the bot took whichever zone was nearest and the two tiers were averaged
+        // into one column that looked like noise. Split, they read:
+        //
+        //   past     12/12 survived, banked 638, lowest HP 98
+        //   tier 0   13/13 survived, banked 1052, lowest HP 91
+        //   tier 1   10/11 survived, banked 1328, lowest HP 59
+        //
+        // Tier 1 is priced. Tier 0 was not a gamble at all: seven points of health
+        // and nobody ever died, for sixty-five per cent more money. A shallow zone
+        // that always pays is not "a dangerous place you chose to walk into", it is
+        // a chore with a reward attached, and the correct play is to take it every
+        // single run — which collapses the choice the zones exist to create.
+        //
+        // The bases move about forty per cent of the way toward tier 1 and the
+        // per-tier steps shrink by the same amount, so every tier-1 number here is
+        // unchanged to two decimal places. Only the cheap one gets dearer.
+        ZoneKind.Hold => 3.45f + Tier * 0.90f,
+        ZoneKind.Purge => 4.31f + Tier * 1.14f,
+        ZoneKind.Breach => 1.58f + Tier * 0.42f,
         _ => 2.6f,
     };
 

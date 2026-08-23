@@ -434,7 +434,11 @@ public partial class LandmarkProbe : SceneTree
         _closest = Mathf.Min(_closest, Flat(at - _to));
 
         if (tick % 600 == 0)
-            GD.Print($"    tick {tick}: at ({at.X:F1}, {at.Z:F1}), {Flat(at - _to):F1} m to go");
+        {
+            GD.Print($"    tick {tick}: at ({at.X:F1}, {at.Z:F1}), {Flat(at - _to):F1} m to go, "
+                   + $"flow ({horde.FlowAt(at).X:F2}, {horde.FlowAt(at).Y:F2}), "
+                   + $"cell {(horde.FieldBlockedAt(at) ? "blocked" : "open")}");
+        }
 
         if (tick < 1800)
             return null;

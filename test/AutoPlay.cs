@@ -39,7 +39,25 @@ public partial class AutoPlay : SceneTree
     /// what does a zone cost, and does it pay for itself?
     private DangerZone? _zone;
     private int _zoneLeg = -1;
+
+    /// Where the bot was ten seconds ago, and how far it got since. Only a
+    /// timeout reads these.
+    private Vector3 _stuckFrom;
+    private float _stuckDrift;
     private bool _attemptZone;
+
+    /// Which tier of zone to attempt, or -1 for whichever is nearest.
+    ///
+    /// **This flag is the difference between a measurement and a sample.** Taking
+    /// the nearest zone means taking whatever tier the generator happened to put
+    /// closest, which is usually tier 0 — so the zone arm of the balance table was
+    /// bimodal, two seeds paying heavily and three barely noticing, and the spread
+    /// was read as variance in what a zone costs. It was variance in *which zone*.
+    ///
+    /// A tier that the seed does not contain is reported and the nearest is taken
+    /// instead. Falling back silently would put a tier-0 run in the tier-1 column,
+    /// which is the same failure one level further down.
+    private int _zoneTier = -1;
     private bool _zoneCleared;
 
     /// The crate a cleared zone drops, which the bot has to actually pick up.
@@ -257,12 +275,39 @@ public partial class AutoPlay : SceneTree
 
         if (distance > ArriveDistance)
         {
+            // How far the bot has actually moved lately, so a timeout can say
+            // whether it was blocked or merely slow. "Could not reach it in sixty
+            // seconds" is the same sentence for a bot pressed against a wall and
+            // one circling the pad two metres out, and they are different bugs.
+            if (_legTicks % 600 == 0)
+            {
+                _stuckDrift = _stuckFrom.DistanceTo(_player.GlobalPosition);
+                _stuckFrom = _player.GlobalPosition;
+            }
+
             Steer(target);
 
             if (_legTicks > (_leg == _zoneLeg ? ZoneLegTimeoutTicks : LegTimeoutTicks))
             {
                 Release();
-                GD.Print($"AUTOPLAY FAILED — could not reach {Label()} in 60s (still {distance:F1}m away)");
+                Vector2 flow = Navigate(target);
+                GD.Print($"AUTOPLAY FAILED — could not reach {Label()} in 60s (still {distance:F1}m away), " +
+                         $"{_horde.Pool.Count} enemies on the field");
+                GD.Print($"  stuck at ({_player.GlobalPosition.X:F1}, {_player.GlobalPosition.Z:F1}) " +
+                         $"heading for ({target.X:F1}, {target.Z:F1}); " +
+                         $"flow ({flow.X:F2}, {flow.Y:F2}), moved {_stuckDrift:F2} m in the last ten seconds");
+
+                ReportNearbyCover();
+
+                // A stuck run is a result, not a missing row.
+                //
+                // It used to leave without a `SWEEP` line, so `BalanceSweep` logged
+                // "no result" and dropped it — and the table then read "4/4
+                // survived" for an arm in which one of five runs never got home.
+                // A failure rate is exactly the kind of thing a balance table is
+                // for, and it was the one number it could not show.
+                GD.Print(Growth());
+                Sweep("Stuck", _tick / 60.0f, _player.SafeBox.TotalValue);
                 Quit(1);
                 return true;
             }
@@ -515,11 +560,23 @@ public partial class AutoPlay : SceneTree
             _navField.Rebuild(target);
         }
 
+        // Out of a wall first, if that is where the bot is standing.
+        //
+        // "Straight on is the honest fallback" was wrong, and specifically wrong
+        // in the one case it was written for. Inside an inflated footprint the
+        // target is usually on the *other side* of the thing being stood against,
+        // so the straight line points into it — the bot leaned on the south face
+        // of an eight-metre wall for sixty seconds, seven and a half metres from
+        // the extraction pad, while the sweep recorded the run as having no result
+        // at all. `EscapeFrom` is the field's answer to "which way is out".
+        Vector2 escape = _navField.EscapeFrom(_player.GlobalPosition);
+        if (escape != Vector2.Zero)
+            return escape;
+
         Vector2 flow = _navField.Sample(_player.GlobalPosition);
 
-        // Zero means the field has no route from here — standing inside an
-        // inflated footprint, usually. Straight on is the honest fallback: it is
-        // what the bot did before, and it gets it back out of the margin.
+        // Zero here now means a genuinely unreachable target rather than a body
+        // in a margin, and straight on is the honest answer to that.
         return flow == Vector2.Zero ? straight : flow;
     }
 
@@ -618,6 +675,43 @@ public partial class AutoPlay : SceneTree
                $"  threw {_thrown}, still carrying {_player.ThrowableCount}";
     }
 
+    /// Every obstacle within ten metres of a stuck bot, with its footprint.
+    ///
+    /// "It did not get there" is not a diagnosis. What decides whether this is a
+    /// pathing bug or a level-generation bug is whether the thing in the way is
+    /// something the flow field was told about, and the only way to know is to
+    /// list what is actually there.
+    private void ReportNearbyCover()
+    {
+        Node? obstacles = _player.GetParent()?.GetNodeOrNull("Obstacles");
+        if (obstacles == null)
+        {
+            GD.Print("  no Obstacles node to inspect");
+            return;
+        }
+
+        Vector3 at = _player.GlobalPosition;
+        int listed = 0;
+
+        foreach (Node child in obstacles.GetChildren())
+        {
+            if (child is not Node3D body)
+                continue;
+
+            float away = new Vector2(body.Position.X - at.X, body.Position.Z - at.Z).Length();
+            if (away > 10.0f)
+                continue;
+
+            var box = body.GetNodeOrNull<CollisionShape3D>("Collision")?.Shape as BoxShape3D;
+            GD.Print($"    {body.Name} at ({body.Position.X:F1}, {body.Position.Z:F1}), " +
+                     $"{away:F1} m away, {(box == null ? "no box" : $"{box.Size.X:F1} x {box.Size.Z:F1} m")}");
+            listed++;
+        }
+
+        if (listed == 0)
+            GD.Print("    nothing within ten metres — whatever is in the way is not an obstacle");
+    }
+
     private bool Bind()
     {
         Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
@@ -663,6 +757,9 @@ public partial class AutoPlay : SceneTree
         // an equally reasonable thing to type.
         foreach (string argument in OS.GetCmdlineUserArgs())
         {
+            if (argument.StartsWith("tier:") && int.TryParse(argument[5..], out int tier))
+                _zoneTier = tier;
+
             if (argument == "--zone")
                 _attemptZone = true;
         }
@@ -703,9 +800,16 @@ public partial class AutoPlay : SceneTree
         }
         if (_attemptZone)
         {
-            _zone = NearestZone(scene, _crates.Length > 0
+            Vector3 from = _crates.Length > 0
                 ? _crates[^1].GlobalPosition
-                : _player.GlobalPosition);
+                : _player.GlobalPosition;
+
+            _zone = NearestZone(scene, from, _zoneTier);
+
+            if (_zoneTier >= 0 && _zone != null && _zone.Tier != _zoneTier)
+            {
+                GD.Print($"  no tier {_zoneTier} zone on this seed — taking tier {_zone.Tier}");
+            }
 
             if (_zone != null)
             {
@@ -806,10 +910,17 @@ public partial class AutoPlay : SceneTree
     /// Nearest rather than richest. The tiers differ by less than the walk does
     /// on a 55 metre map, and a bot that crossed the whole arena for one extra
     /// loot roll would be measuring the walk rather than the zone.
-    private static DangerZone? NearestZone(Node scene, Vector3 from)
+    /// The nearest zone, preferring one of `tier` if the seed has one.
+    ///
+    /// Two passes rather than one with a filter: the fallback has to be the
+    /// nearest zone *of any tier*, and a single pass that skipped the wrong tier
+    /// would return nothing at all on a seed that happens to have none.
+    private static DangerZone? NearestZone(Node scene, Vector3 from, int tier = -1)
     {
         DangerZone? best = null;
+        DangerZone? bestOfTier = null;
         float bestDistance = float.MaxValue;
+        float bestOfTierDistance = float.MaxValue;
 
         foreach (Node child in scene.GetNodeOrNull("DangerZones")?.GetChildren()
                                ?? new Godot.Collections.Array<Node>())
@@ -818,14 +929,21 @@ public partial class AutoPlay : SceneTree
                 continue;
 
             float distance = from.DistanceTo(zone.GlobalPosition);
-            if (distance >= bestDistance)
-                continue;
 
-            bestDistance = distance;
-            best = zone;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = zone;
+            }
+
+            if (zone.Tier == tier && distance < bestOfTierDistance)
+            {
+                bestOfTierDistance = distance;
+                bestOfTier = zone;
+            }
         }
 
-        return best;
+        return bestOfTier ?? best;
     }
 
     private string Label() => _leg < _routeLabels.Length ? _routeLabels[_leg] : "done";
@@ -1098,6 +1216,12 @@ public partial class AutoPlay : SceneTree
                  $"lowestHp={_lowestHealth:F0} maxHp={_player.MaxHealth:F0} " +
                  $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} " +
                  $"zone={(_zone == null ? "none" : _zoneCleared ? _zone.Title.Replace(" ", "") : "failed")} " +
+
+                 // The tier actually attempted, not the tier asked for. A sweep
+                 // that grouped by the request would put a fallback run in the
+                 // wrong column and the table would be wrong in exactly the way
+                 // the flag was added to fix.
+                 $"zoneTier={(_zone?.Tier ?? -1)} " +
                  $"level={_growth?.Level ?? 0} picks={_picksTaken} " +
                  $"weaponLv={_weapons?.Level ?? 0} weaponMax={_weapons?.MaxLevel ?? 0} " +
                  $"ceilingAt={(_ceilingAt < 0.0f ? -1.0f : _ceilingAt):F0} " +

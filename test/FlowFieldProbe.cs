@@ -41,10 +41,95 @@ public partial class FlowFieldProbe : SceneTree
         GetRoot().AddChild(scene);
     }
 
+    /// The escape channel, checked on a field built here rather than on the live
+    /// one.
+    ///
+    /// `FlowField` is a plain class, so this needs no scene, no horde and no
+    /// tick — and a synthetic field is the only way to place a body *inside* a
+    /// blocked region on purpose, which is the whole case being tested.
+    ///
+    /// The third assertion is the one that matters most and looks least like a
+    /// test. `Sample` must still return zero inside a blocked cell. The first
+    /// version of the escape wrote its directions straight into the route field,
+    /// which took away the zero — and `Horde` reads that zero as "no route" and
+    /// runs a fallback it has been tuned around. A walker that had been going
+    /// round a pylon in 1800 ticks stopped dead thirty-three metres out.
+    private bool CheckEscapes()
+    {
+        // Two-metre cells over a forty-metre square, and a ten-by-ten block in
+        // the middle of it: big enough that its centre is several cells deep, so
+        // "points outward" is a claim with somewhere to point.
+        var field = new FlowField(Vector2.Zero, 20.0f, 2.0f);
+        field.BlockBox(Vector2.Zero, new Vector2(5.0f, 5.0f));
+        field.Rebuild(new Vector3(15.0f, 0.0f, 15.0f));
+
+        var inside = new Vector3(0.0f, 0.0f, 0.0f);
+        var edge = new Vector3(4.0f, 0.0f, 0.0f);
+        var outside = new Vector3(12.0f, 0.0f, 12.0f);
+
+        Vector2 fromCentre = field.EscapeFrom(inside);
+        Vector2 fromEdge = field.EscapeFrom(edge);
+        Vector2 fromOpen = field.EscapeFrom(outside);
+
+        bool ok = true;
+
+        if (fromCentre == Vector2.Zero || fromEdge == Vector2.Zero)
+        {
+            GD.PushError("  a blocked cell has no way out");
+            ok = false;
+        }
+
+        if (fromOpen != Vector2.Zero)
+        {
+            GD.PushError($"  an open cell was handed an escape {fromOpen} — callers would follow it");
+            ok = false;
+        }
+
+        // Walking the escape has to actually leave. Ten steps of one cell each is
+        // twice the depth of the block, so a direction that merely pointed
+        // *somewhere* rather than outward would still be inside at the end.
+        Vector3 walk = inside;
+        int steps = 0;
+        while (field.IsBlockedAt(walk) && steps < 10)
+        {
+            Vector2 out2 = field.EscapeFrom(walk);
+            if (out2 == Vector2.Zero)
+                break;
+
+            walk += new Vector3(out2.X, 0.0f, out2.Y) * 2.0f;
+            steps++;
+        }
+
+        if (field.IsBlockedAt(walk))
+        {
+            GD.PushError($"  following the escape for {steps} steps ended still inside the block");
+            ok = false;
+        }
+
+        // And the route field is untouched.
+        if (field.Sample(inside) != Vector2.Zero || field.Sample(edge) != Vector2.Zero)
+        {
+            GD.PushError("  Sample no longer returns zero inside an obstacle — the horde's fallback is gone");
+            ok = false;
+        }
+
+        GD.Print($"escapes: centre {fromCentre}, edge {fromEdge}, open {fromOpen}, "
+               + $"out in {steps} step(s)");
+
+        return ok;
+    }
+
     public override bool _PhysicsProcess(double delta)
     {
         if (_tick == 0)
         {
+            if (!CheckEscapes())
+            {
+                GD.Print("PROBE FAILED — the escape channel is wrong");
+                Quit(1);
+                return true;
+            }
+
             Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
             _horde = scene.GetNodeOrNull<Horde>("Horde");
             _player = scene.GetNodeOrNull<Node3D>("Player");

@@ -45,7 +45,66 @@ Read this before starting work. Update it as phases land.
 | Done | What | Commit |
 | :--- | :--- | :--- |
 | ✅ C1 | The camera gets out from behind cover | `8bcbe7e` |
-| ✅ C2 | A muted renderer is not synced, and owns its own visibility | *this* |
+| ✅ C2 | A muted renderer is not synced, and owns its own visibility | `710c26e` |
+| ✅ C3 | The balance table can tell the two zone tiers apart | *this* |
+
+#### ✅ C3 — The balance table can tell the two zone tiers apart
+
+The zone arm of the balance table had been bimodal since it existed — two seeds paying heavily and
+three barely noticing — and the spread was read as variance in what a zone costs. **It was variance in
+which zone was taken.** `AutoPlay` took whichever danger zone was nearest, which is usually the shallow
+one, so the two tiers were averaged into a single column that looked like noise.
+
+`AutoPlay -- tier:N` picks a tier and says so when the seed has none of it; the `SWEEP` line carries
+`zoneTier=` — **the tier attempted, never the tier requested**, or a fallback run lands in the wrong
+column and the table is wrong in exactly the way the flag was added to fix. `BalanceSweep -- zones:tiers`
+runs three arms and groups by what the run actually reached. `DefaultSeeds` is twelve now, with the
+original five first so `seeds:5` still reproduces every earlier table.
+
+Three things had to be fixed before the table meant anything:
+
+**A stuck run left no row at all.** `AutoPlay` printed `AUTOPLAY FAILED` and quit without a `SWEEP`
+line, so the sweep logged "no result" and dropped it — and the arm then read "4/4 survived" for a set in
+which one of five runs never got home. A failure rate is exactly what a balance table is for, and it
+was the one number it could not show. Stuck runs report `outcome=Stuck` now.
+
+**The flow field's zero meant two different things.** Obstacles are inflated by a body radius before
+they are marked, so the blocked band reaches about a metre past anything you can actually touch — and
+standing in that band is the ordinary result of walking up to a wall. `Sample` returns zero there;
+`AutoPlay` read zero as "no route" and substituted the straight line to its target, which is the *worst*
+advice available, because the target is on the other side of the thing being stood against. Sixty
+seconds leaning on the south face of an eight-metre wall, seven and a half metres from the extraction
+pad. `FlowField.EscapeFrom` answers "which way is out"; `Sample` is unchanged.
+
+**The escape must not go into `_flow`.** The first version wrote it straight into the route field, on
+the reasoning that a zero there means nothing useful anyway. It does: `Horde` reads zero as "no route"
+and runs a fallback it has been tuned around. `LandmarkProbe` caught it in one run — a walker that had
+been going round a pylon in 1800 ticks stopped dead thirty-three metres out and stayed there. It is a
+separate channel, and `FlowFieldProbe` now asserts `Sample` still returns zero inside an obstacle.
+
+##### What the table says
+
+Twelve layouts, `lingers:0`:
+
+| arm | survived | median banked | median lowest HP | expected value |
+| :--- | :--- | :--- | :--- | :--- |
+| past | 12/12 | 638 | 98 | 638 |
+| tier 0 | 13/13 | 1052 | 91 | 1052 |
+| tier 1 | 10/11 | 1328 | 59 | 1207 |
+
+Tier 1 is priced: nine per cent of runs do not come home and the median run ends on 59 health. **Tier 0
+was not a gamble at all** — seven points of health, nobody ever died, sixty-five per cent more money.
+The correct play was to take it every single run, which collapses the choice the zones exist to create.
+
+Its base intensities went up by about forty per cent of the gap to tier 1, with the per-tier steps
+shrunk by the same amount so every tier-1 number is unchanged. The result: 12/13 rather than 13/13, and
+92 health rather than 91.
+
+**Intensity is a weak lever here, and that is the finding.** A forty per cent raise bought one death.
+The bot arrives at the zone over-levelled and grinds through whatever is in it; more enemies is mostly
+more kills, and the banked median went *up*. Cutting the reward instead would lower the payout without
+making it a decision. Stopping here on purpose — the next few turns of that screw would be tuning the
+game to one bot's strategy rather than to a player.
 
 #### ✅ C2 — A muted renderer is not synced, and owns its own visibility
 

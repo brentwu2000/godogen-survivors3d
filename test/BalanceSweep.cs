@@ -29,9 +29,21 @@ public partial class BalanceSweep : SceneTree
     /// Layouts. Fixed rather than random, because a balance table that moves
     /// between runs is not a table — and cover density varies enough between
     /// seeds that one layout is an anecdote.
+    /// Twelve layouts, and the first five are the original five.
+    ///
+    /// The order matters: `seeds:5` has to reproduce the table every earlier
+    /// tuning decision was made against, or a number that moved because the
+    /// sample changed reads as a number that moved because the game did.
+    ///
+    /// Five was enough while a run was one of two arms. Splitting the zone arm by
+    /// tier makes it three, and not every layout has a zone of every tier — the
+    /// first tiered table had six tier-0 rows against four tier-1 rows, and a
+    /// median of four runs is a number one unlucky seed can move by a third.
     private static readonly ulong[] DefaultSeeds =
     {
         0x51E5D0A7UL, 0x9E3779B9UL, 0xC17E4A9BUL, 0x2545F491UL, 0xBF58476DUL,
+        0x94D049BBUL, 0x1B873593UL, 0x85EBCA6BUL, 0xCC9E2D51UL, 0x27D4EB2FUL,
+        0x165667B1UL, 0xD6E8FEB1UL,
     };
 
     /// The tier that has to reach this, for the run clock to mean anything.
@@ -45,6 +57,14 @@ public partial class BalanceSweep : SceneTree
         /// is optional in the game, and the interesting number is the
         /// *difference* between taking one and walking past.
         public readonly bool Zone;
+
+        /// The tier of the zone this run actually attempted, or -1 for none.
+        ///
+        /// **The tier attempted, never the tier requested.** Not every seed has a
+        /// tier-1 zone; `AutoPlay` says so and takes the nearest instead, and a
+        /// table that grouped by the request would file that run under tier 1 and
+        /// report a cost nobody paid.
+        public readonly int ZoneTier;
 
         /// What the run climbed to. Separate from the outcome numbers because
         /// they answer a different question: banked says whether the run paid,
@@ -66,10 +86,12 @@ public partial class BalanceSweep : SceneTree
         public readonly int LowestHp;
         public readonly int Peak;
 
-        public Row(bool zone, int level, int picks, int weaponLevel, int weaponMax, float ceilingAt,
-                   float linger, ulong seed, string outcome, float seconds, int banked, int lowestHp, int peak)
+        public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
+                   float ceilingAt, float linger, ulong seed, string outcome, float seconds,
+                   int banked, int lowestHp, int peak)
         {
             Zone = zone;
+            ZoneTier = zoneTier;
             Level = level;
             Picks = picks;
             WeaponLevel = weaponLevel;
@@ -87,14 +109,25 @@ public partial class BalanceSweep : SceneTree
         public bool Survived => Outcome == "Extracted";
     }
 
+    /// Arm sentinels. Anything else is a tier to ask `AutoPlay` for.
+    private const int NoZone = -1;
+    private const int AnyTier = 99;
+
     public override void _Initialize()
     {
         float[] lingers = DefaultLingers;
         ulong[] seeds = DefaultSeeds;
 
         // Which arms to run. `off` is the default so the existing table keeps
-        // meaning what it meant; `both` is what answers whether a zone pays.
-        bool[] arms = { false };
+        // meaning what it meant; `both` is what answers whether a zone pays; and
+        // `tiers` is what answers *which* zone pays.
+        //
+        // `zones:both` was the honest answer to the wrong question. Its zone arm
+        // took whichever zone was nearest, which is usually tier 0, so its results
+        // were bimodal — two seeds paying heavily and three barely noticing — and
+        // the spread read as variance in what a zone costs. It was variance in
+        // which zone was taken.
+        int[] arms = { NoZone };
 
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
@@ -102,10 +135,13 @@ public partial class BalanceSweep : SceneTree
                 seeds = seeds[..Mathf.Clamp(count, 1, seeds.Length)];
 
             if (arg == "zones:on")
-                arms = new[] { true };
+                arms = new[] { AnyTier };
 
             if (arg == "zones:both")
-                arms = new[] { false, true };
+                arms = new[] { NoZone, AnyTier };
+
+            if (arg == "zones:tiers")
+                arms = new[] { NoZone, 0, 1 };
 
             if (arg.StartsWith("lingers:"))
             {
@@ -126,17 +162,17 @@ public partial class BalanceSweep : SceneTree
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
                  $"{arms.Length} arm(s) = {lingers.Length * seeds.Length * arms.Length} runs");
 
-        foreach (bool zone in arms)
+        foreach (int arm in arms)
         {
             foreach (float linger in lingers)
             {
                 foreach (ulong seed in seeds)
                 {
-                    Row? row = RunOne(linger, seed, zone);
+                    Row? row = RunOne(linger, seed, arm);
                     if (row is { } value)
                         rows.Add(value);
                     else
-                        GD.PushError($"  linger {linger:F0} seed {seed} zone {zone}: no result");
+                        GD.PushError($"  linger {linger:F0} seed {seed} arm {arm}: no result");
                 }
             }
         }
@@ -146,7 +182,7 @@ public partial class BalanceSweep : SceneTree
 
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
-    private static Row? RunOne(float linger, ulong seed, bool zone)
+    private static Row? RunOne(float linger, ulong seed, int arm)
     {
         var output = new Godot.Collections.Array();
 
@@ -157,8 +193,16 @@ public partial class BalanceSweep : SceneTree
             $"linger:{linger:F0}", $"seed:{seed}",
         };
 
-        if (zone)
+        if (arm != NoZone)
+        {
             args.Add("--zone");
+
+            // Only a real tier is passed through. `AnyTier` is this file's way of
+            // saying "whatever is nearest", which is `AutoPlay`'s default and not
+            // something it has a flag for.
+            if (arm != AnyTier)
+                args.Add($"tier:{arm}");
+        }
 
         // The exit code is ignored on purpose: a death is a failure for the
         // play-test and a data point for this, and treating it as an error here
@@ -170,7 +214,7 @@ public partial class BalanceSweep : SceneTree
             foreach (string text in line.AsString().Split('\n'))
             {
                 if (text.Contains("SWEEP "))
-                    return Parse(text, linger, seed, zone);
+                    return Parse(text, linger, seed, arm != NoZone);
             }
         }
 
@@ -182,6 +226,7 @@ public partial class BalanceSweep : SceneTree
         string outcome = Field(line, "outcome");
         return new Row(
             zone,
+            Mathf.RoundToInt(Number(line, "zoneTier")),
             Mathf.RoundToInt(Number(line, "level")),
             Mathf.RoundToInt(Number(line, "picks")),
             Mathf.RoundToInt(Number(line, "weaponLv")),
@@ -333,20 +378,38 @@ public partial class BalanceSweep : SceneTree
     /// tuning against.
     private static void ReportArms(System.Collections.Generic.List<Row> rows)
     {
-        var past = new System.Collections.Generic.List<Row>();
-        var took = new System.Collections.Generic.List<Row>();
+        var groups = new System.Collections.Generic.List<(string Label, System.Collections.Generic.List<Row> Rows)>();
 
-        foreach (Row row in rows)
-            (row.Zone ? took : past).Add(row);
+        void Collect(string label, System.Func<Row, bool> belongs)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (belongs(row))
+                    picked.Add(row);
+            }
 
-        if (past.Count == 0 || took.Count == 0)
+            if (picked.Count > 0)
+                groups.Add((label, picked));
+        }
+
+        Collect("past", row => !row.Zone);
+
+        // Grouped by the tier the run actually reached, so a seed with no tier-1
+        // zone lands in the tier-0 row rather than diluting the one it was asked
+        // for. This is also why the counts per row need not be equal, and why the
+        // count is printed.
+        Collect("tier 0", row => row.Zone && row.ZoneTier == 0);
+        Collect("tier 1", row => row.Zone && row.ZoneTier == 1);
+        Collect("zone ?", row => row.Zone && row.ZoneTier < 0);
+
+        if (groups.Count < 2)
             return;
 
         GD.Print("");
         GD.Print("arm      survived   median banked   median seconds   median lowest HP   worst peak");
 
-        foreach ((string label, System.Collections.Generic.List<Row> arm) in
-                 new[] { ("past", past), ("zone", took) })
+        foreach ((string label, System.Collections.Generic.List<Row> arm) in groups)
         {
             int survived = 0, worstPeak = 0;
             var banked = new System.Collections.Generic.List<float>();

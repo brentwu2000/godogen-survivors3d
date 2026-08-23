@@ -22,6 +22,26 @@ public sealed class FlowField
     private readonly Vector2[] _flow;
     private readonly int[] _queue;
 
+    /// A way out of each blocked cell, in its own channel.
+    ///
+    /// **Not written into `_flow`.** The first version of this filled the blocked
+    /// cells of the route field directly, on the reasoning that a zero there means
+    /// nothing useful anyway. It does not: `Horde` reads a zero as "no route" and
+    /// runs a deliberate fallback — straight at the player inside
+    /// `FieldFallbackRadius`, carry on in the current direction outside it — and
+    /// overwriting the zero took that branch away from every enemy at once.
+    /// `LandmarkProbe` caught it immediately: a walker that had been going round a
+    /// pylon in 1800 ticks stopped dead thirty-three metres out and stayed there.
+    ///
+    /// So the escape is a second answer to a second question, and only the caller
+    /// that asked it gets it.
+    private readonly Vector2[] _escape;
+
+    /// Which blocked cells `BuildEscapes` has already given a way out. Kept as a
+    /// field rather than allocated per rebuild — the field is rebuilt every few
+    /// ticks for the whole run, and this is one array the size of the arena.
+    private readonly bool[] _escapeSeen;
+
     /// <param name="center">World-space centre of the covered area.</param>
     /// <param name="extent">Half-width of the covered area.</param>
     public FlowField(Vector2 center, float extent, float cellSize)
@@ -39,6 +59,8 @@ public sealed class FlowField
         _distance = new int[cells];
         _flow = new Vector2[cells];
         _queue = new int[cells];
+        _escape = new Vector2[cells];
+        _escapeSeen = new bool[cells];
     }
 
     /// Marks an axis-aligned footprint impassable. Called once at build time;
@@ -96,7 +118,29 @@ public sealed class FlowField
 
     /// Direction to travel from a world position, or Zero where the target is
     /// unreachable — callers treat Zero as "hold position" rather than guessing.
+    ///
+    /// Unchanged by the escape channel, deliberately. `Horde` depends on the zero:
+    /// it means "no route" and selects a fallback the horde has been tuned around.
+    /// A caller that wants to be told how to get out of a wall asks `EscapeFrom`.
     public Vector2 Sample(Vector3 position) => _flow[CellOf(position)];
+
+    /// The way out of an obstacle's inflated footprint, or Zero when the cell is
+    /// already open.
+    ///
+    /// Obstacles are inflated by a body radius before they are marked, so the
+    /// blocked band reaches about a metre past the collider anything can actually
+    /// touch — and standing in that band is the ordinary result of walking up to a
+    /// wall. `Sample` returns zero there, every caller reads zero as "no route",
+    /// and `AutoPlay` substitutes the straight line to its target: pressed against
+    /// the south face of an eight-metre wall with the pad on the north side, that
+    /// line points *into the wall*. The bot leaned on it for sixty seconds, seven
+    /// and a half metres from the extraction, and the sweep recorded the run as
+    /// having no result at all.
+    public Vector2 EscapeFrom(Vector3 position) => _escape[CellOf(position)];
+
+    /// True where the cell containing `position` is inside an obstacle's inflated
+    /// footprint. Only a probe asks.
+    public bool IsBlockedAt(Vector3 position) => _blocked[CellOf(position)];
 
     private void TryVisit(int x, int z, int distance, ref int tail)
     {
@@ -145,6 +189,98 @@ public sealed class FlowField
             }
 
             _flow[cell] = bestDir;
+        }
+
+        BuildEscapes();
+    }
+
+    /// Fills `_escape` with a direction out of every blocked cell.
+    ///
+    /// **Without this a body inside an obstacle's footprint has no advice at all.**
+    /// Obstacles are inflated by a body radius before they are marked, so the band
+    /// of blocked cells extends about a metre past the collider the player can
+    /// actually touch — and standing in that band is the ordinary result of
+    /// walking up to a wall. `BuildFlow` leaves those cells at `Vector2.Zero`,
+    /// every caller reads zero as "no route", and `AutoPlay` in particular
+    /// substitutes the straight line to its target. Pressed against the south face
+    /// of an eight-metre wall with the pad on the north side, that straight line
+    /// points *into the wall*, and the bot leans on it until the leg times out.
+    /// It did, at seven and a half metres from the extraction, for sixty seconds.
+    ///
+    /// A multi-source breadth-first search outward from the open cells, so the
+    /// cost is one pass over the blocked cells rather than a spiral search from
+    /// each of them. The direction stored is the one that steps toward whichever
+    /// open cell is nearest, which is the shortest way back out of the band.
+    ///
+    /// Only *blocked* cells are filled. A cell that is open but unreachable keeps
+    /// its zero, because there the answer really is "no route" and a caller that
+    /// started guessing would walk into the sea.
+    private void BuildEscapes()
+    {
+        int cells = _width * _depth;
+        for (int i = 0; i < cells; i++)
+        {
+            _escapeSeen[i] = false;
+            _escape[i] = Vector2.Zero;
+        }
+
+        int head = 0, tail = 0;
+
+        // Seed: every blocked cell touching an open one, pointing at it.
+        for (int z = 0; z < _depth; z++)
+        for (int x = 0; x < _width; x++)
+        {
+            int cell = z * _width + x;
+            if (!_blocked[cell])
+                continue;
+
+            for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dz == 0)
+                    continue;
+
+                int nx = x + dx, nz = z + dz;
+                if (nx < 0 || nx >= _width || nz < 0 || nz >= _depth)
+                    continue;
+
+                if (_blocked[nz * _width + nx] || _escapeSeen[cell])
+                    continue;
+
+                _escape[cell] = new Vector2(dx, dz).Normalized();
+                _escapeSeen[cell] = true;
+                _queue[tail++] = cell;
+            }
+        }
+
+        // Spread inward: a blocked cell with no open neighbour takes the
+        // direction of the blocked neighbour that found the way out first, which
+        // is the one nearest an edge.
+        while (head < tail)
+        {
+            int cell = _queue[head++];
+            int cx = cell % _width;
+            int cz = cell / _width;
+            Vector2 outward = _escape[cell];
+
+            for (int dz = -1; dz <= 1; dz++)
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dz == 0)
+                    continue;
+
+                int nx = cx + dx, nz = cz + dz;
+                if (nx < 0 || nx >= _width || nz < 0 || nz >= _depth)
+                    continue;
+
+                int neighbour = nz * _width + nx;
+                if (!_blocked[neighbour] || _escapeSeen[neighbour])
+                    continue;
+
+                _escape[neighbour] = outward;
+                _escapeSeen[neighbour] = true;
+                _queue[tail++] = neighbour;
+            }
         }
     }
 

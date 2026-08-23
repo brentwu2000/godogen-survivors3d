@@ -325,6 +325,13 @@ public partial class Horde : Node3D
     /// so re-marking them on every rebuild would be pure waste.
     public void BlockBox(Vector2 center, Vector2 halfExtents) => _field.BlockBox(center, halfExtents);
 
+    /// What the flow field says at a point, and whether that point is inside an
+    /// inflated obstacle footprint. Only a probe asks; the horde reads the field
+    /// directly.
+    public Vector2 FlowAt(Vector3 at) => _field.Sample(at);
+
+    public bool FieldBlockedAt(Vector3 at) => _field.IsBlockedAt(at);
+
     /// One flat disc per hazard slot, built once and moved as patches come and
     /// go. Creating a node per throw would allocate in the middle of the fight
     /// the throw was meant to win.
