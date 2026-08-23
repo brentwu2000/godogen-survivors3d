@@ -240,7 +240,19 @@ public partial class RunKit : Node3D
     private void BuildBlades()
     {
         var builder = new MeshBuilder();
-        builder.Box(Vector3.Zero, new Vector3(0.10f, 0.34f, 0.42f), new Color(0.82f, 0.86f, 0.95f));
+        // Thin, long, and steel rather than white. At 0.10 by 0.42 in a pale
+        // near-white they read as sheets of paper orbiting the player — big
+        // enough to draw the eye away from the crowd, which is the one thing the
+        // player has to be watching. Narrow along the direction of travel and
+        // dark enough to sit in the palette.
+        builder.Box(Vector3.Zero, new Vector3(0.05f, 0.26f, 0.60f), new Color(0.58f, 0.62f, 0.70f));
+
+        // A brighter leading edge, so the direction of the spin is visible. A
+        // symmetrical blade at this size is a smudge that could be going either
+        // way, and which way the ring turns is information — it is where the next
+        // hit lands.
+        builder.Box(new Vector3(0.0f, 0.0f, 0.26f), new Vector3(0.06f, 0.28f, 0.08f),
+                    new Color(0.88f, 0.90f, 0.96f));
 
         ArrayMesh mesh = builder.Build();
         mesh.SurfaceSetMaterial(0, PropLibrary.Material());

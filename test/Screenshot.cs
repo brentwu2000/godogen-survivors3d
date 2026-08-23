@@ -53,6 +53,9 @@ public partial class Screenshot : SceneTree
         {
             if (argument == "--zone")
                 _visitZone = true;
+
+            if (argument == "--kit")
+                _showKit = true;
         }
 
         foreach (string argument in OS.GetCmdlineArgs())
@@ -105,6 +108,7 @@ public partial class Screenshot : SceneTree
     }
 
     private bool _visitZone;
+    private bool _showKit;
 
     /// Puts the player in the middle of the first zone on the map.
     ///
@@ -145,6 +149,14 @@ public partial class Screenshot : SceneTree
 
             if (_visitZone)
                 GoToZone();
+
+            if (_showKit && player is Player kitted)
+            {
+                // Granted directly rather than drawn from the deck: the picture
+                // is of the ring, not of a random offer agreeing to produce one.
+                kitted.Mods.OrbitBlades = 5;
+                kitted.Mods.PulseStacks = 2;
+            }
 
             var horde = _scene.GetNodeOrNull<Horde>("Horde");
             if (_mixed && horde != null && player != null)
