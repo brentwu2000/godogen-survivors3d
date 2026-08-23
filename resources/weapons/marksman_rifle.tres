@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_dqgkc"]
+
+[resource]
+script = ExtResource("1_dqgkc")
+WeaponName = "Marksman Rifle"
+BaseDamage = 34.0
+BaseAttackSpeed = 0.9
+BaseRange = 30.0
+BaseSpreadDegrees = 2.0
+BaseReloadTime = 2.4
+MagazineSize = 8
+StartingReserve = 72
+MaxReserve = 140
+Penetration = 3
+Knockback = 0.4
+Trait = 6
+TraitAmount = 3.5
+TraitCount = 3
+Tier = 3
+Price = 2200
+MaxLevel = 14
+TierStartBonus = 2

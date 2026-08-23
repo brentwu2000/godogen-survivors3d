@@ -130,7 +130,17 @@ public partial class BaseScreen : Control
     {
         switch (Focus)
         {
-            case Fitting.Armoury: SellOne(); break;
+            // Two meanings, one key, decided by the row. `[C]` is defined as
+            // "the other thing you can do here", and for a weapon that is
+            // carrying it in the other hand while for a piece of gear there is no
+            // other hand to carry it in.
+            case Fitting.Armoury:
+                if (_cursor >= 0 && _cursor < _catalogue.All.Count && _catalogue.All[_cursor].Slot == null)
+                    ChooseAsSidearm();
+                else
+                    SellOne();
+
+                break;
             case Fitting.Board: Reroll(); break;
             case Fitting.Map: LaunchDaily(); break;
 
@@ -168,38 +178,85 @@ public partial class BaseScreen : Control
             return;
 
         ShopCatalogue.Entry entry = _catalogue.All[_cursor];
-
-        if (!_profile.Owns(entry.Path))
-        {
-            // Checked before the price, because a locked entry is not expensive,
-            // it is unavailable — and "you cannot afford it" would send the
-            // player off to earn credits that will not help.
-            if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
-            {
-                _message = $"{entry.Name} is locked — {reason.ToLower()}";
-                return;
-            }
-
-            if (entry.Price <= 0)
-            {
-                _message = $"{entry.Name} is not for sale";
-                return;
-            }
-
-            if (_profile.Credits < entry.Price)
-            {
-                // Nothing is deducted and nothing is granted. A partial purchase
-                // is the one outcome a shop must never have.
-                _message = $"{entry.Name} costs {entry.Price}; you have {_profile.Credits}";
-                return;
-            }
-
-            _profile.Credits -= entry.Price;
-            _profile.Grant(entry.Path);
-            _message = $"bought {entry.Name} for {entry.Price}";
-        }
+        if (!TryBuy(entry))
+            return;
 
         Equip(entry);
+        Persist();
+    }
+
+    /// Owns it afterwards, or says why not.
+    ///
+    /// Lifted out of `Choose` when the armoury grew a second verb: buying and
+    /// then carrying as a sidearm asks the same three questions in the same order
+    /// as buying and then equipping, and two copies of "can the player have this"
+    /// is two places for a locked item to become purchasable.
+    private bool TryBuy(ShopCatalogue.Entry entry)
+    {
+        if (_profile.Owns(entry.Path))
+            return true;
+
+        // Checked before the price, because a locked entry is not expensive,
+        // it is unavailable — and "you cannot afford it" would send the
+        // player off to earn credits that will not help.
+        if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
+        {
+            _message = $"{entry.Name} is locked — {reason.ToLower()}";
+            return false;
+        }
+
+        if (entry.Price <= 0)
+        {
+            _message = $"{entry.Name} is not for sale";
+            return false;
+        }
+
+        if (_profile.Credits < entry.Price)
+        {
+            // Nothing is deducted and nothing is granted. A partial purchase is
+            // the one outcome a shop must never have.
+            _message = $"{entry.Name} costs {entry.Price}; you have {_profile.Credits}";
+            return false;
+        }
+
+        _profile.Credits -= entry.Price;
+        _profile.Grant(entry.Path);
+        _message = $"bought {entry.Name} for {entry.Price}";
+        return true;
+    }
+
+    /// Carries the selected weapon in the second slot, whatever kind it is.
+    ///
+    /// `Equip` sends melee to the sidearm slot and everything else to the
+    /// primary, which was a sound default while there was one interesting
+    /// firearm. With a shotgun, a marksman rifle and a bolt launcher on the
+    /// shelf it is a rule that quietly forbids the builds worth having — the
+    /// marksman rifle charges while holstered, so *carrying it as a sidearm and
+    /// swapping in for the shot* is the whole weapon, and there was no way to
+    /// ask for that.
+    private void ChooseAsSidearm()
+    {
+        if (_cursor < 0 || _cursor >= _catalogue.All.Count)
+            return;
+
+        ShopCatalogue.Entry entry = _catalogue.All[_cursor];
+
+        if (entry.Slot != null)
+        {
+            _message = $"{entry.Name} is worn, not carried";
+            return;
+        }
+
+        if (!TryBuy(entry))
+            return;
+
+        // Out of the primary if it was there, or the player would be carrying one
+        // weapon in two slots and have nothing to swap to.
+        if (_profile.LoadoutWeapon == entry.Path)
+            _profile.LoadoutWeapon = "res://resources/weapons/scavenged_rifle.tres";
+
+        _profile.LoadoutSecondary = entry.Path;
+        _message = $"{_message}{(_message.Length > 0 ? "; " : "")}carrying {entry.Name} as sidearm";
         Persist();
     }
 
@@ -660,6 +717,13 @@ public partial class BaseScreen : Control
             text.AppendLine(title);
             if (first.Length > 0)
                 text.AppendLine($"  [E] {first}");
+
+            // The armoury's second verb changes with the row, so the prompt has
+            // to as well — a fitting whose key does two things and says one is
+            // worse than one that does nothing.
+            if (Focus == Fitting.Armoury && _cursor >= 0 && _cursor < _catalogue.All.Count)
+                second = _catalogue.All[_cursor].Slot == null ? "carry as sidearm" : "sell it back";
+
             if (second.Length > 0)
                 text.AppendLine($"  [C] {second}");
 

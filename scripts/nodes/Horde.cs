@@ -960,11 +960,17 @@ public partial class Horde : Node3D
         }
     }
 
-    /// A death blast, resolved one level deep — blast kills cannot blast in turn.
+    /// A blast, resolved one level deep — blast kills cannot blast in turn.
     /// A pile of bloaters is otherwise a chain reaction whose depth is however
     /// many happened to be standing together, which is both a frame spike and a
     /// balance number nobody chose.
-    private void Blast(Vector3 center, float radius, float damage)
+    ///
+    /// Public because the bolt launcher detonates through here rather than
+    /// through a second implementation. It hurts the player inside the radius,
+    /// which for a bloater is the threat and for a weapon is the cost — a
+    /// launcher that could be fired at your own feet for free is a launcher with
+    /// no range to learn.
+    public void Blast(Vector3 center, float radius, float damage)
     {
         Exploded?.Invoke(center);
 

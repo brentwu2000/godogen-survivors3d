@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_rofsn"]
+
+[resource]
+script = ExtResource("1_rofsn")
+WeaponName = "Bolt Launcher"
+Category = 2
+BaseDamage = 26.0
+BaseAttackSpeed = 1.1
+BaseRange = 24.0
+BaseReloadTime = 2.2
+MagazineSize = 5
+StartingReserve = 40
+MaxReserve = 90
+ProjectileSpeed = 19.0
+Knockback = 0.6
+Trait = 7
+TraitAmount = 4.0
+Tier = 3
+Price = 2000
+MaxLevel = 12
+TierStartBonus = 1

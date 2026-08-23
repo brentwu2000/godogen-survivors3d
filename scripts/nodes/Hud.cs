@@ -432,6 +432,13 @@ public partial class Hud : CanvasLayer
             ? $"      lv {_weapons.Level}/{_weapons.MaxLevel} MAX"
             : $"      lv {_weapons.Level}/{_weapons.MaxLevel}";
 
+        // The charge is worthless unsaid. It is the only trait whose value
+        // depends on the player *knowing* it is ready — a shot that quietly does
+        // three and a half times the damage is a weapon with inconsistent numbers
+        // rather than one that rewards restraint.
+        if (_weapons.IsCharged)
+            _arms.Text += "      CHARGED";
+
         if (_player?.AdrenalineActive == true)
             _arms.Text += $"      ADRENALINE {_player.AdrenalineRemaining:F0}s";
 

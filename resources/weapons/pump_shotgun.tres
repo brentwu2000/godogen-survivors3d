@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_e8snw"]
+
+[resource]
+script = ExtResource("1_e8snw")
+WeaponName = "Pump Shotgun"
+BaseDamage = 16.0
+BaseAttackSpeed = 1.4
+BaseRange = 13.0
+BaseSpreadDegrees = 20.0
+SpreadFloorFraction = 0.8
+BaseReloadTime = 2.6
+MagazineSize = 6
+StartingReserve = 60
+MaxReserve = 120
+Knockback = 0.9
+Trait = 5
+TraitAmount = 0.34
+TraitCount = 8
+Tier = 2
+Price = 1300
+MaxLevel = 12
+TierStartBonus = 1

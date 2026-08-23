@@ -148,6 +148,97 @@ public partial class BuildWeapons : SceneTree
                 Knockback = 0.1f,
             },
 
+            // Eight pellets, each rolling its own line. The only weapon whose
+            // damage is a *distance* rather than a number: at fifteen metres most
+            // of the cone goes past, at three every pellet lands, so the player
+            // learns a range instead of a stat.
+            //
+            // `SpreadFloorFraction` is 0.8 rather than the usual 0.2. Practice
+            // tightens every other firearm toward a point, and a practised
+            // shotgun that quietly became a slug would be a weapon losing its
+            // identity to a formula it shares with the rifles.
+            new()
+            {
+                WeaponName = "Pump Shotgun",
+                Trait = WeaponTrait.Spread,
+                TraitAmount = 0.34f,
+                TraitCount = 8,
+                Category = WeaponCategory.Firearm,
+                Tier = 2,
+                Price = 1300,
+                MaxLevel = 12,
+                TierStartBonus = 1,
+                BaseDamage = 16.0f,
+                BaseAttackSpeed = 1.4f,
+                BaseRange = 13.0f,
+                BaseSpreadDegrees = 20.0f,
+                SpreadFloorFraction = 0.8f,
+                BaseReloadTime = 2.6f,
+                MagazineSize = 6,
+                StartingReserve = 60,
+                MaxReserve = 120,
+                Penetration = 1,
+                Knockback = 0.9f,
+            },
+
+            // Three seconds of not shooting for three and a half times the
+            // damage. The only thing in the game that pays for restraint —
+            // everything else wants the trigger held, and a horde game where the
+            // right input is always the same input has one weapon with skins.
+            //
+            // The charge ticks while holstered, which is the build it is really
+            // for: carry it as a sidearm, fight with the other weapon, swap in
+            // for the shot that has to land.
+            new()
+            {
+                WeaponName = "Marksman Rifle",
+                Trait = WeaponTrait.Charge,
+                TraitAmount = 3.5f,
+                TraitCount = 3,
+                Category = WeaponCategory.Firearm,
+                Tier = 3,
+                Price = 2200,
+                MaxLevel = 14,
+                TierStartBonus = 2,
+                BaseDamage = 34.0f,
+                BaseAttackSpeed = 0.9f,
+                BaseRange = 30.0f,
+                BaseSpreadDegrees = 2.0f,
+                BaseReloadTime = 2.4f,
+                MagazineSize = 8,
+                StartingReserve = 72,
+                MaxReserve = 140,
+                Penetration = 3,
+                Knockback = 0.4f,
+            },
+
+            // A bolt that detonates where it connects. Direct hit *and* splash,
+            // so it is not strictly worse than a rifle against one target — and
+            // the blast hurts the player inside it, which is the range the weapon
+            // asks them to learn.
+            new()
+            {
+                WeaponName = "Bolt Launcher",
+                Trait = WeaponTrait.Blast,
+                TraitAmount = 4.0f,
+                TraitCount = 0,
+                Category = WeaponCategory.BowCrossbow,
+                Tier = 3,
+                Price = 2000,
+                MaxLevel = 12,
+                TierStartBonus = 1,
+                BaseDamage = 26.0f,
+                BaseAttackSpeed = 1.1f,
+                BaseRange = 24.0f,
+                BaseReloadTime = 2.2f,
+                MagazineSize = 5,
+                StartingReserve = 40,
+                MaxReserve = 90,
+                ProjectileSpeed = 19.0f,
+                Penetration = 1,
+                Knockback = 0.6f,
+            },
+
             // The answer to being surrounded, bought rather than found. Wider
             // sweep than the axe and a ceiling to match, but no reach until the
             // practice is there — a long weapon is a promise, not a gift.

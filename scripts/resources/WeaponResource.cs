@@ -37,6 +37,30 @@ public enum WeaponTrait
     /// The swing also strikes everything within reach behind the swinger, at
     /// TraitAmount of the damage. Being surrounded stops being purely a problem.
     Cleave,
+
+    /// TraitCount separate shots in one pull, each at TraitAmount of the damage
+    /// and each rolling its own line inside the cone.
+    ///
+    /// Separate shots, not one shot that hits several times — which is the whole
+    /// weapon. Each pellet rolls independently, so at range most of them miss and
+    /// at contact all of them land, and the player learns a distance rather than
+    /// a number.
+    Spread,
+
+    /// Waiting TraitCount seconds without firing multiplies the next shot by
+    /// TraitAmount.
+    ///
+    /// The only weapon in the game that rewards *not* attacking. Everything else
+    /// wants the trigger held, and a horde game where the correct input is always
+    /// the same input has one weapon with several skins.
+    Charge,
+
+    /// The projectile detonates for TraitAmount metres where it connects.
+    ///
+    /// It stops there whatever its penetration says: a bolt that punched through
+    /// and detonated at the end of its flight would put the blast behind the
+    /// crowd, which is both wrong and impossible to aim.
+    Blast,
 }
 
 /// Weapon stats as data, so balance lives in .tres files rather than in code.
@@ -64,6 +88,14 @@ public partial class WeaponResource : Resource
 
     /// Cone half-angle in degrees at zero proficiency. Firearms only.
     [Export] public float BaseSpreadDegrees { get; set; }
+
+    /// The tightest the cone ever gets, as a fraction of `BaseSpreadDegrees`.
+    ///
+    /// A fifth for a rifle, where practice should make the shot nearly exact.
+    /// Much higher for a shotgun: eight pellets inside four degrees is a slug,
+    /// and a practised shotgun that quietly stops being a shotgun is a weapon
+    /// whose identity was a bug in a shared formula.
+    [Export] public float SpreadFloorFraction { get; set; } = 0.2f;
 
     [Export] public float BaseReloadTime { get; set; } = 2.0f;
 
@@ -157,7 +189,7 @@ public partial class WeaponResource : Resource
             return 0.0f;
 
         return Mathf.Max(
-            BaseSpreadDegrees * 0.2f,
+            BaseSpreadDegrees * SpreadFloorFraction,
             BaseSpreadDegrees * (1.0f - ClampLevel(proficiency) * 0.08f));
     }
 

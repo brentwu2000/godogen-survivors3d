@@ -23,6 +23,10 @@ public sealed class ProjectilePool
     /// somebody else.
     public readonly int[] Bounces;
 
+    /// Metres this shot detonates for where it connects. Zero for everything
+    /// that does not, which is almost everything.
+    public readonly float[] Blast;
+
     public int Count { get; private set; }
 
     public ProjectilePool(int capacity)
@@ -35,10 +39,11 @@ public sealed class ProjectilePool
         Life = new float[capacity];
         Pierce = new int[capacity];
         Bounces = new int[capacity];
+        Blast = new float[capacity];
     }
 
     public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life,
-                         int pierce, int bounces = 0)
+                         int pierce, int bounces = 0, float blast = 0.0f)
     {
         if (Count >= Capacity)
             return false;
@@ -51,6 +56,7 @@ public sealed class ProjectilePool
         Knockback[i] = knockback;
         Life[i] = life;
         Pierce[i] = pierce;
+        Blast[i] = blast;
         return true;
     }
 
@@ -67,6 +73,7 @@ public sealed class ProjectilePool
         Life[index] = Life[last];
         Pierce[index] = Pierce[last];
         Bounces[index] = Bounces[last];
+        Blast[index] = Blast[last];
     }
 
     public void Clear() => Count = 0;

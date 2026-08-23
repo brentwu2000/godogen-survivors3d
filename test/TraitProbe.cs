@@ -79,6 +79,9 @@ public partial class TraitProbe : SceneTree
             case 2: return RunStage(StageCleave, "the axe hits what is behind it");
             case 3: return RunStage(StageRicochet, "an arrow turns to a new target");
             case 4: return RunStage(StageBurst, "the rifle spends its burst, and its ammo with it");
+            case 5: return RunStage(StageSpread, "the shotgun is a distance, not a damage number");
+            case 6: return RunStage(StageCharge, "waiting is worth something, and firing spends it");
+            case 7: return RunStage(StageBlast, "the bolt detonates where it connects");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -99,37 +102,246 @@ public partial class TraitProbe : SceneTree
         return false;
     }
 
+    /// The shotgun's damage is a function of range, and that is the weapon.
+    ///
+    /// Measured at two distances rather than by counting pellets: eight separate
+    /// rolls inside a cone is an implementation, and what has to be true is that
+    /// standing close is worth more. A spread that fired one shot for the full
+    /// damage would pass any count-based check and be a different weapon.
+    private bool? StageSpread(int tick)
+    {
+        var shotgun = GD.Load<WeaponResource>("res://resources/weapons/pump_shotgun.tres");
+        if (shotgun == null)
+        {
+            GD.PushError("  pump_shotgun.tres did not load");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _weapons!.Equip(0, shotgun);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 0);
+            return null;
+        }
+
+        // Point blank, then most of the way out. A brute, so nothing dies and
+        // the health left is a clean reading.
+        float close = DamageAtRange(shotgun, 2.0f);
+        float far = DamageAtRange(shotgun, 11.0f);
+
+        GD.Print($"  {shotgun.TraitCount} pellets at {shotgun.TraitAmount:P0}: " +
+                 $"{close:F1} damage at 2 m, {far:F1} at 11 m");
+
+        bool closeHurts = close > shotgun.BaseDamage;
+        bool fallsOff = far < close * 0.8f;
+
+        if (!closeHurts)
+            GD.PushError($"  {close:F1} at point blank against a base damage of {shotgun.BaseDamage:F1} — " +
+                         "are the pellets firing as one shot?");
+
+        if (!fallsOff)
+            GD.PushError($"  {far:F1} at 11 m against {close:F1} at 2 m — the cone is not spreading");
+
+        return closeHurts && fallsOff;
+    }
+
+    /// Fires once at a lone enemy placed `metres` away and returns what it took.
+    ///
+    /// The target has to survive, or the reading is its health rather than the
+    /// damage — which is not a hypothetical. The charge stage first ran against a
+    /// brute, one-shot it for far more than its 60 HP, and read back exactly 60:
+    /// a charge that had worked perfectly, reported as a multiplier of 1.6.
+    /// `type` exists so a stage measuring a big number can pick something big
+    /// enough to take it.
+    private float DamageAtRange(WeaponResource weapon, float metres, int type = 2)
+    {
+        _horde!.Pool.Clear();
+        _horde.Spawn(_player!.GlobalPosition + new Vector3(metres, 0.0f, 0.0f), type);
+
+        if (_horde.Pool.Count == 0)
+            return 0.0f;
+
+        float before = _horde.Pool.Health[0];
+        _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
+
+        if (_horde.Pool.Count == 0)
+        {
+            GD.PushError($"  the target died to one shot at {metres:F0} m — the reading is its " +
+                         $"{before:F0} HP, not the damage. Use a tougher type.");
+            return before;
+        }
+
+        return before - _horde.Pool.Health[0];
+    }
+
+    /// Waiting multiplies the shot, and the shot spends the wait.
+    private bool? StageCharge(int tick)
+    {
+        var rifle = GD.Load<WeaponResource>("res://resources/weapons/marksman_rifle.tres");
+        if (rifle == null)
+        {
+            GD.PushError("  marksman_rifle.tres did not load");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _weapons!.Equip(0, rifle);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 0);
+            _weapons.ForceFire(new Vector2(1.0f, 0.0f));   // spend whatever was banked
+            return null;
+        }
+
+        // TraitCount seconds of physics ticks, plus a couple for the boundary.
+        if (tick < rifle.TraitCount * 60 + 4)
+            return null;
+
+        // The boss, because a charged marksman shot is 3.5 times a 34 damage
+        // base and a brute has 60 HP.
+        bool charged = _weapons!.IsCharged;
+        float first = DamageAtRange(rifle, 6.0f, type: 5);
+
+        // Immediately again: the charge was just spent, so this one is plain.
+        bool spent = !_weapons.IsCharged;
+        float second = DamageAtRange(rifle, 6.0f, type: 5);
+
+        GD.Print($"  after {rifle.TraitCount}s idle: charged={charged}, hit for {first:F1}; " +
+                 $"straight after: charged={spent switch { true => "false", false => "true" }}, hit for {second:F1}");
+
+        bool multiplied = first > second * 2.0f;
+
+        if (!charged)
+            GD.PushError($"  not charged after {rifle.TraitCount}s of waiting");
+        if (!spent)
+            GD.PushError("  still charged immediately after firing — the shot did not spend it");
+        if (!multiplied)
+            GD.PushError($"  {first:F1} then {second:F1} — the charge multiplied nothing");
+
+        return charged && spent && multiplied;
+    }
+
+    /// The bolt hurts what it hit and what was standing next to it.
+    private bool? StageBlast(int tick)
+    {
+        var launcher = GD.Load<WeaponResource>("res://resources/weapons/bolt_launcher.tres");
+        if (launcher == null)
+        {
+            GD.PushError("  bolt_launcher.tres did not load");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _weapons!.Equip(0, launcher);
+            _horde!.Pool.Clear();
+
+            // One in the line of fire and one well off it, inside the blast.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(8.0f, 0.0f, 0.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(8.0f, 0.0f, 2.6f), 2);
+            _weapons.ForceFire(new Vector2(1.0f, 0.0f));
+
+            _targetBefore = _horde.Pool.Health[0];
+            _bystanderBefore = _horde.Pool.Health[1];
+            return null;
+        }
+
+        // The bolt has to fly. At 19 m/s, eight metres is under half a second.
+        if (tick < 40)
+            return null;
+
+        float target = _targetBefore - _horde!.Pool.Health[0];
+        float bystander = _bystanderBefore - _horde.Pool.Health[1];
+
+        GD.Print($"  bolt at 8 m: the target took {target:F1}, a bystander 2.6 m off it took {bystander:F1} " +
+                 $"(blast {launcher.TraitAmount:F0} m)");
+
+        bool hit = target > 0.0f;
+        bool splashed = bystander > 0.0f;
+
+        if (!hit)
+            GD.PushError("  the bolt did not connect at all");
+        if (!splashed)
+            GD.PushError("  nothing beside the target was touched — the bolt did not detonate");
+
+        // The direct hit has to be worth more than the splash, or the weapon is
+        // strictly worse than a rifle at what it is aimed at.
+        bool direct = target > bystander;
+        if (!direct)
+            GD.PushError($"  the bystander took {bystander:F1} against the target's {target:F1}");
+
+        return hit && splashed && direct;
+    }
+
+    private float _targetBefore;
+    private float _bystanderBefore;
+
     /// The blanket check. A weapon that came out of BuildWeapons without one is
     /// a weapon that is only a number, which is the state this phase existed to
     /// leave behind.
     private bool? StageEveryWeaponHasOne(int tick)
     {
-        string[] names =
+        // The directory, not a list of names.
+        //
+        // This held six hardcoded names, and three weapons were added without it
+        // noticing — it went green while none of the new traits had ever been
+        // loaded, let alone fired. A blanket check that has to be edited to cover
+        // new content is a blanket check that covers the content somebody
+        // remembered.
+        using var directory = DirAccess.Open("res://resources/weapons");
+        if (directory == null)
         {
-            "combat_knife", "fire_axe", "hunting_bow",
-            "scavenged_rifle", "service_rifle", "reaper_scythe",
-        };
+            GD.PushError("  cannot open res://resources/weapons");
+            return false;
+        }
 
         bool ok = true;
         var summary = new System.Collections.Generic.List<string>();
+        var seen = new System.Collections.Generic.HashSet<WeaponTrait>();
+        int found = 0;
 
-        foreach (string name in names)
+        foreach (string file in directory.GetFiles())
         {
-            var weapon = GD.Load<WeaponResource>($"res://resources/weapons/{name}.tres");
+            // Godot hands exported resources back as `.tres.remap`, so the
+            // extension has to be trimmed rather than matched — a filter on
+            // `.tres` finds nothing at all in a build.
+            if (!file.EndsWith(".tres") && !file.EndsWith(".tres.remap"))
+                continue;
+
+            string path = $"res://resources/weapons/{file.Replace(".remap", "")}";
+            var weapon = GD.Load<WeaponResource>(path);
             if (weapon == null)
             {
-                GD.PushError($"  {name}.tres did not load — run BuildWeapons.cs");
+                GD.PushError($"  {file} did not load — run BuildWeapons.cs");
                 ok = false;
                 continue;
             }
 
+            found++;
             summary.Add($"{weapon.WeaponName}={weapon.Trait}");
+            seen.Add(weapon.Trait);
+
             if (weapon.Trait == WeaponTrait.None)
+            {
+                GD.PushError($"  {weapon.WeaponName} has no trait — it is only a number");
                 ok = false;
+            }
         }
 
-        GD.Print($"  {string.Join("  ", summary)}");
-        return ok;
+        GD.Print($"  {found} weapons: {string.Join("  ", summary)}");
+
+        // And every trait the enum defines has to be on something. A trait with
+        // no weapon is code nobody runs, which is how `Spread` could have shipped
+        // subtly broken with a green suite.
+        foreach (WeaponTrait trait in System.Enum.GetValues<WeaponTrait>())
+        {
+            if (trait == WeaponTrait.None || seen.Contains(trait))
+                continue;
+
+            GD.PushError($"  no weapon uses {trait} — the trait is unreachable");
+            ok = false;
+        }
+
+        return ok && found > 0;
     }
 
     private bool? StageBleed(int tick)

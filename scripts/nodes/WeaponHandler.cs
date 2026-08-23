@@ -48,6 +48,15 @@ public partial class WeaponHandler : Node3D
         public int BurstLeft;
         public float BurstDelay;
         public Vector2 BurstDirection;
+
+        /// Seconds since this weapon last actually attacked.
+        ///
+        /// Per slot and ticked for *both*, because a holstered marksman rifle is
+        /// still waiting. Charging only while the weapon is drawn would make the
+        /// trait "hold this weapon and do nothing", which is not a decision — the
+        /// interesting version is carrying it as a sidearm, fighting with the
+        /// other one, and swapping to a charged shot.
+        public float SinceFired;
     }
 
     private readonly Slot[] _slots = { new(), new() };
@@ -257,6 +266,21 @@ public partial class WeaponHandler : Node3D
         slot.BurstDelay = 0.0f;
     }
 
+    /// Whether the active weapon's next shot is a charged one.
+    ///
+    /// Read by the readout as well as by the shot, so what the player is told and
+    /// what happens cannot disagree — the entire value of the trait is that the
+    /// player knows when it is ready.
+    public bool IsCharged
+    {
+        get
+        {
+            Slot slot = _slots[_active];
+            return slot.Weapon is { Trait: WeaponTrait.Charge, TraitCount: > 0 }
+                   && slot.SinceFired >= slot.Weapon.TraitCount;
+        }
+    }
+
     public int GetProficiency(WeaponCategory category) => _proficiency[(int)category];
 
     public void SetProficiency(WeaponCategory category, int level) => _proficiency[(int)category] = level;
@@ -265,6 +289,13 @@ public partial class WeaponHandler : Node3D
     {
         float step = (float)delta;
         StepProjectiles(step);
+
+        // Every slot, before anything that can return early. There are four ways
+        // out of this method below — a burst in progress, a reload, a dry
+        // magazine, a cooldown — and a charge ticked further down would stall on
+        // all of them.
+        foreach (Slot each in _slots)
+            each.SinceFired += step;
 
         Slot slot = _slots[_active];
         if (slot.Weapon is not { } weapon || _horde == null)
@@ -282,6 +313,7 @@ public partial class WeaponHandler : Node3D
             {
                 slot.BurstLeft--;
                 slot.BurstDelay = weapon.TraitAmount;
+                slot.SinceFired = 0.0f;
                 Fire(GlobalPosition, slot.BurstDirection, level, allowBurst: false);
 
                 if (weapon.MagazineSize > 0)
@@ -326,6 +358,7 @@ public partial class WeaponHandler : Node3D
             return;
 
         Fire(origin, direction, level);
+        slot.SinceFired = 0.0f;
         slot.Cooldown = weapon.GetEffectiveAttackDelay(level) * Mods.AttackDelayScale;
 
         if (weapon.MagazineSize > 0)
@@ -343,6 +376,13 @@ public partial class WeaponHandler : Node3D
             return;
 
         Fire(GlobalPosition, direction.Normalized(), Level);
+
+        // Spent here too. This is a real attack site — a probe firing twice in a
+        // row must not get two charged shots — and it is the third of three,
+        // which is exactly why the reset lives at the call sites rather than
+        // inside Fire: Fire is also reached by the burst queue, where the shot
+        // has already been paid for.
+        _slots[_active].SinceFired = 0.0f;
     }
 
     private bool TryGetAimDirection(Vector3 origin, float range, out Vector2 direction)
@@ -386,6 +426,13 @@ public partial class WeaponHandler : Node3D
         float damage = weapon.GetEffectiveDamage(level);
         if (Mods.CritChance > 0.0f && NextFloat() < Mods.CritChance)
             damage *= Mods.CritMultiplier;
+
+        // Charge: the only trait in the game that pays for *not* attacking.
+        // Applied before the shot and spent by it — the `SinceFired` reset lives
+        // at the call sites, so a burst shot and an ordinary shot both count as
+        // having fired.
+        if (IsCharged)
+            damage *= weapon.TraitAmount;
 
         float knockback = weapon.Knockback + Mods.Knockback;
 
@@ -442,22 +489,50 @@ public partial class WeaponHandler : Node3D
             return;
         }
 
-        Vector2 shot = ApplySpread(direction, weapon.GetEffectiveSpreadDegrees(level));
+        float cone = weapon.GetEffectiveSpreadDegrees(level);
 
         if (weapon.IsProjectile)
         {
             float speed = weapon.GetEffectiveProjectileSpeed(level);
             Projectiles.TrySpawn(
                 new Vector3(origin.X, 0.0f, origin.Z),
-                shot * speed,
+                ApplySpread(direction, cone) * speed,
                 damage,
                 knockback,
                 range / speed,
-                weapon.Penetration + Mods.Pierce,
-                weapon.Trait == WeaponTrait.Ricochet ? weapon.TraitCount : 0);
+
+                // A blast bolt stops where it connects whatever penetration says.
+                // Punching through and detonating at the end of its flight would
+                // put the explosion behind the crowd, which is wrong and also
+                // impossible to aim.
+                weapon.Trait == WeaponTrait.Blast ? 1 : weapon.Penetration + Mods.Pierce,
+                weapon.Trait == WeaponTrait.Ricochet ? weapon.TraitCount : 0,
+                weapon.Trait == WeaponTrait.Blast ? weapon.TraitAmount : 0.0f);
             return;
         }
 
+        // One pull, several shots.
+        //
+        // Each rolls its own line, which is what makes a shotgun a distance
+        // rather than a damage number: at range most of the cone misses, at
+        // contact all of it lands, and no amount of tuning one shot's damage
+        // produces that shape.
+        int pellets = weapon.Trait == WeaponTrait.Spread ? Mathf.Max(1, weapon.TraitCount) : 1;
+        float perPellet = weapon.Trait == WeaponTrait.Spread ? weapon.TraitAmount : 1.0f;
+
+        for (int pellet = 0; pellet < pellets; pellet++)
+            Hitscan(weapon, origin, ApplySpread(direction, cone), range, damage * perPellet, knockback);
+    }
+
+    /// One instantaneous line, resolved against the horde.
+    ///
+    /// Lifted out of `Fire` so `Spread` can loop it. Sharing the body matters
+    /// more than the eight lines it saves: penetration, the tracer and the
+    /// swap-tolerant walk are all easy to get subtly wrong, and a second copy
+    /// written for pellets would drift from the one the rifle uses.
+    private void Hitscan(WeaponResource weapon, Vector3 origin, Vector2 shot,
+                         float range, float damage, float knockback)
+    {
         int hits = _horde!.QueryRay(origin, shot, range, HitscanThickness, _hitList);
         int remaining = weapon.Penetration + Mods.Pierce;
 
@@ -536,6 +611,22 @@ public partial class WeaponHandler : Node3D
 
             _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
             RecordHit(WeaponCategory.BowCrossbow, position);
+
+            // Detonate where it connected, and stop.
+            //
+            // After the direct hit, so the thing it struck takes both — a bolt
+            // that only splashed would be strictly worse against a single target
+            // than the rifle it costs the same as. Before the pierce and bounce
+            // checks, because a blast bolt does neither: it stops here whatever
+            // else it was carrying.
+            if (Projectiles.Blast[i] > 0.0f)
+            {
+                // `Horde.Blast` raises Exploded itself, so the camera shake and
+                // the sound arrive without this having to know about either.
+                _horde.Blast(position, Projectiles.Blast[i], Projectiles.Damage[i]);
+                Projectiles.DespawnAt(i);
+                continue;
+            }
 
             // Ricochet turns to face somebody new rather than carrying straight
             // on, which is what makes it different from penetration: it curves
