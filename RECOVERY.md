@@ -17,13 +17,33 @@ Read this before starting work. Update it as phases land.
 | ✅ A3a | `MeshBuilder` gains `Tube`, `Ball` and the rig channels | `f2aad1b` |
 | ✅ A3b | `BodyMeshLibrary`, `BodyRenderer`, `SoloBody`, `body.gdshader` | `4cbddf0` |
 | ✅ A8 | Sky, depth fog, and arms outside the torso | `3cc1a80` |
+| ✅ A5 | Danger zones: `ZonePlan`, `DangerZone`, perimeter spawning | `4c62ec9` |
+| ✅ A5b | Zone readout, and `zone_marker.gdshader` so the edge is visible | `debadab` |
+| ✅ A5c | `AutoPlay --zone`, and three balance corrections it found | `8871b4c` |
+| ✅ A5d | `BalanceSweep zones:both`, and the zone tuned against the table | `ac006d1` |
 
-**Next: A5** (danger zones), then A6, A9/A10, A7, A4.
+**Next: A6** (walkable shelter), then A9/A10 (ground and props), A7 (minimap), A4 (blob shadows).
 
-Reordered after looking at a render. A4 (blob shadows) matters least now — shadows were the billboard
-path's only ground contact and solid bodies cast real ones, so it is a fallback-path fix rather than a
-visual one. What the frame actually lacks is *structure*: the arena is a large flat expanse with
-scattered cover. A5 gives it places that mean something.
+A4 matters least now — shadows were the billboard path's only ground contact and solid bodies cast
+real ones, so it is a fallback-path fix rather than a visual one.
+
+### Where the balance stands
+
+Five seeds, both arms, `lingers:0`:
+
+| arm | survived | median banked | median seconds | median lowest HP | worst peak |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| past | 5/5 | 485 | 37s | 98 | 65 |
+| zone | 4/5 | 1120 | 60s | 95 | 136 |
+
+```bash
+godot --headless --script test/BalanceSweep.cs -- seeds:5 lingers:0 zones:both
+```
+
+**Open:** the cost is bimodal, not graded. Four of five zone runs finish near full health and the
+fifth dies. The bot takes the *nearest* zone, which is usually tier 0, so the sample is mostly the
+easy tier while the one deep Hold is lethal. Whether that shape is right or an artefact of picking by
+distance is the next thing the table can answer.
 
 **Render the game and look at it after any visual phase.** Two defects in A3b were invisible to a
 green 27-probe sweep and obvious in one screenshot: arms buried inside the torso, and a hard black
