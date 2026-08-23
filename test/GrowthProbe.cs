@@ -186,15 +186,26 @@ public partial class GrowthProbe : SceneTree
             return null;
         }
 
+        // Drive to the cap by *picks*, which is the unit the cap is in.
+        //
+        // This used to loop on `_player.Armour < ArmourCap`, and the two are only
+        // the same number while the player starts a run with no armour. They stop
+        // being the same the moment a starting loadout carries a piece — which it
+        // now does. One point of gear armour meant two picks reached three points,
+        // the loop exited, and the deck was correctly still offering the third
+        // pick. The probe called that a capping failure. It was reading a pick
+        // ceiling off a health-mitigation number.
+        float startingArmour = _player!.Armour;
         int guard = 0;
-        while (_player!.Armour < ArmourCap && guard++ < 40)
+        while (_growth!.IsAvailable(GrowthOption.Armour) && guard++ < 40)
         {
             EarnOnePick();
             TakeIfOffered(GrowthOption.Armour);
         }
 
         float armour = _player!.Armour;
-        bool cappedOut = !_growth!.IsAvailable(GrowthOption.Armour);
+        int taken = _growth!.TakenCount(GrowthOption.Armour);
+        bool cappedOut = !_growth.IsAvailable(GrowthOption.Armour);
 
         _player.Heal(9999.0f);
         float before = _player.Health;
@@ -206,7 +217,8 @@ public partial class GrowthProbe : SceneTree
         _player.TakeDamage(armour * 0.5f);
         float smallHit = before - _player.Health;
 
-        GD.Print($"  armour {armour:F0}/{ArmourCap} (still offered: {!cappedOut}); " +
+        GD.Print($"  {taken}/{ArmourCap} picks took armour {startingArmour:F0} -> {armour:F0} " +
+                 $"(still offered: {!cappedOut}); " +
                  $"50 damage -> {bigHit:F2}, {armour * 0.5f:F2} damage -> {smallHit:F3} " +
                  $"(a fifth always gets through)");
 
@@ -215,7 +227,10 @@ public partial class GrowthProbe : SceneTree
         // Absolute tolerance, not IsEqualApprox: these are differences of two
         // health values near 100, so the relative epsilon of a 0.3 result is
         // finer than the float subtraction that produced it.
-        return armour == ArmourCap
+        // Every pick landed, the deck closed, and the points arrived — three
+        // separate claims that the old single comparison collapsed into one.
+        return taken == ArmourCap
+            && Mathf.IsEqualApprox(armour, startingArmour + ArmourCap * _growth.ArmourPerPick)
             && cappedOut
             && Mathf.Abs(bigHit - (50.0f - armour)) < 0.01f
             && Mathf.Abs(smallHit - armour * 0.5f * 0.2f) < 0.01f;

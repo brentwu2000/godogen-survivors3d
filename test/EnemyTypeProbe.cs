@@ -330,16 +330,65 @@ public partial class EnemyTypeProbe : SceneTree
         float bruteDamage = _player!.MaxHealth - _player.Health;
         EnemyTypeResource[] types = _horde!.Types;
 
-        // Both stages ran the same number of ticks, so the ratio of damage is
-        // the ratio of the table's rates.
-        float expectedRatio = types[Brute].ContactDamagePerSecond / types[Walker].ContactDamagePerSecond;
+        // Both stages ran the same number of ticks, so the ratio of damage is the
+        // ratio of the rates that actually reached the player — which is not the
+        // ratio in the table, and the difference is the whole design of armour.
+        //
+        // This compared against the raw table ratio, on the reasoning that a
+        // common factor cancels. Armour is not a common factor: it is subtracted
+        // from the rate, deliberately, so that it answers a crowd of weak contacts
+        // and never answers a brute. Flat mitigation does not cancel in a ratio,
+        // it *widens* it — and the wider the gap the better armour is working.
+        //
+        // It went unnoticed because the player used to start a run with none. A
+        // single point from a starting loadout turned 14:6 into 13:5, which is
+        // 2.60 rather than 2.33, and the probe reported a damage table that had
+        // not changed as broken. `GrowthProbe` was tripped by the same one point
+        // on the same day.
+        float armour = _player.Armour;
+        float walkerRate = Mitigate(types[Walker].ContactDamagePerSecond, armour);
+        float bruteRate = Mitigate(types[Brute].ContactDamagePerSecond, armour);
+
+        float expectedRatio = bruteRate / walkerRate;
         float actualRatio = bruteDamage / Mathf.Max(0.001f, _walkerDamage);
 
         GD.Print($"  walker {_walkerDamage:F1} vs brute {bruteDamage:F1} over 1s " +
-                 $"-> ratio {actualRatio:F2} (table {expectedRatio:F2})");
+                 $"-> ratio {actualRatio:F2} (expected {expectedRatio:F2} from " +
+                 $"{types[Walker].ContactDamagePerSecond:F0}/{types[Brute].ContactDamagePerSecond:F0} " +
+                 $"less {armour:F0} armour)");
 
-        return _walkerDamage > 0.0f && Mathf.Abs(actualRatio - expectedRatio) < 0.15f;
+        // The absolute rates too, not just their ratio. A ratio alone passes if
+        // both halves are wrong by the same factor, which is exactly what would
+        // happen if contact damage stopped being applied every tick — and the
+        // ratio is the thing this stage was already checking when it missed a
+        // real change in mitigation.
+        //
+        // One tick of tolerance each way: the enemy is spawned 0.2 m from the
+        // player and is inside the contact radius immediately, but the tick it
+        // spawns on does no damage.
+        float slack = bruteRate / 60.0f * 2.0f;
+        bool walkerRight = Mathf.Abs(_walkerDamage - walkerRate) < slack;
+        bool bruteRight = Mathf.Abs(bruteDamage - bruteRate) < slack;
+
+        if (!walkerRight)
+            GD.PushError($"  walker dealt {_walkerDamage:F2} over 1s, expected {walkerRate:F2}");
+        if (!bruteRight)
+            GD.PushError($"  brute dealt {bruteDamage:F2} over 1s, expected {bruteRate:F2}");
+
+        return _walkerDamage > 0.0f
+            && walkerRight
+            && bruteRight
+            && Mathf.Abs(actualRatio - expectedRatio) < 0.15f;
     }
+
+    /// `Player.Mitigate`, mirrored.
+    ///
+    /// Copied rather than called because the method is private and making it
+    /// public to satisfy a test would widen the player's surface for the
+    /// convenience of one assertion. Twenty percent always gets through — armour
+    /// that reached zero would turn the weakest variant into scenery.
+    private static float Mitigate(float rate, float armour) =>
+        rate <= 0.0f ? 0.0f : Mathf.Max(rate - armour, rate * 0.2f);
 
     private float _walkerDamage;
 
