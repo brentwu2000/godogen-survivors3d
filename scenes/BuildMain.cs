@@ -585,7 +585,7 @@ public partial class BuildMain : SceneTree
         });
     }
 
-    private static StaticBody3D BuildGround(float size)
+    private static Node3D BuildGround(float size)
     {
         var body = new StaticBody3D { Name = "Ground" };
 
@@ -596,6 +596,10 @@ public partial class BuildMain : SceneTree
         // owned by the scene, so the override serialises — the case godot.md:46
         // warns about is an override on a node *inside* an imported GLB, whose
         // owner the packer skips.
+        // A placeholder plane, replaced at startup by `GroundMesh` with a
+        // heightmapped surface built from `Terrain`. Built in `_Ready` rather
+        // than packed because 6,561 vertices in a text `.tscn` is megabytes of
+        // numbers nothing can review and every regeneration rewrites.
         body.AddChild(new MeshInstance3D
         {
             Name = "Mesh",
@@ -613,6 +617,6 @@ public partial class BuildMain : SceneTree
             Position = new Vector3(0.0f, -thickness * 0.5f, 0.0f),
         });
 
-        return body;
+        return (Node3D)SceneBuildUtil.AttachScriptToRoot(body, "res://scripts/nodes/GroundMesh.cs");
     }
 }

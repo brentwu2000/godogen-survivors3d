@@ -141,7 +141,13 @@ public partial class EffectDirector : Node3D
     {
         // At the muzzle, not at the character. A flash centred on the player
         // reads as the player glowing; a metre out along the shot reads as a gun.
-        Vector3 at = origin + new Vector3(direction.X, 0.0f, direction.Y) * 0.75f;
+        // Flattened, because the player is planted and `EffectPool.Spawn`
+        // plants what it is given. Passing the player's real Y would add the
+        // ground height twice and hang every muzzle flash a metre and a half in
+        // the air on a crest — while looking perfectly correct on the flat ground
+        // around the spawn, which is where it would be checked.
+        Vector3 at = new Vector3(origin.X, 0.0f, origin.Z)
+                   + new Vector3(direction.X, 0.0f, direction.Y) * 0.75f;
 
         if (category is WeaponCategory.MeleeShort or WeaponCategory.MeleeLong)
         {

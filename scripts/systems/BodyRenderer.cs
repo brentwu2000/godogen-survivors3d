@@ -143,7 +143,13 @@ public sealed class BodyRenderer
             float scale = type.SpriteScale * Elites.ScaleBonus(elite)
                           * Horde.EmergeScale(pool.Emerge[i]);
 
-            Write(_buffers[variant], slot, pool.Position[i], pool.Yaw[i], scale,
+            // Planted for drawing only. The pool's Y stays zero — the flow
+            // field, the collider and every distance test in the horde are flat,
+            // and a body whose simulated position had a height would disagree
+            // with all of them.
+            Vector3 at = Terrain.Plant(pool.Position[i]);
+
+            Write(_buffers[variant], slot, at, pool.Yaw[i], scale,
                   Pack(pool.Velocity[i].Length(), pool.Stride[i]),
                   HueShift(elite), pool.HitFlash[i], Jitter(pool.Phase[i]));
         }

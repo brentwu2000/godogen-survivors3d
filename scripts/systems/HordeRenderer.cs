@@ -151,7 +151,7 @@ public sealed class HordeRenderer
 
             // Scaled by how far out of the ground it is. Cosmetic only — the
             // flow field and the damage already treat it as fully present.
-            Write(i, pool.Position[i],
+            Write(i, Terrain.Plant(pool.Position[i]),
                   type.SpriteScale * Elites.ScaleBonus(elite) * Horde.EmergeScale(pool.Emerge[i]),
                   pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer,
                   pool.HitFlash[i], Elites.Tint(elite));
@@ -174,7 +174,8 @@ public sealed class HordeRenderer
             float spin = Mathf.Atan2(-velocity.Y, velocity.X);
 
             Vector3 p = pool.Position[i];
-            Write(i, new Vector3(p.X, p.Y + height * 0.5f, p.Z), 1.0f, 0.0f, 0.0f, spin, 0);
+            Write(i, new Vector3(p.X, Terrain.Height(p.X, p.Z) + p.Y + height * 0.5f, p.Z),
+                  1.0f, 0.0f, 0.0f, spin, 0);
         }
 
         Upload(pool.Count);

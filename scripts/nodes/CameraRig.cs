@@ -210,7 +210,17 @@ public partial class CameraRig : Node3D
             Shake(Mathf.Min(0.6f, lost / (maxHealth * 0.25f)));
     }
 
-    private static Vector3 Flatten(Vector3 position) => new(position.X, 0.0f, position.Z);
+    /// The rig's own height follows the ground under the target.
+    ///
+    /// Flattened to the terrain rather than to zero. On a flat floor these were
+    /// the same thing; over hills, a rig pinned at zero puts the camera through
+    /// the ground on every rise and high above the player in every dip.
+    ///
+    /// Smoothed by the same follow rate as the horizontal chase, so cresting a
+    /// rise is a lean rather than a jolt — the ground is 1 m of amplitude and the
+    /// player crosses it in a second.
+    private static Vector3 Flatten(Vector3 position) =>
+        new(position.X, Terrain.Height(position.X, position.Z), position.Z);
 
     /// Deterministic and allocation-free, like every other generator here, so a
     /// capture run reproduces frame for frame.

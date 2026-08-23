@@ -390,7 +390,17 @@ public partial class Horde : Node3D
             if (!active)
                 continue;
 
-            _hazardDecals[i].Position = Hazards.Position[i] + new Vector3(0.0f, 0.02f, 0.0f);
+            // Planted. Two centimetres of lift is enough to beat z-fighting
+            // against a flat floor and nowhere near enough against a floor with
+            // a metre and a half of relief — an unplanted decal spends most of
+            // its life buried, and a burning patch the player cannot see is a
+            // patch they walk into.
+            //
+            // The hazard itself stays flat: `Hazards.Position` is what the damage
+            // test reads, and it is a two-dimensional test.
+            Vector3 spot = Hazards.Position[i];
+            _hazardDecals[i].Position = new Vector3(
+                spot.X, Terrain.Height(spot.X, spot.Z) + spot.Y + 0.02f, spot.Z);
             // X and Y, not X and Z. Scale is applied in local space before the
             // rotation that lays the quad flat, and a quad's extent is in its own
             // XY — the cylinder this replaced had its height on Y, which is why

@@ -504,6 +504,20 @@ public partial class Player : CharacterBody3D
             Mathf.Lerp(Velocity.Z, desired.Z, t));
 
         MoveAndSlide();
+
+        // Planted after the move, never before.
+        //
+        // The floor collider is a flat box and the simulation is two-dimensional
+        // — see `Terrain`. `MoveAndSlide` resolves against that flat floor, and
+        // only then is the body lifted onto the visible ground. Doing it the
+        // other way round means sliding along a surface the physics does not
+        // have, which produces a character that skates and occasionally falls
+        // through.
+        GlobalPosition = new Vector3(
+            GlobalPosition.X,
+            Terrain.Height(GlobalPosition.X, GlobalPosition.Z),
+            GlobalPosition.Z);
+
         UpdateFacing();
         UpdateBody((float)delta);
 

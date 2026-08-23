@@ -63,7 +63,18 @@ public sealed class EffectPool
             }
         }
 
-        Position[i] = position;
+        // Planted here, once, rather than at each of the eight call sites.
+        //
+        // `position.Y` is kept and added on top: callers pass a *height above the
+        // ground* — 0.9 for a hit spark at chest height, 0.15 for a muzzle flash
+        // — and every one of them is derived from something the simulation holds
+        // flat. The one caller that starts from an already-planted position is
+        // `EffectDirector.OnFired`, which flattens first for exactly this reason.
+        Position[i] = new Vector3(
+            position.X,
+            Terrain.Height(position.X, position.Z) + position.Y,
+            position.Z);
+
         StartSize[i] = startSize;
         EndSize[i] = endSize;
         Tint[i] = tint;

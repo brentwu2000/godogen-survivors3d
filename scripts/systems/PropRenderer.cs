@@ -106,7 +106,12 @@ public sealed class PropRenderer
         // column of each row. Scale is baked into the basis, which is what lets a
         // container stretch along a long footprint without stretching its height.
         buffer[b + 0] = cos * footprint.X;  buffer[b + 1] = 0.0f;        buffer[b + 2] = -sin * footprint.Y;  buffer[b + 3] = centre.X;
-        buffer[b + 4] = 0.0f;               buffer[b + 5] = heightScale; buffer[b + 6] = 0.0f;                buffer[b + 7] = 0.0f;
+        // The Y translation was a hard zero, which is correct on a flat floor and
+        // leaves every piece of cover hanging in the air or buried once the
+        // ground has a height. Planted here rather than by the caller because
+        // every caller would have to remember, and one that forgot would look
+        // like a placement bug.
+        buffer[b + 4] = 0.0f;               buffer[b + 5] = heightScale; buffer[b + 6] = 0.0f;                buffer[b + 7] = Terrain.Height(centre.X, centre.Y);
         buffer[b + 8] = sin * footprint.X;  buffer[b + 9] = 0.0f;        buffer[b + 10] = cos * footprint.Y;  buffer[b + 11] = centre.Y;
 
         _counts[index] = slot + 1;

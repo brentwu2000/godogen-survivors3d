@@ -97,7 +97,7 @@ public sealed class ScatterField
     /// roughly its own square root, and every piece of scatter comes out visibly
     /// paler than the ground it is lying on. The same conversion `MeshBuilder`
     /// does for vertex colours, for the same reason.
-    public void Add(ScatterKind kind, Vector2 at, float yaw, float scale, Color tint)
+    public void Add(ScatterKind kind, Vector2 at, float yaw, float scale, Color tint, float height = 0.0f)
     {
         int index = (int)kind;
         int slot = _counts[index];
@@ -113,7 +113,7 @@ public sealed class ScatterField
         float s = Mathf.Sin(yaw) * scale;
 
         buffer[write + 0] = c;     buffer[write + 1] = 0.0f;  buffer[write + 2] = s;     buffer[write + 3] = at.X;
-        buffer[write + 4] = 0.0f;  buffer[write + 5] = scale; buffer[write + 6] = 0.0f;  buffer[write + 7] = 0.0f;
+        buffer[write + 4] = 0.0f;  buffer[write + 5] = scale; buffer[write + 6] = 0.0f;  buffer[write + 7] = height;
         buffer[write + 8] = -s;    buffer[write + 9] = 0.0f;  buffer[write + 10] = c;    buffer[write + 11] = at.Y;
 
         Color linear = tint.SrgbToLinear();

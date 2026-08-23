@@ -129,6 +129,33 @@ public partial class LevelGenerator : Node3D
 
         _rng = Seed;
 
+        // Shifted per seed, before anything is placed. Every plant below reads
+        // this, so it has to be settled first — a level generated against one
+        // offset and drawn against another is a map whose crates float.
+        //
+        // Hashed from the seed rather than drawn from `_rng`, and that is not a
+        // style preference. Two `NextFloat()` calls here shift every draw the
+        // generator makes afterwards, so the same seed lays out a completely
+        // different map — the cover moves, the crates move, and the pads move.
+        // Nothing errors. What happened instead was that two probes started
+        // failing with enemies that would not walk, because the layout they had
+        // been written against no longer existed, and the terrain looked like the
+        // last thing that could be responsible.
+        ulong mix = Seed * 0x9E3779B97F4A7C15UL;
+        mix ^= mix >> 29;
+        mix *= 0xBF58476D1CE4E5B9UL;
+        mix ^= mix >> 32;
+
+        Terrain.Offset = new Vector2(
+            (mix & 0xFFFFUL) / 65535.0f * 900.0f,
+            ((mix >> 16) & 0xFFFFUL) / 65535.0f * 900.0f);
+
+        // And the floor is rebuilt against it. `Ground` is ready long before this
+        // node is, so the mesh it built in `_Ready` belongs to the previous
+        // seed's offset — a floor that looks like perfectly good ground while
+        // being a different landscape from everything standing on it.
+        GetParent()?.GetNodeOrNull<GroundMesh>("Ground")?.Rebuild();
+
         Node3D obstacles = Container("Obstacles");
         Node3D crates = Container("LootContainers");
         Node3D pads = Container("ExtractionZones");
@@ -491,7 +518,13 @@ public partial class LevelGenerator : Node3D
             var body = new StaticBody3D
             {
                 Name = $"Block{i}",
-                Position = new Vector3(block.Center.X, height * 0.5f, block.Center.Y),
+                // Planted, then raised by half its height. The collider is a box
+                // and the simulation is flat, so this only moves what is drawn and
+                // what the player walks into — the flow field still sees a
+                // rectangle on a plane.
+                Position = new Vector3(block.Center.X,
+                                       Terrain.Height(block.Center.X, block.Center.Y) + height * 0.5f,
+                                       block.Center.Y),
             };
             body.AddChild(new CollisionShape3D { Name = "Collision", Shape = new BoxShape3D { Size = size } });
             obstacles.AddChild(body);
@@ -564,7 +597,8 @@ public partial class LevelGenerator : Node3D
             var tint = new Color(tile.R * shade, tile.G * shade, tile.B * shade);
 
             _scatter.Add(kind, spot, NextFloat() * Mathf.Tau,
-                         Mathf.Lerp(0.55f, 1.35f, NextFloat()), tint);
+                         Mathf.Lerp(0.55f, 1.35f, NextFloat()), tint,
+                         Terrain.Height(spot.X, spot.Y));
         }
 
         _scatter.Commit();
@@ -685,7 +719,7 @@ public partial class LevelGenerator : Node3D
             var zone = new ExtractionZone
             {
                 Name = $"Pad{i}",
-                Position = new Vector3(spot.X, 0.0f, spot.Y),
+                Position = Terrain.Plant(new Vector3(spot.X, 0.0f, spot.Y)),
                 Open = false,
                 Visible = false,
                 WillOpen = (i - firstOpen + PadCount) % PadCount < opening,
@@ -764,7 +798,7 @@ public partial class LevelGenerator : Node3D
             var zone = new DangerZone
             {
                 Name = $"Zone{i}",
-                Position = new Vector3(centre.X, 0.0f, centre.Y),
+                Position = Terrain.Plant(new Vector3(centre.X, 0.0f, centre.Y)),
                 HalfExtent = plan.HalfExtent,
                 Kind = (int)plan.Kind,
                 Tier = plan.Tier,
@@ -856,7 +890,7 @@ public partial class LevelGenerator : Node3D
             var crate = new LootContainer
             {
                 Name = $"Crate{i}",
-                Position = new Vector3(spot.X, 0.0f, spot.Y),
+                Position = Terrain.Plant(new Vector3(spot.X, 0.0f, spot.Y)),
                 RarityBias = Mathf.Lerp(1.0f, Biome.DepthRarityBias, depth),
             };
 

@@ -27,8 +27,9 @@ Read this before starting work. Update it as phases land.
 | ✅ B5 | Spread, Charge and Blast; three weapons that resolve differently | `82ac068` |
 | ✅ B6 | A full backpack is a decision; `[R] drop`, and crates keep the overflow | `4293c5a` |
 | ✅ B3 | `RunKit` — Orbit, Shockwave, Chain and Chill; cards that fight on their own | `4d93557` |
+| ✅ B9 | `Terrain` + `GroundMesh` — the floor has relief and the simulation never noticed | *this* |
 
-**Next: B4** (trinkets), then B7 (curiosities), B2, B9–B12, B14, and A4 last.
+**Next: B10** (landmarks), then B14, and A4 last.
 
 **Half A is done except A4.** Blob shadows were the billboard path's only ground contact and solid
 bodies cast real ones, so A4 is a fallback-path fix rather than a visual one — the lowest-value item
@@ -380,25 +381,57 @@ Two input bugs found alongside:
 `Save()` omits any setting equal to its default, so a hand-edited line vanishes the next time the input
 tool runs.
 
-### B9 — The floor stopped being a table  ·  *needs A3, A9, B8*
+### ✅ B9 — The floor stopped being a table  ·  *done*
 
 `Terrain.cs` — an analytic height function, **not** a mesh (raycasts do not reliably hit
-`ConcavePolygonShape3D`). Two octaves of value noise, `Amplitude 1.05`, coarse wavelength **18 m**
-(tuned against the fog: the dark closes 24 m out, so a 40 m wave is half a wave in view and reads as a
-tilted camera), fine 6.3 m at 0.32 weight, flat within 7 m of the origin fading to full by 16 m,
-offset from `GameSession.RunSeed`.
+`ConcavePolygonShape3D`). Two octaves of value noise, coarse wavelength **18 m** (tuned against the
+fog: the dark closes 24 m out, so a 40 m wave is half a wave in view and reads as a tilted camera),
+fine 6.3 m at 0.32 weight, flat within 7 m of the origin fading to full by 16 m.
 
-`GroundMesh.cs` builds the floor in `_Ready` (200 m at 2.5 m = 6561 vertices; a `.tscn` is a text
-file). **Wind the triangles clockwise seen from above** — the other order is culled from every angle
-the camera can reach, and with black fog behind it that looks exactly like a mesh that failed to build.
+`Amplitude` shipped at **1.75**, not the planned 1.05. 1.05 rendered as a table: at this camera height,
+over an 18 m wave, the slab seams still read as straight lines. At 1.75 the seams curve and the horizon
+bows, and a four-metre block still sits on it without a gap under one corner — which is what bounds it
+from above.
+
+`GroundMesh.cs` builds the floor from `Terrain` (200 m at 2.5 m = 6561 vertices; a `.tscn` is a text
+file), extending `StaticBody3D` because it is attached to the Ground body itself.
+
+**The winding rule in the plan was wrong.** Godot's front face is the one whose *engine* normal points
+at the camera, and the engine normal is the negative of the right-hand rule — `Plane(v0, v1, v2)` is
+`(v0 - v2) × (v0 - v1)`. A floor is therefore front-facing from above when the right-hand normal of its
+winding points **down**, which is counter-clockwise seen from above. Authored the plan's way first: the
+screenshot was a black void with the scatter floating in it, and it looked exactly like a mesh that
+never built. The shading normals have to be negated to match, or the floor is lit from underneath and
+comes out black anyway — the same symptom from a different cause.
+
+**`GroundMesh` cannot build in `_Ready`.** `Ground` is ready long before `LevelGenerator` runs, so the
+floor it builds belongs to whatever offset the previous run left. Nothing about this is visible: the
+ground still looks like ground and the props still look planted, because both are plausible surfaces.
+`GroundMesh.Rebuild()` is public and the generator calls it once the offset is fixed. `TerrainProbe`
+reported 12,744 of 12,800 triangles off the height field — the only place the disagreement was legible.
+
+**Do not draw the terrain offset from `_rng`.** It is two `NextFloat()` calls and it shifts every draw
+the generator makes afterwards, so the same seed lays out a completely different map. Hash it off
+`Seed` instead. Cost: two probes started failing with enemies that would not walk, and the terrain
+looked like the last thing that could be responsible — the enemies were fine, their cover had moved.
 
 **The simulation stays 2D.** Only things that draw consult `Terrain`, plus props placed once. The floor
-collider stays a flat box; the player is planted after `MoveAndSlide`. Plant: blocks, crates, pads,
-rooms, packs, `PropRenderer` (Y translation, was a hard zero), `BodyRenderer`, `ShadowRenderer`,
-`HordeRenderer` (bodies and projectiles), hazard decals, effect puffs.
+collider stays a flat box; the player is planted after `MoveAndSlide`. Planted: blocks, crates, pads,
+zones, scatter, `PropRenderer`, `BodyRenderer`, `HordeRenderer` (bodies and projectiles), the camera
+rig, hazard decals, and effect puffs. Puffs are planted inside `EffectPool.Spawn` rather than at eight
+call sites, so `EffectDirector.OnFired` has to flatten the player's position first or the ground height
+is added twice.
 
-Probe: `TerrainProbe` — the enemy pool's Y must stay **zero** over ground that is provably not flat,
-and `NearestWithin` must find a target 12 m away across 0.5 m of drop at range 13 and miss it at 11.
+`ShadowRenderer` is not in the list because it does not exist yet — it is A4.
+
+Probe: `TerrainProbe`, eight stages. The two the plan named: the enemy pool's Y stays **zero** over
+ground that is provably not flat, and `NearestWithin` finds a target 12 m away across 0.5 m of drop at
+range 13 and misses it at 11. Both halves of every stage assert presence as well as absence — "the pool
+is flat" passes vacuously over a dead height field, so it also counts how many of those enemies are
+standing on relief.
+
+`test/sweep.ps1` runs all 38 headless probes. It existed as a habit rather than as a file, which is how
+it kept being run from memory against a stale list.
 
 ### B10 — Three landmarks, and the only three.js  ·  *needs B9*
 
