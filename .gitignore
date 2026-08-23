@@ -11,6 +11,10 @@ godot.md
 bin/
 obj/
 
+# Exported builds. Reproducible from export_presets.cfg with one command, and
+# an .exe plus its .pck is sixty megabytes of derived file per export.
+build/
+
 # Capture output — 700 frames + mp4, regenerate with test/Presentation.cs.
 # The .gdignore stays tracked: without it the importer swallows every frame.
 screenshots/*

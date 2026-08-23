@@ -205,15 +205,34 @@ public sealed class ShopCatalogue
         return total;
     }
 
+    /// Every item on disk, by name, loaded once.
+    ///
+    /// This used to walk the items directory and `GD.Load` every `.tres` on each
+    /// call, and its only caller is `StashValue` — which the base screen asks
+    /// for while it is being drawn. A directory scan per frame is the cheap half
+    /// of the cost: in an *exported* build the repeated load of a resource whose
+    /// script is a C# class races the script bridge and prints a "Handle is not
+    /// initialized" backtrace every frame, which is how a perfectly playable
+    /// screen comes to look like a broken one.
+    ///
+    /// Static because the item table is content, not state — nothing writes to
+    /// it during a run, and a per-instance cache would be rebuilt by every
+    /// screen that happens to construct a catalogue.
+    private static System.Collections.Generic.Dictionary<string, ItemResource>? _items;
+
     private static ItemResource? FindItem(string itemName)
     {
-        foreach (string path in Files("res://resources/items"))
+        if (_items == null)
         {
-            var item = GD.Load<ItemResource>(path);
-            if (item != null && item.ItemName == itemName)
-                return item;
+            _items = new System.Collections.Generic.Dictionary<string, ItemResource>();
+            foreach (string path in Files("res://resources/items"))
+            {
+                var item = GD.Load<ItemResource>(path);
+                if (item != null)
+                    _items[item.ItemName] = item;
+            }
         }
 
-        return null;
+        return _items.TryGetValue(itemName, out ItemResource? found) ? found : null;
     }
 }
