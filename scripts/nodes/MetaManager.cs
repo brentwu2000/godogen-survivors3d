@@ -401,10 +401,22 @@ public partial class MetaManager : Node
         return lost.ToArray();
     }
 
+    /// Everything carried out goes into the stash, and curiosities are noted on
+    /// the way past.
+    ///
+    /// Recorded here rather than at the locker, so selling the stash for credits
+    /// — which is the ordinary thing to do with it — does not forfeit a set the
+    /// player has already earned.
     private void StashAll(Inventory inventory)
     {
         for (int i = 0; i < inventory.EntryCount; i++)
-            Profile.AddToStash(inventory.ItemAt(i).ItemName, inventory.CountAt(i));
+        {
+            string name = inventory.ItemAt(i).ItemName;
+            Profile.AddToStash(name, inventory.CountAt(i));
+            Profile.Record(name);
+        }
+
+        CollectionBook.Claim(Profile);
     }
 
     private void Persist()

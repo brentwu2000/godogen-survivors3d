@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_gx2co"]
+
+[resource]
+script = ExtResource("1_gx2co")
+ItemName = "Dog Tags"
+Rarity = 2
+Value = 170
+Bulk = 2
+Weight = 0.28

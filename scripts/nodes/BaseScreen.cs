@@ -620,6 +620,29 @@ public partial class BaseScreen : Control
         text.AppendLine();
         text.AppendLine($"  practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
                         $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}");
+        text.AppendLine();
+
+        // The sets, with pieces ticked. On the records wall rather than the
+        // locker, because this is the one screen that is about what has been done
+        // rather than about what to buy — and a collection listed next to a price
+        // reads as something to shop for.
+        text.AppendLine("CURIOSITIES");
+
+        for (int set = 0; set < CollectionBook.All.Length; set++)
+        {
+            CollectionBook.Set entry = CollectionBook.All[set];
+            bool claimed = _profile.ClaimedSets.Contains(entry.Name);
+
+            text.AppendLine($"  {entry.Name}  {CollectionBook.Found(_profile, set)}/{entry.Pieces.Length}" +
+                            (claimed ? "  — paid" : $"  — {entry.Bounty} cr"));
+
+            foreach (string piece in entry.Pieces)
+                text.AppendLine($"    [{(_profile.Collected.Contains(piece) ? "x" : " ")}] {piece}");
+        }
+
+        text.AppendLine();
+        text.AppendLine("  selling one does not lose it — the record is kept at the door");
+
         return text.ToString();
     }
 

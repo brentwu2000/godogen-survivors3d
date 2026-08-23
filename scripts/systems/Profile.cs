@@ -35,6 +35,21 @@ public sealed class Profile
     /// it is starting kit, which is the shirt on their back and cannot be taken.
     public Array<string> Owned { get; } = new();
 
+    /// Curiosities that have ever reached the stash, by name.
+    ///
+    /// Written at the door, when the run's takings are handed over — not at the
+    /// locker when they are sold. Selling a curiosity is the ordinary way of
+    /// turning loot into credits and must not quietly forfeit the set; a
+    /// collection that punished that would be a trap dressed as content, and the
+    /// player would find out two hours in.
+    ///
+    /// Names rather than paths, like the stash, so moving a `.tres` does not
+    /// orphan somebody's collection.
+    public Array<string> Collected { get; } = new();
+
+    /// Sets whose bounty has already been paid, so it is paid once.
+    public Array<string> ClaimedSets { get; } = new();
+
     /// Equipped gear by slot: armour, backpack, boots. An empty entry falls back
     /// to the starting piece, so a player can never arrive at a run with no
     /// backpack because the last one was lost.
@@ -391,6 +406,15 @@ public sealed class Profile
         _ => "",
     };
 
+    /// Notes that a curiosity has been seen. Harmless for anything else.
+    public void Record(string itemName)
+    {
+        if (CollectionBook.SetOf(itemName) < 0 || Collected.Contains(itemName))
+            return;
+
+        Collected.Add(itemName);
+    }
+
     public void AddToStash(string itemName, int count)
     {
         if (count <= 0)
@@ -414,6 +438,8 @@ public sealed class Profile
             { "loadout", LoadoutWeapon },
             { "loadout_secondary", LoadoutSecondary },
             { "owned", Owned },
+            { "collected", Collected },
+            { "claimed_sets", ClaimedSets },
             { "gear", new Array<string> { EquippedGear[0] ?? "", EquippedGear[1] ?? "", EquippedGear[2] ?? "" } },
             { "runs_survived", RunsSurvived },
             { "runs_lost", RunsLost },
@@ -498,6 +524,22 @@ public sealed class Profile
         {
             foreach (Variant entry in owned.AsGodotArray())
                 profile.Grant(entry.AsString());
+        }
+
+        if (root.TryGetValue("collected", out Variant collected) && collected.VariantType == Variant.Type.Array)
+        {
+            foreach (Variant entry in collected.AsGodotArray())
+                profile.Record(entry.AsString());
+        }
+
+        if (root.TryGetValue("claimed_sets", out Variant claimed) && claimed.VariantType == Variant.Type.Array)
+        {
+            foreach (Variant entry in claimed.AsGodotArray())
+            {
+                var name = entry.AsString();
+                if (!profile.ClaimedSets.Contains(name))
+                    profile.ClaimedSets.Add(name);
+            }
         }
 
         if (root.TryGetValue("gear", out Variant gear) && gear.VariantType == Variant.Type.Array)

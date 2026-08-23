@@ -155,7 +155,13 @@ public partial class CarryProbe : SceneTree
             if (brick != null)
                 _player.Backpack.TryAdd(brick, 999);
 
-            _crate!.SearchSeconds = 0.05f;
+            // A crate holding far more than the bag can take, so the stages
+            // after this one still have something left to work with. At the
+            // default roll count the contents were barely more than a full
+            // backpack, and two units of room emptied the whole thing the moment
+            // the item table grew — which the next stage's guard caught.
+            _crate!.RollCount = 14;
+            _crate.SearchSeconds = 0.05f;
             _player.GlobalPosition = _crate.GlobalPosition;
             return null;
         }
@@ -241,33 +247,52 @@ public partial class CarryProbe : SceneTree
         // Emptied now, so what came out is what was left.
         int intoBag = _player!.Backpack.TotalValue;
 
-        GD.Print($"  {before} left in the crate, {intoBag} arrived in an empty bag, " +
-                 $"looted={_crate.Looted}");
+        GD.Print($"  {before} was left in the crate; {intoBag} arrived in an empty bag " +
+                 $"and {_crate.RemainingValue} stayed behind");
+
+        // Conservation, not emptying. What came out plus what is still in there
+        // has to equal what was there — which holds whether or not the bag had
+        // room for all of it, and is a stronger statement about re-rolling than
+        // "the crate is now empty" ever was. A re-roll changes the total.
+        int stillThere = _crate.RemainingValue;
+        int accounted = intoBag + stillThere;
 
         bool anything = before > 0;
-        bool same = anything && Mathf.Abs(intoBag - before) <= Mathf.Max(1, before / 20);
+        bool conserved = anything && Mathf.Abs(accounted - before) <= Mathf.Max(1, before / 50);
 
         if (!anything)
             GD.PushError("  the crate was already empty — this stage tested nothing");
-        else if (!same)
-            GD.PushError($"  {intoBag} came out of a crate holding {before} — was it re-rolled?");
+        else if (!conserved)
+        {
+            GD.PushError($"  {intoBag} came out and {stillThere} remains, of a crate that held " +
+                         $"{before} — was it re-rolled?");
+        }
 
-        bool finished = _crate.Looted;
-        if (!finished)
-            GD.PushError("  the crate is not finished after emptying into a bag with room for everything");
-
-        return same && finished;
+        return conserved;
     }
 
     private int _leftInCrate;
 
     private bool? StageCountedOnce(int tick)
     {
-        GD.Print($"  the crate paid out {_emptiedSignals} times and reported finished {_finishedSignals} time(s)");
+        // Drain it. The crate holds more than a backpack, so finishing it takes
+        // several trips — which is the behaviour under test, and means the
+        // "finished" signal cannot be observed without actually doing it.
+        if (!_crate!.Looted && tick < 400)
+        {
+            _player!.Backpack.Clear();
+            return null;
+        }
+
+        GD.Print($"  emptied over several trips: {_emptiedSignals} payouts, " +
+                 $"finished {_finishedSignals} time(s), crate looted={_crate.Looted}");
 
         // Several payouts, one completion. The run log values every visit and
         // counts the crate once, and with a single-argument signal it could do
         // only one of the two.
+        if (!_crate.Looted)
+            GD.PushError("  the crate never finished — the drain loop ran out of ticks");
+
         bool paidSeveralTimes = _emptiedSignals >= 2;
         bool finishedOnce = _finishedSignals == 1;
 
@@ -276,6 +301,6 @@ public partial class CarryProbe : SceneTree
         if (!finishedOnce)
             GD.PushError($"  reported finished {_finishedSignals} times, expected exactly one");
 
-        return paidSeveralTimes && finishedOnce;
+        return paidSeveralTimes && finishedOnce && _crate.Looted;
     }
 }

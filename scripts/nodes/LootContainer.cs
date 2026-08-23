@@ -13,6 +13,19 @@ public partial class LootContainer : Node3D
     /// far out the crate sits, so walking deeper is worth the walk.
     [Export] public float RarityBias { get; set; } = 1.0f;
 
+    /// Whether this container can hold curiosities.
+    ///
+    /// True for crates the level placed, false for anything dropped during a run.
+    /// A cache is a *payout* — it owes ammunition and consumables, because the
+    /// player earned it by fighting and is still fighting. The first zone cache
+    /// after the curiosities shipped handed over four collectibles and three
+    /// supplies, which is a reward that makes the next five minutes harder.
+    ///
+    /// Set-piece items are also the wrong shape for a reward: at two bulk each
+    /// they fill a backpack the player needs for the rest of the run, and the
+    /// bounty they lead to arrives at the base rather than now.
+    [Export] public bool Curiosities { get; set; } = true;
+
     /// Progress resets rather than pauses when the player steps away, so a
     /// contested search cannot be done in safe nibbles.
     [Export] public bool ResetOnLeave { get; set; } = true;
@@ -57,9 +70,7 @@ public partial class LootContainer : Node3D
 
         // Seeded from the spawn position so each crate rolls differently but the
         // same crate rolls the same way on a replay.
-        _rng = (ulong)(Position.X * 7919.0f) ^ ((ulong)(Position.Z * 104729.0f) << 21) ^ 0x2545F4914F6CDD1DUL;
-        if (_rng == 0)
-            _rng = 0x9E3779B97F4A7C15UL;
+        Seed();
 
         LoadTable();
     }
@@ -109,13 +120,25 @@ public partial class LootContainer : Node3D
     {
         _table = SharedTable();
 
+        // Reset, not accumulated. `_weightTotal` is a running sum below, and
+        // this method is called from `_Ready` and now also on demand — called
+        // twice it would double every weight total and halve the effective
+        // rarity bias, silently.
+        _weightTotal = 0.0f;
+
         // Biased weights are computed once here rather than per roll: the bias
         // never changes after the level places the crate, and PickWeighted runs
         // three times for every search.
         _weights = new float[_table.Length];
         for (int i = 0; i < _table.Length; i++)
         {
-            _weights[i] = _table[i].Weight * Mathf.Pow(RarityBias, (int)_table[i].Rarity);
+            // Weight zero rather than a filtered table, so the shared table stays
+            // shared. Building a second array per crate would undo the caching
+            // this method exists to do.
+            _weights[i] = Curiosities || CollectionBook.SetOf(_table[i].ItemName) < 0
+                ? _table[i].Weight * Mathf.Pow(RarityBias, (int)_table[i].Rarity)
+                : 0.0f;
+
             _weightTotal += _weights[i];
         }
     }
@@ -195,7 +218,16 @@ public partial class LootContainer : Node3D
     /// to pick up. A stage that read the rarity bias instead would be reading the
     /// input to the question — which is exactly how a cache named "supply" shipped
     /// full of jewellery.
-    public void RollIntoForTesting(Inventory bag) => Transfer(RollAll(), bag);
+    public void RollIntoForTesting(Inventory bag)
+    {
+        // Loads its own table. A container built with `new` never enters the
+        // tree, so `_Ready` never runs and the table is empty — every roll
+        // produces nothing, which reads as "this crate contains no curiosities"
+        // rather than as "this crate contains nothing at all". The stage that
+        // caught it was the one asserting an *ordinary* crate still produces them.
+        LoadTable();
+        Transfer(RollAll(), bag);
+    }
 
     /// Everything this crate holds, in an inventory of its own.
     ///
@@ -231,8 +263,30 @@ public partial class LootContainer : Node3D
         return _table[^1];
     }
 
+    /// Deterministic from where the crate stands, so a seed reproduces a run.
+    ///
+    /// Two crates at the same position would roll identically, which never
+    /// happens on a generated map and does happen to anything built by hand at
+    /// the origin — hence the fallback.
+    private void Seed()
+    {
+        _rng = (ulong)(Position.X * 7919.0f) ^ ((ulong)(Position.Z * 104729.0f) << 21)
+               ^ 0x2545F4914F6CDD1DUL;
+
+        if (_rng == 0)
+            _rng = 0x9E3779B97F4A7C15UL;
+    }
+
     private float NextFloat()
     {
+        // Seeded here as well as in _Ready, because zero is a fixed point of
+        // xorshift: the state stays zero forever and every draw returns exactly
+        // 0.0, so the weighted pick takes the first entry every time. A container
+        // built with `new` never runs _Ready, and forty rolls produced forty
+        // adrenaline shots — a table that looked empty of everything else.
+        if (_rng == 0)
+            Seed();
+
         _rng ^= _rng << 13;
         _rng ^= _rng >> 7;
         _rng ^= _rng << 17;

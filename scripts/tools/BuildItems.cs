@@ -48,6 +48,22 @@ public partial class BuildItems : SceneTree
 
             new() { ItemName = "Circuit Board", Rarity = ItemRarity.Uncommon, Value = 120, Bulk = 1, Weight = 1.2f },
             new() { ItemName = "Antiviral Serum", Rarity = ItemRarity.Rare, Value = 440, Bulk = 2, Weight = 0.35f },
+
+            // Curiosities. Worth credits like anything else, and also one of
+            // three — see `CollectionBook`. Two bulk, the size of a medkit, on
+            // purpose: a set piece that cost nothing to carry would never be a
+            // decision, and the whole of B6 exists to make bulk one.
+            //
+            // Weights between 0.20 and 0.30, so a piece is rarer than the serum
+            // and a set takes several runs to finish. Anything commoner and the
+            // bounty is an income stream rather than a thing to recognise.
+            new() { ItemName = "Wedding Ring", Rarity = ItemRarity.Rare, Value = 150, Bulk = 2, Weight = 0.30f },
+            new() { ItemName = "Crayon Drawing", Rarity = ItemRarity.Rare, Value = 130, Bulk = 2, Weight = 0.30f },
+            new() { ItemName = "Dog Tags", Rarity = ItemRarity.Rare, Value = 170, Bulk = 2, Weight = 0.28f },
+
+            new() { ItemName = "Fuse Coupling", Rarity = ItemRarity.Rare, Value = 280, Bulk = 2, Weight = 0.24f },
+            new() { ItemName = "Turbine Blade", Rarity = ItemRarity.Rare, Value = 320, Bulk = 2, Weight = 0.20f },
+            new() { ItemName = "Control Rod", Rarity = ItemRarity.Rare, Value = 300, Bulk = 2, Weight = 0.22f },
         };
 
         foreach (ItemResource item in items)

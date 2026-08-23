@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ItemResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/ItemResource.cs" id="1_201g8"]
+
+[resource]
+script = ExtResource("1_201g8")
+ItemName = "Control Rod"
+Rarity = 2
+Value = 300
+Bulk = 2
+Weight = 0.22

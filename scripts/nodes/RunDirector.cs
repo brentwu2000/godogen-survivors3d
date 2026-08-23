@@ -329,6 +329,12 @@ public partial class RunDirector : Node3D
             RarityBias = bias,
             RollCount = rolls,
             SearchSeconds = seconds,
+
+            // A payout owes ammunition, not collectibles. See
+            // `LootContainer.Curiosities`: the first zone cache after the sets
+            // shipped paid four set pieces and three supplies, which is a reward
+            // that makes the next five minutes harder.
+            Curiosities = false,
         };
 
         cache.AddChild(new MeshInstance3D
