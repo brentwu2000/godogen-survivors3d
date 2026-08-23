@@ -125,6 +125,11 @@ public partial class SoundDirector : Node
 
     public override void _Ready()
     {
+        // Before a single voice exists. The mix has held its headroom by
+        // arithmetic — see `AudioBus`, which is where the one effect on the
+        // master bus lives and why it is installed from code.
+        AudioBus.Install();
+
         // Negative infinity rather than zero as the never-played marker. Zero is
         // a real value of the clock — the first second of a run — and a sentinel
         // that collides with live data gates nothing during exactly the window

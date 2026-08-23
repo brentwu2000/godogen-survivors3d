@@ -44,6 +44,7 @@ public partial class AudioProbe : SceneTree
             case 2: return RunStage(StageOneShotsEndClean, "one-shots end on zero, not on a step");
             case 3: return RunStage(StageAmbienceLoops, "the horde layer loops without a seam");
             case 4: return RunStage(StageGateHoldsRepeats, "one frame of kills is one death sound");
+            case 5: return RunStage(StageMasterBusIsLimited, "the master bus has one limiter, and the mix needs it");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -228,6 +229,101 @@ public partial class AudioProbe : SceneTree
             samples[i] = (short)(data[i * 2] | (data[i * 2 + 1] << 8)) / 32768.0f;
 
         return samples;
+    }
+
+    /// The music layer names and their per-layer ceilings, mirrored from
+    /// `MusicDirector`.
+    ///
+    /// Copied rather than read off a live node, and that is a deliberate
+    /// exception to how the rest of this file works. The point of the stage
+    /// below is to compute what the mix *can* sum to from the numbers the mix is
+    /// built out of; reading them back off an instance configured from the same
+    /// numbers would be the arithmetic checking itself.
+    private static readonly string[] MusicClips = { "music_bed", "music_pulse", "music_tension", "music_boss" };
+    private static readonly float[] MusicGain = { 1.0f, 0.85f, 0.7f, 0.95f };
+
+    private const float MusicMasterDb = -14.0f;
+    private const float SoundMasterDb = -9.0f;
+
+    /// The loudest per-sound trim any call site passes. `SoundDirector` plays at
+    /// its master plus this; two decibels is the level-up chime.
+    private const float LoudestSoundTrimDb = 2.0f;
+
+    /// Voices in the SFX ring, from `SoundDirector`.
+    private const int Voices = 14;
+
+    /// The master bus is protected, and the arithmetic says why.
+    ///
+    /// The mix has held its headroom by arithmetic since it was built — the
+    /// directors attenuate by −9 and −14 dB. That covered the music, which sums
+    /// to 0.41 and comfortably fits. It never covered the fourteen-voice SFX
+    /// ring, which at the loudest clip and the loudest trim sums to 5.63.
+    ///
+    /// A computation rather than a peak meter, and that is the point rather than
+    /// a shortcut: the headless driver processes no audio, so
+    /// `GetBusPeakVolume*` reads silence forever and a probe built on it would
+    /// pass against a bus with no limiter and no sound in it. What can be checked
+    /// without a speaker is the configuration and the sum.
+    private bool? StageMasterBusIsLimited(int tick)
+    {
+        AudioBus.Install();
+
+        // Twice, because `AudioServer` is global and every scene builds its own
+        // sound director. Ten limiters in series is not ten times the protection.
+        AudioBus.Install();
+
+        int limiters = 0;
+        for (int i = 0; i < AudioServer.GetBusEffectCount(0); i++)
+        {
+            if (AudioServer.GetBusEffect(0, i) is AudioEffectHardLimiter)
+                limiters++;
+        }
+
+        float music = 0.0f;
+        bool clipsLoaded = MusicClips.Length == MusicGain.Length;
+
+        for (int i = 0; i < MusicClips.Length; i++)
+        {
+            AudioStreamWav? clip = Load(MusicClips[i]);
+            if (clip == null)
+            {
+                GD.PushError($"  {MusicClips[i]} did not load");
+                clipsLoaded = false;
+                continue;
+            }
+
+            music += Peak(clip) * Mathf.DbToLinear(MusicMasterDb + Mathf.LinearToDb(MusicGain[i]));
+        }
+
+        // The whole SFX ring firing at once on the loudest clip at the loudest
+        // trim. A worst case rather than a likely one — the repeat gate stops
+        // most of it — but a worst case is exactly what a ceiling is for.
+        float loudestClip = 0.0f;
+        foreach (Sfx id in System.Enum.GetValues<Sfx>())
+            loudestClip = Mathf.Max(loudestClip, Peak(Load(Name(id))));
+
+        float effects = Voices * loudestClip * Mathf.DbToLinear(SoundMasterDb + LoudestSoundTrimDb);
+        float total = music + effects;
+
+        GD.Print($"  worst case: {MusicClips.Length} music layers sum to {music:F2}, " +
+                 $"{Voices} voices at {loudestClip:F2} sum to {effects:F2}, total {total:F2}");
+        GD.Print($"  master bus carries {limiters} hard limiter(s) after two installs");
+
+        bool limited = limiters == 1;
+        if (!limited)
+            GD.PushError($"  the master bus has {limiters} limiters — expected exactly one");
+
+        // The music alone must still fit without help. A limiter doing work
+        // during ordinary play is a compressor nobody tuned, and four layers
+        // together is ordinary play.
+        bool musicFits = music < 1.0f;
+        if (!musicFits)
+            GD.PushError($"  the music alone peaks at {music:F2} — the limiter would be riding it");
+
+        if (total <= 1.0f)
+            GD.Print("  note: the worst case fits under unity, so the limiter is pure insurance");
+
+        return limited && musicFits && clipsLoaded;
     }
 
     private static float Peak(AudioStreamWav? clip)
