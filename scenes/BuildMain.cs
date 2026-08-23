@@ -129,6 +129,11 @@ public partial class BuildMain : SceneTree
         // blades would appear to hang motionless relative to whatever the player
         // was looking at. The ring belongs to the world; it follows the player's
         // position and ignores their rotation.
+        // Scenery, and it only reads the player's position — see AirDust, which
+        // deliberately ignores their rotation.
+        var dust = new Node3D { Name = "AirDust" };
+        root.AddChild(SceneBuildUtil.AttachScriptToRoot(dust, "res://scripts/nodes/AirDust.cs"));
+
         var kit = new Node3D { Name = "RunKit" };
         root.AddChild(SceneBuildUtil.AttachScriptToRoot(kit, "res://scripts/nodes/RunKit.cs"));
 
