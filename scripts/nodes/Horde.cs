@@ -13,6 +13,18 @@ public partial class Horde : Node3D
     /// World height of a variant at scale 1. Each variant multiplies it.
     [Export] public float SpriteHeight { get; set; } = 2.0f;
 
+    /// Solid bodies instead of billboard sprites.
+    ///
+    /// True is the game. False is the sprite path this project used for
+    /// twenty-nine phases, kept working rather than deleted — it is the only way
+    /// to answer "is this the bodies or is this the thing I just changed" when
+    /// something in the horde looks wrong, and a path that has rotted in a branch
+    /// nobody runs cannot answer anything.
+    ///
+    /// The sprites are also still the cheaper renderer by a wide margin, so this
+    /// is the first thing to reach for if a machine cannot hold frame rate.
+    [Export] public bool SolidBodies { get; set; } = true;
+
     /// Enemies closer than this to the player get separation and a full-rate
     /// update. Beyond it they only follow the field, on a strided schedule.
     [Export] public float ActiveRadius { get; set; } = 15.0f;
@@ -104,6 +116,7 @@ public partial class Horde : Node3D
     private SpatialGrid _grid = null!;
     private FlowField _field = null!;
     private HordeRenderer _renderer = null!;
+    private BodyRenderer? _bodies;
     private HordeRenderer? _shotRenderer;
     private Node3D? _player;
     private int[] _neighbours = null!;
@@ -152,6 +165,36 @@ public partial class Horde : Node3D
         _renderer = new HordeRenderer(texture, shader, SpriteHeight, Capacity, ArenaExtent,
                                       maxScale: maxScale, useColours: true);
         AddChild(_renderer.Node);
+
+        if (SolidBodies)
+        {
+            var bodyShader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
+            if (bodyShader == null)
+            {
+                // Falling back rather than failing. A missing shader is a build
+                // problem, and a horde that is invisible is much harder to
+                // diagnose than one that is drawn the old way with a warning.
+                GD.PushWarning("Horde: body.gdshader missing — falling back to sprites");
+                SolidBodies = false;
+            }
+            else
+            {
+                float tallest = 0.0f;
+                foreach (EnemyTypeResource type in Types)
+                    tallest = Mathf.Max(tallest, type.DesignHeightMeters * maxScale);
+
+                // Capacity per variant rather than divided among them. A horde
+                // that happens to be all walkers is an ordinary early run, not an
+                // edge case, and a shared budget would silently stop drawing the
+                // overflow — enemies that are there, hurt you, and cannot be seen.
+                _bodies = new BodyRenderer(bodyShader, Types, Capacity, ArenaExtent, tallest);
+                AddChild(_bodies.Node);
+            }
+
+            // The billboards stay built either way, so the toggle is a property
+            // rather than a rebuild — but only one of them draws.
+            _renderer.Node.Visible = !SolidBodies;
+        }
 
         Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
         if (shotTexture != null)
@@ -477,7 +520,7 @@ public partial class Horde : Node3D
         {
             StepEnemyShots(step);
             StepHazards(step);
-            _renderer.Sync(Pool, Types);
+            Draw(step);
             return;
         }
 
@@ -580,8 +623,30 @@ public partial class Horde : Node3D
         StepHazards(step);
 
         _tick++;
+        Draw(step);
+    }
+
+    /// Hands the frame to whichever renderer is switched on.
+    ///
+    /// Both are kept fed rather than one being torn down, because the sprite path
+    /// is the fallback for a missing shader and the control for a visual bug —
+    /// and a fallback that has not run since startup is not a fallback.
+    private void Draw(float step)
+    {
+        if (_bodies != null)
+        {
+            // Advance before sync, and exactly once per physics tick. The stride
+            // is the only part of a body that is a function of time; syncing
+            // twice costs work, advancing twice doubles every gait.
+            BodyRenderer.Advance(Pool, step);
+            _bodies.Sync(Pool, Types);
+        }
+
         _renderer.Sync(Pool, Types);
     }
+
+    /// The solid-body renderer, or null on the sprite path. Only a probe asks.
+    public BodyRenderer? Bodies => _bodies;
 
     /// Ranged behaviour: hold at standoff and shoot. Returns true when the
     /// enemy should stop closing.

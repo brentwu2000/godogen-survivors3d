@@ -12,9 +12,15 @@ Read this before starting work. Update it as phases land.
 | :--- | :--- | :--- |
 | ✅ B1 | Export that reads the build back | `2245607` |
 | ✅ B13 | Limiter on the master bus | `d8fd10f` |
-| ✅ A1 A2 B8 | Turnable third-person camera, turn-and-advance, `BotDrive` | this one |
+| ✅ A1 A2 B8 | Turnable third-person camera, turn-and-advance, `BotDrive` | `deac551` |
+| ✅ — | Two inherited probe failures: both were one point of gear armour | `9f4b997` |
+| ✅ A3a | `MeshBuilder` gains `Tube`, `Ball` and the rig channels | `f2aad1b` |
+| ✅ A3b | `BodyMeshLibrary`, `BodyRenderer`, `SoloBody`, `body.gdshader` | this one |
 
-**Next: A3** (solid low-poly bodies), then A5 A6 A8, then B2 onward.
+**Next: A4** (blob shadows for the sprite path), then A5 A6 A8, then B2 onward.
+
+A4 matters less than it did — shadows were the billboard path'"'"'s only ground contact, and solid
+bodies cast real ones. It is now a fallback-path fix rather than a visual one.
 
 A1, A2 and B8 had to land together. A2 is what breaks every automated driver and B8 is the repair,
 so shipping either alone leaves the repository with no working balance signal — which is the state

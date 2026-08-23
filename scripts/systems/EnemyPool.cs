@@ -22,6 +22,27 @@ public sealed class EnemyPool
     /// Per-instance animation offset, so a crowd does not bob in lockstep.
     public readonly float[] Phase;
 
+    /// Where in its stride this body is, in turns, wrapped to [0, 1).
+    ///
+    /// Advanced by distance walked, and stored rather than computed — which is
+    /// the whole point. Deriving a stride phase from world position is the
+    /// obvious shortcut and it is wrong in three ways at once: a crowd standing
+    /// on the same spot stands in identical poses, a body knocked backwards walks
+    /// backwards, and anything held still by contact freezes mid-step with one
+    /// foot in the air instead of standing.
+    ///
+    /// Seeded from `Phase` on spawn so two enemies that walk the same distance
+    /// are still out of step with each other.
+    public readonly float[] Stride;
+
+    /// Which way the body is facing, in radians about +Y.
+    ///
+    /// Kept here rather than recomputed from velocity every frame because
+    /// velocity is zeroed on contact — a body that reached the player would
+    /// otherwise snap to face north at the moment it started biting. It only
+    /// turns while there is a direction to turn toward, and holds it otherwise.
+    public readonly float[] Yaw;
+
     /// Index into the horde's variant table. A byte rather than a reference:
     /// this array is walked every tick, and the whole point of the layout is
     /// that a pass over it stays inside cache.
@@ -61,6 +82,8 @@ public sealed class EnemyPool
         Velocity = new Vector2[capacity];
         Health = new float[capacity];
         Phase = new float[capacity];
+        Stride = new float[capacity];
+        Yaw = new float[capacity];
         Type = new byte[capacity];
         AttackCooldown = new float[capacity];
         HitFlash = new float[capacity];
@@ -79,6 +102,8 @@ public sealed class EnemyPool
         Velocity[i] = Vector2.Zero;
         Health[i] = health;
         Phase[i] = phase;
+        Stride[i] = phase;
+        Yaw[i] = 0.0f;
         Type[i] = type;
         AttackCooldown[i] = 0.0f;
         HitFlash[i] = 0.0f;
@@ -106,6 +131,8 @@ public sealed class EnemyPool
             Velocity[index] = Velocity[last];
             Health[index] = Health[last];
             Phase[index] = Phase[last];
+            Stride[index] = Stride[last];
+            Yaw[index] = Yaw[last];
             Type[index] = Type[last];
             AttackCooldown[index] = AttackCooldown[last];
             HitFlash[index] = HitFlash[last];

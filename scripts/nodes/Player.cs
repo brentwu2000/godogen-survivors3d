@@ -13,6 +13,18 @@ public partial class Player : CharacterBody3D
     /// runs cannot answer anything.
     [Export] public bool TurnToSteer { get; set; } = true;
 
+    /// A solid body instead of a billboard sprite.
+    ///
+    /// True is the game. The sprite path stays working for the same reason
+    /// `Horde.SolidBodies` keeps its own — and because a player left as a
+    /// billboard among solid enemies is the fastest way to see whether a problem
+    /// is in the body pipeline or somewhere else.
+    [Export] public bool SolidBody { get; set; } = true;
+
+    /// How tall the player draws. Slightly over the walker's two metres, because
+    /// the one body that must never be mistaken for the horde is this one.
+    [Export] public float BodyHeight { get; set; } = 2.2f;
+
     /// Degrees per second `[A]`/`[D]` turn the view. Read off the rig so the
     /// movement keys and the view keys cannot end up at different rates.
     private float TurnRateDegrees => _rig?.TurnRateDegrees ?? 150.0f;
@@ -77,6 +89,7 @@ public partial class Player : CharacterBody3D
     private IInputSource _input = null!;
     private Sprite3D _sprite = null!;
     private CameraRig? _rig;
+    private SoloBody? _body;
     private WeaponHandler? _weapons;
     private Horde? _horde;
 
@@ -96,6 +109,43 @@ public partial class Player : CharacterBody3D
         _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
         _rig = GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
+
+        if (SolidBody)
+        {
+            var bodyShader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
+            if (bodyShader == null)
+            {
+                // Falling back rather than failing, for the same reason the horde
+                // does: a missing shader is a build problem, and an invisible
+                // player is much harder to diagnose than a sprite with a warning.
+                GD.PushWarning("Player: body.gdshader missing — staying a sprite");
+                SolidBody = false;
+            }
+            else
+            {
+                _body = new SoloBody(bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight),
+                                     _horde?.ArenaExtent ?? 60.0f);
+
+                // Added to the parent, not to the player. The transform inside a
+                // MultiMesh is world space, so a node parented to a moving player
+                // would apply the movement twice — the body would run away at
+                // double speed, which looks like a movement bug rather than a
+                // parenting one.
+                //
+                // Deferred, because the parent is still setting up its children
+                // while this _Ready runs and a direct AddChild is refused:
+                //
+                //   Parent node is busy setting up children, `add_child()` failed.
+                //
+                // Which is printed, and is not an exception. The player carries on
+                // with a body that exists, updates every frame, and is not in the
+                // tree — so it draws nothing at all, and the C# holding it looks
+                // entirely correct.
+                GetParent()?.CallDeferred(Node.MethodName.AddChild, _body.Node);
+            }
+
+            _sprite.Visible = !SolidBody;
+        }
         Health = MaxHealth;
         Backpack = new Inventory(CarryCapacity);
         SafeBox = new Inventory(SafeBoxCapacity);
@@ -399,6 +449,10 @@ public partial class Player : CharacterBody3D
         Health = Mathf.Max(0.0f, Health - amount);
         _damageSincePoll += amount;
 
+        // Six times the fraction of maximum health this took, which is what
+        // makes a hit look like a hit and a rate look like a rate. See HurtFlash.
+        HurtFlash = Mathf.Min(1.0f, HurtFlash + amount / Mathf.Max(1.0f, MaxHealth) * 6.0f);
+
         if (Health <= 0.0f)
             EmitSignal(SignalName.Died);
     }
@@ -430,6 +484,7 @@ public partial class Player : CharacterBody3D
 
         MoveAndSlide();
         UpdateFacing();
+        UpdateBody((float)delta);
 
         if (_input.SecurePressed)
             TrySecureBest();
@@ -478,6 +533,43 @@ public partial class Player : CharacterBody3D
         // is screen-space and points down.
         return _rig.Forward() * -stick.Y;
     }
+
+    /// Places the body and walks its legs.
+    ///
+    /// The facing is the view rather than the direction of travel, which is the
+    /// point of turn-and-advance: backing away from something while still looking
+    /// at it is a thing the player does, and the body has to do it too. The gait
+    /// comes from actual speed, so the legs stop when the player does.
+    private void UpdateBody(float delta)
+    {
+        if (_body == null)
+            return;
+
+        var flatVelocity = new Vector2(Velocity.X, Velocity.Z);
+        float yaw = Mathf.Atan2(-Facing.X, -Facing.Y);
+
+        _body.Update(GlobalPosition, yaw, flatVelocity.Length(), delta, HurtFlash);
+        HurtFlash = Mathf.Max(0.0f, HurtFlash - FlashFade * delta);
+    }
+
+    /// Lights the body white for a moment after taking a hit.
+    ///
+    /// Raised in proportion to the fraction of maximum health a single
+    /// application took, and decayed on a timer — which is what separates a hit
+    /// from a rate. Contact damage arrives as a per-tick slice of a rate: at five
+    /// damage a second against a hundred maximum, each tick adds half a
+    /// percent of a flash while the decay removes six percent, so standing in a
+    /// crowd glows faintly and a shotgun to the chest flashes white. A flash
+    /// triggered by "did health drop" would be on permanently in a horde, which
+    /// stops being feedback and becomes the way the game looks.
+    public float HurtFlash { get; private set; }
+
+    /// Fractions of a second for a full flash to fade. Short enough that two
+    /// hits read as two.
+    private const float FlashFade = 4.0f;
+
+    /// The solid body, or null on the sprite path. Only a probe asks.
+    public SoloBody? Body => _body;
 
     /// One sprite direction, mirrored at runtime. Generators cannot reliably draw
     /// a specific facing (SKILL.md:109), so paying for a mirrored set buys
