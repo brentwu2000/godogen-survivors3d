@@ -16,18 +16,28 @@ Read this before starting work. Update it as phases land.
 | ✅ — | Two inherited probe failures: both were one point of gear armour | `9f4b997` |
 | ✅ A3a | `MeshBuilder` gains `Tube`, `Ball` and the rig channels | `f2aad1b` |
 | ✅ A3b | `BodyMeshLibrary`, `BodyRenderer`, `SoloBody`, `body.gdshader` | `4cbddf0` |
-| ✅ A8 | Sky, depth fog, and arms outside the torso | this one |
+| ✅ A8 | Sky, depth fog, and arms outside the torso | `3cc1a80` |
 
 **Next: A5** (danger zones), then A6, A9/A10, A7, A4.
 
 Reordered after looking at a render. A4 (blob shadows) matters least now — shadows were the billboard
-path'"'"'s only ground contact and solid bodies cast real ones, so it is a fallback-path fix rather than a
+path's only ground contact and solid bodies cast real ones, so it is a fallback-path fix rather than a
 visual one. What the frame actually lacks is *structure*: the arena is a large flat expanse with
 scattered cover. A5 gives it places that mean something.
 
-**Render the game and look at it.** Two defects in A3b were invisible to a green 27-probe sweep and
-obvious in one screenshot: arms buried inside the torso, and a hard black band where the sky should
-be.  — no .
+**Render the game and look at it after any visual phase.** Two defects in A3b were invisible to a
+green 27-probe sweep and obvious in one screenshot: arms buried inside the torso, and a hard black
+band where the sky should be.
+
+```
+godot --script test/Screenshot.cs      # no --headless; it needs a display
+```
+
+**Never put a shell metacharacter in a `python -c "..."` string.** Writing this section cost two
+tries: backticks inside a double-quoted bash string are command substitution, so the line naming the
+command above was replaced by the output of running it, and a `'\"'\"'` escape leaked in as literal
+text. Both landed in a commit. Write a `.py` file to the scratchpad and run that — the same rule
+already in force for PowerShell, for a different reason.
 
 A1, A2 and B8 had to land together. A2 is what breaks every automated driver and B8 is the repair,
 so shipping either alone leaves the repository with no working balance signal — which is the state
