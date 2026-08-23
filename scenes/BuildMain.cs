@@ -174,13 +174,21 @@ public partial class BuildMain : SceneTree
     {
         var environment = new Godot.Environment
         {
-            // A colour rather than a sky. The camera is orthographic and tilted
-            // down 52°, so the horizon is never in frame — a sky would be paying
-            // for something nobody sees. What is needed from it is the ambient
-            // term, which is set directly.
-            BackgroundMode = Godot.Environment.BGMode.Color,
-            BackgroundColor = new Color(0.09f, 0.10f, 0.12f),
+            // A sky, because there is a horizon now.
+            //
+            // This was a flat colour, and the comment justifying it said "the
+            // camera is orthographic and tilted down 52°, so the horizon is never
+            // in frame". That was true and stopped being true the moment the
+            // camera became perspective at 26° — and the cost was not subtle. The
+            // top third of every frame was pure black, with the ground running
+            // into it along a hard line. It read as the level having an edge.
+            BackgroundMode = Godot.Environment.BGMode.Sky,
+            Sky = BuildSky(),
 
+            // Ambient stays a colour rather than being taken from the sky. The
+            // value below was tuned by eye against this geometry, and handing the
+            // job to a sky that was chosen for how it looks on the horizon would
+            // re-light the entire game as a side effect of a background change.
             AmbientLightSource = Godot.Environment.AmbientSource.Color,
 
             // Cool, because the sun is warm. Shadowed faces picking up sky colour
@@ -200,10 +208,98 @@ public partial class BuildMain : SceneTree
             AdjustmentContrast = 1.08f,
             AdjustmentSaturation = 1.12f,
             AdjustmentBrightness = 1.0f,
+
+            // Distance goes dark, and this is the whole reason the game has a
+            // horizon worth looking at.
+            //
+            // Without it a perspective camera shows every enemy in the arena at
+            // once, at full contrast, forty metres out — so nothing ever
+            // *arrives*. They wink into existence at the spawn ring, in plain
+            // sight, and the horde stops being a thing that closes in and becomes
+            // a thing that is already there.
+            FogEnabled = true,
+            FogMode = Godot.Environment.FogModeEnum.Depth,
+
+            // Near-black rather than atmospheric grey. The game is set at dusk
+            // and the point is losing sight of things, not haze.
+            FogLightColor = new Color(0.05f, 0.05f, 0.07f),
+            FogLightEnergy = 1.0f,
+
+            // **One, not zero.** Depth mode computes its falloff from the range
+            // below and then still multiplies by this — a density of zero is fog
+            // that is fully configured, reports no error, and contributes exactly
+            // nothing. Every number here would look right in the inspector.
+            FogDensity = 1.0f,
+
+            // The sky takes the fog colour too. Without this the ground fades to
+            // near-black and meets a sky that did not, and the horizon becomes a
+            // hard bright line — worse than the black void it replaced, because
+            // it looks deliberate.
+            FogSkyAffect = 1.0f,
+
+            // No sun scattering. It would put a bright bloom in the fog on
+            // whichever side the sun is, which is a lovely effect in a landscape
+            // and, in a game about not seeing what is coming, a light source
+            // pointing at the thing you are trying to hide.
+            FogSunScatter = 0.0f,
+
+            FogDepthBegin = FogBeginMetres,
+            FogDepthEnd = FogEndMetres,
+            FogDepthCurve = FogCurve,
         };
 
         return new WorldEnvironment { Name = "Environment", Environment = environment };
     }
+
+    /// Where the fog starts, in metres. Comfortably past the crowd immediately
+    /// around the player — fog that begins where the fighting is would grey out
+    /// the enemy actually biting you.
+    private const float FogBeginMetres = 10.0f;
+
+    /// Where the fog is total.
+    ///
+    /// Thirty-five, and the number matters. The horde spawns on a ring 12 to 40 m
+    /// out, so at 35 the far half of that ring is inside the fog and enemies walk
+    /// out of the dark instead of appearing in it. Set it to 42 — past the whole
+    /// ring — and the fog is technically working and does nothing at all: it
+    /// reaches full only where nothing is ever spawned.
+    private const float FogEndMetres = 35.0f;
+
+    /// Above 1, so the fog holds off and then closes quickly. A linear ramp
+    /// starts dimming things at ten metres, which reads as the game being murky
+    /// rather than as distance being dangerous.
+    private const float FogCurve = 1.6f;
+
+    /// A dusk sky that agrees with the fog at the horizon.
+    ///
+    /// Every colour here is dark. A sky bright enough to be pretty would put the
+    /// brightest thing in the frame directly behind whatever is walking toward
+    /// the player, and silhouettes are the only channel left at that distance.
+    private static Sky BuildSky() => new()
+    {
+        SkyMaterial = new ProceduralSkyMaterial
+        {
+            SkyTopColor = new Color(0.07f, 0.09f, 0.14f),
+
+            // Meets the fog colour. `FogSkyAffect` above pushes the sky toward
+            // the fog near the horizon, and starting close to it means the two
+            // blend rather than crossfade through a third colour.
+            SkyHorizonColor = new Color(0.11f, 0.11f, 0.13f),
+            SkyCurve = 0.15f,
+            SkyEnergyMultiplier = 1.0f,
+
+            // The ground half of the sky is only ever seen past the edge of the
+            // terrain, so it is the fog colour and nothing else.
+            GroundBottomColor = new Color(0.05f, 0.05f, 0.07f),
+            GroundHorizonColor = new Color(0.09f, 0.09f, 0.11f),
+            GroundCurve = 0.02f,
+
+            // No sun disc. There is a directional light for shape, but a visible
+            // sun would date the scene to an hour the rest of the palette denies.
+            SunAngleMax = 0.0f,
+            SunCurve = 0.0f,
+        },
+    };
 
     private static Node3D BuildCameraRig()
     {

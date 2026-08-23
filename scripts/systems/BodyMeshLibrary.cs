@@ -27,6 +27,9 @@ public static class BodyMeshLibrary
     /// would be six lines of constructor around one call.
     public readonly record struct Build(
         float Height,
+
+        /// The chest, across. The arms hang outside this, so the body is wider
+        /// than the number by two arm radii.
         float ShoulderWidth,
         float LimbRadius,
         float TorsoDepth,
@@ -210,14 +213,22 @@ public static class BodyMeshLibrary
         // walk reading as a march. The pivot is the shoulder, after the lean has
         // moved it — an arm swinging about where the shoulder would have been
         // upright detaches from a leaning body at the top of every stride.
+        float armRadius = spec.LimbRadius * 0.9f;
+
         for (int side = 0; side < 2; side++)
         {
-            float x = side == 0 ? -half : half;
+            // Clear of the torso, not flush with it. At exactly `half` the arm
+            // centre sits on the chest's own surface and half the tube is buried
+            // inside it — which does not look like a bug in a screenshot, it looks
+            // like a body with no arms. The silhouette is the only thing carrying
+            // information at the distance most of the horde is seen from, and an
+            // arm that is not in the silhouette may as well not have been built.
+            float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius);
             Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
 
             mesh.SetRig(spec.ArmSwing, shoulder.Y, side * 0.5f + 0.5f, spec.Bob);
             mesh.Tube(shoulder, shoulder + new Vector3(0.0f, -(shoulderY - hipY) * 1.15f, 0.0f),
-                      spec.LimbRadius * 0.9f, spec.Limb);
+                      armRadius, spec.Limb);
         }
 
         mesh.ClearRig();

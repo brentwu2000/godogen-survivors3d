@@ -15,12 +15,19 @@ Read this before starting work. Update it as phases land.
 | ✅ A1 A2 B8 | Turnable third-person camera, turn-and-advance, `BotDrive` | `deac551` |
 | ✅ — | Two inherited probe failures: both were one point of gear armour | `9f4b997` |
 | ✅ A3a | `MeshBuilder` gains `Tube`, `Ball` and the rig channels | `f2aad1b` |
-| ✅ A3b | `BodyMeshLibrary`, `BodyRenderer`, `SoloBody`, `body.gdshader` | this one |
+| ✅ A3b | `BodyMeshLibrary`, `BodyRenderer`, `SoloBody`, `body.gdshader` | `4cbddf0` |
+| ✅ A8 | Sky, depth fog, and arms outside the torso | this one |
 
-**Next: A4** (blob shadows for the sprite path), then A5 A6 A8, then B2 onward.
+**Next: A5** (danger zones), then A6, A9/A10, A7, A4.
 
-A4 matters less than it did — shadows were the billboard path'"'"'s only ground contact, and solid
-bodies cast real ones. It is now a fallback-path fix rather than a visual one.
+Reordered after looking at a render. A4 (blob shadows) matters least now — shadows were the billboard
+path'"'"'s only ground contact and solid bodies cast real ones, so it is a fallback-path fix rather than a
+visual one. What the frame actually lacks is *structure*: the arena is a large flat expanse with
+scattered cover. A5 gives it places that mean something.
+
+**Render the game and look at it.** Two defects in A3b were invisible to a green 27-probe sweep and
+obvious in one screenshot: arms buried inside the torso, and a hard black band where the sky should
+be.  — no .
 
 A1, A2 and B8 had to land together. A2 is what breaks every automated driver and B8 is the repair,
 so shipping either alone leaves the repository with no working balance signal — which is the state
