@@ -40,6 +40,16 @@ public static class BodyMeshLibrary
 
         /// Radians of swing at reference pace. Legs and arms separately: a body
         /// that swings both the same amount marches.
+        ///
+        /// **The arm figures are smaller than they look like they should be, and
+        /// that is the rig's fault rather than the animation's.** `SetRig` turns a
+        /// vertex about a *fixed* Y by `swing * sin(phase)`, which cannot express
+        /// a child bone: a forearm given its own pivot at the elbow separates from
+        /// the upper arm the moment the upper arm swings. So the whole arm turns
+        /// as one piece about the shoulder, and past about a third of a radian a
+        /// rigid arm at full swing reads as a plank rather than as a stride. The
+        /// legs do not have this problem — a straightening knee is what a leg does
+        /// at the top of a stride, so the same rigidity reads as correct.
         float LegSwing,
         float ArmSwing,
 
@@ -63,14 +73,14 @@ public static class BodyMeshLibrary
     {
         // Gaunt and slightly stooped. The baseline everything else reads against,
         // so it is deliberately the least distinctive silhouette in the set.
-        "walker" => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.45f, 0.035f,
+        "walker" => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
             new Color(0.36f, 0.40f, 0.34f), new Color(0.44f, 0.42f, 0.38f),
             new Color(0.62f, 0.58f, 0.50f), false),
 
         // Thin, leaning hard into the run, arms back. Recognisable from the
         // silhouette alone before the speed is apparent, which is the whole point
         // — by the time the speed is apparent it is next to you.
-        "runner" => new Build(height, 0.36f, 0.045f, 0.16f, 26.0f, 0.95f, 0.80f, 0.055f,
+        "runner" => new Build(height, 0.36f, 0.045f, 0.16f, 26.0f, 0.95f, 0.48f, 0.055f,
             new Color(0.46f, 0.30f, 0.28f), new Color(0.52f, 0.36f, 0.32f),
             new Color(0.66f, 0.50f, 0.42f), false),
 
@@ -88,7 +98,7 @@ public static class BodyMeshLibrary
 
         // Long-armed and narrow, because it fights at eight metres and the reach
         // is the tell.
-        "spitter" => new Build(height, 0.38f, 0.050f, 0.18f, 12.0f, 0.45f, 0.60f, 0.030f,
+        "spitter" => new Build(height, 0.38f, 0.050f, 0.18f, 12.0f, 0.45f, 0.38f, 0.030f,
             new Color(0.28f, 0.42f, 0.38f), new Color(0.34f, 0.48f, 0.42f),
             new Color(0.48f, 0.62f, 0.52f), false),
 
@@ -99,7 +109,7 @@ public static class BodyMeshLibrary
             new Color(0.20f, 0.18f, 0.22f), new Color(0.26f, 0.22f, 0.24f),
             new Color(0.40f, 0.30f, 0.30f), false),
 
-        _ => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.45f, 0.035f,
+        _ => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
             new Color(0.36f, 0.40f, 0.34f), new Color(0.44f, 0.42f, 0.38f),
             new Color(0.62f, 0.58f, 0.50f), false),
     };
@@ -110,7 +120,7 @@ public static class BodyMeshLibrary
     /// even a frame, and in a crowd the only channel with any bandwidth left is
     /// hue. Blue against a horde of greens, greys and reds.
     public static Build ForPlayer(float height) =>
-        new(height, 0.48f, 0.065f, 0.24f, 4.0f, 0.60f, 0.50f, 0.040f,
+        new(height, 0.48f, 0.065f, 0.24f, 4.0f, 0.60f, 0.33f, 0.040f,
             new Color(0.22f, 0.34f, 0.52f), new Color(0.26f, 0.30f, 0.38f),
             new Color(0.72f, 0.60f, 0.48f), false);
 
@@ -119,9 +129,14 @@ public static class BodyMeshLibrary
     /// hip is comes apart when it walks.
     private const float HipFraction = 0.46f;
     private const float ShoulderFraction = 0.80f;
-    private const float NeckFraction = 0.86f;
-    private const float HeadFraction = 0.93f;
-    private const float HeadRadiusFraction = 0.070f;
+
+    // The centre and radius still sum to one design height. Taking half a per
+    // cent from the radius and giving it to the centre exposes the neck without
+    // changing StandingHeight; the tube ends half a per cent of design height
+    // inside the head so the newly visible joint cannot open when viewed uphill.
+    private const float NeckFraction = 0.875f;
+    private const float HeadFraction = 0.935f;
+    private const float HeadRadiusFraction = 0.065f;
 
     /// How tall this body actually stands, which is not its design height.
     ///
@@ -179,10 +194,11 @@ public static class BodyMeshLibrary
             mesh.SetRig(spec.LegSwing, hipY, phase, spec.Bob);
             mesh.Tube(knee, hip, spec.LimbRadius * 1.05f, trousers);
 
-            // An eighth of a turn makes the lower leg lag visibly without making
-            // the knee pop apart at full stride; a quarter-turn looked jointed in
-            // profile but opened a hand-wide gap on the runner's fastest frame.
-            mesh.SetRig(spec.LegSwing * 0.72f, kneeY, phase + 0.08f, spec.Bob);
+            // Four hundredths of a turn leaves enough disagreement to bend the
+            // knee beneath the body, while 92% of the thigh's travel makes both
+            // sections nearly collinear at full extension. A larger lag shortened
+            // the leg precisely when its forward silhouette needed the reach.
+            mesh.SetRig(spec.LegSwing * 0.92f, kneeY, phase + 0.04f, spec.Bob);
             mesh.Tube(ankle, knee, spec.LimbRadius * 0.88f, spec.Limb);
             mesh.Box(new Vector3(x, 0.04f, -spec.LimbRadius * 1.25f),
                      new Vector3(spec.LimbRadius * 2.15f, 0.08f, spec.LimbRadius * 3.9f),
@@ -226,13 +242,14 @@ public static class BodyMeshLibrary
         mesh.Ball(head, headRadius, spec.Head, 6, 4);
 
         // These project beyond the sphere rather than being decoration painted
-        // onto it. The jaw survives as a profile from the side; the brow makes a
-        // dark eye socket from the front when the face is only three pixels tall.
+        // onto it. The jaw survives as a profile from the side; the brow stays
+        // inside the crown's narrow low-poly silhouette so darkness, rather than
+        // a mushroom cap, survives when the face is three pixels tall.
         mesh.Box(head + new Vector3(0.0f, -headRadius * 0.48f, -headRadius * 0.50f),
                  new Vector3(headRadius * 1.18f, headRadius * 0.62f, headRadius * 0.72f),
                  Darken(spec.Head, 0.78f));
         mesh.Box(head + new Vector3(0.0f, headRadius * 0.12f, -headRadius * 0.82f),
-                 new Vector3(headRadius * 1.48f, headRadius * 0.24f, headRadius * 0.22f), shadow);
+                 new Vector3(headRadius * 1.16f, headRadius * 0.24f, headRadius * 0.22f), shadow);
 
         // --- arms ------------------------------------------------------------
         // Counter-phased against the leg on the same side, which is what stops a
@@ -241,27 +258,30 @@ public static class BodyMeshLibrary
         // upright detaches from a leaning body at the top of every stride.
         for (int side = 0; side < 2; side++)
         {
-            // Clear of the torso, not flush with it. At exactly `half` the arm
-            // centre sits on the chest's own surface and half the tube is buried
-            // inside it — which does not look like a bug in a screenshot, it looks
-            // like a body with no arms. The silhouette is the only thing carrying
-            // information at the distance most of the horde is seen from, and an
-            // arm that is not in the silhouette may as well not have been built.
-            float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius);
+            // Sixty-five per cent of the root radius crosses the shoulder edge.
+            // That overlap survives the faceted tube's narrowest presentation
+            // during a swing, while the remainder still carries the arm in the
+            // silhouette at horde distance.
+            float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius * 0.35f);
             Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
             // Width alone also selects the runner, whose swept-back compact arms
             // are part of its arrowhead outline. The modest lean cutoff leaves
             // the narrow, stooped spitter as the only body reaching below its hip.
             float armLength = chestHeight *
                 (spec.ShoulderWidth < 0.40f && spec.LeanDegrees < 20.0f ? 1.34f : 1.16f);
-            Vector3 elbow = shoulder + new Vector3(0.0f, -armLength * 0.52f, -armRadius * 0.30f);
-            Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, armRadius * 0.18f);
+            // Twelve per cent of a radius shows which way the elbow faces in
+            // profile without moving the hand away from the hip. Animation
+            // supplies the gesture; the resting mesh only supplies the anatomy.
+            Vector3 elbow = shoulder + new Vector3(0.0f, -armLength * 0.52f, -armRadius * 0.12f);
+            Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, -armRadius * 0.03f);
             float phase = side * 0.5f + 0.5f;
 
             mesh.SetRig(spec.ArmSwing, shoulder.Y, phase, spec.Bob);
             mesh.Tube(shoulder, elbow, armRadius, spec.Limb);
 
-            mesh.SetRig(spec.ArmSwing * 0.68f, elbow.Y, phase + 0.08f, spec.Bob);
+            // One shoulder rotation keeps the elbow sealed and lets a hanging
+            // arm read as one line. A second absolute pivot cannot behave like a
+            // child bone and was turning the small resting bend into a doll kink.
             mesh.Tube(elbow, wrist, armRadius * 0.82f, spec.Head);
             mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.75f, -armRadius * 0.10f),
                      new Vector3(armRadius * 1.65f, armRadius * 1.75f, armRadius * 1.25f),
