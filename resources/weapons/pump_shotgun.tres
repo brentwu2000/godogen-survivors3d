@@ -13,7 +13,6 @@ SpreadFloorFraction = 0.8
 BaseReloadTime = 2.6
 MagazineSize = 6
 StartingReserve = 60
-MaxReserve = 120
 Knockback = 0.9
 Trait = 5
 TraitAmount = 0.34

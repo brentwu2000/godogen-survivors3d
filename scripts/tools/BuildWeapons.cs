@@ -26,6 +26,18 @@ using Godot;
 /// it to reset a weapon to its designed baseline.
 public partial class BuildWeapons : SceneTree
 {
+    // No `MaxReserve` on any weapon, and its absence is deliberate.
+    //
+    // Every one of them carried a cap — 360 on the scavenged rifle, 90 on the
+    // bolt launcher — on the reasoning that a cap stops ammunition being a pure
+    // hoard. What it produced was a player at 240 of 240 walking past rounds they
+    // could not pick up, which reads as the game refusing loot rather than as an
+    // economy.
+    //
+    // The decision worth keeping is "is this round worth a slot in the bag", and
+    // that one is made by `CarryCapacity` and is untouched. Zero means no limit;
+    // the field is still there for a weapon that genuinely needs one.
+
     private const string OutputDir = "res://resources/weapons";
 
     public override void _Initialize() => SceneBuildUtil.Run(this, Build);
@@ -117,7 +129,6 @@ public partial class BuildWeapons : SceneTree
                 // run past that, and the cap is what keeps them from becoming a
                 // hoard rather than a decision.
                 StartingReserve = 240,
-                MaxReserve = 360,
                 Penetration = 1,
                 Knockback = 0.08f,
             },
@@ -143,7 +154,6 @@ public partial class BuildWeapons : SceneTree
                 BaseReloadTime = 1.8f,
                 MagazineSize = 40,
                 StartingReserve = 320,
-                MaxReserve = 480,
                 Penetration = 2,
                 Knockback = 0.1f,
             },
@@ -176,7 +186,6 @@ public partial class BuildWeapons : SceneTree
                 BaseReloadTime = 2.6f,
                 MagazineSize = 6,
                 StartingReserve = 60,
-                MaxReserve = 120,
                 Penetration = 1,
                 Knockback = 0.9f,
             },
@@ -207,7 +216,6 @@ public partial class BuildWeapons : SceneTree
                 BaseReloadTime = 2.4f,
                 MagazineSize = 8,
                 StartingReserve = 72,
-                MaxReserve = 140,
                 Penetration = 3,
                 Knockback = 0.4f,
             },
@@ -233,7 +241,6 @@ public partial class BuildWeapons : SceneTree
                 BaseReloadTime = 2.2f,
                 MagazineSize = 5,
                 StartingReserve = 40,
-                MaxReserve = 90,
                 ProjectileSpeed = 19.0f,
                 Penetration = 1,
                 Knockback = 0.6f,

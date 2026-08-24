@@ -142,7 +142,11 @@ public partial class WeaponHandler : Node3D
         if (slot?.Weapon is not { } weapon)
             return 0;
 
-        int taken = Mathf.Min(rounds, weapon.MaxReserve - slot.Reserve);
+        // Everything offered, unless the weapon declares a cap. See
+        // `WeaponResource.MaxReserve` — none of the shipped weapons does.
+        int taken = weapon.CapsReserve
+            ? Mathf.Min(rounds, weapon.MaxReserve - slot.Reserve)
+            : rounds;
         if (taken <= 0)
             return 0;
 
@@ -152,7 +156,8 @@ public partial class WeaponHandler : Node3D
 
     /// True when topping up would do something. Asked before an ammo item is
     /// spent, so a full reserve leaves the rounds worth their sale price.
-    public bool WantsAmmo => MagazineSlot is { Weapon: { } weapon } slot && slot.Reserve < weapon.MaxReserve;
+    public bool WantsAmmo => MagazineSlot is { Weapon: { } weapon } slot
+                             && (!weapon.CapsReserve || slot.Reserve < weapon.MaxReserve);
 
     /// The slot that consumes ammo, preferring the one in hand when both do.
     private Slot? MagazineSlot
@@ -278,7 +283,7 @@ public partial class WeaponHandler : Node3D
         Slot slot = _slots[slotIndex];
         slot.Weapon = weapon;
         slot.Ammo = weapon.MagazineSize;
-        slot.Reserve = Mathf.Min(weapon.StartingReserve, weapon.MaxReserve);
+        slot.Reserve = weapon.FitReserve(weapon.StartingReserve);
         slot.Cooldown = 0.0f;
         slot.ReloadRemaining = 0.0f;
         slot.RunUpgrades = 0;

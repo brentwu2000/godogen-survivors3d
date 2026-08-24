@@ -12,7 +12,6 @@ BaseRange = 24.0
 BaseReloadTime = 2.2
 MagazineSize = 5
 StartingReserve = 40
-MaxReserve = 90
 ProjectileSpeed = 19.0
 Knockback = 0.6
 Trait = 7

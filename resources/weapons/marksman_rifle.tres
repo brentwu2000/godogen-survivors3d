@@ -12,7 +12,6 @@ BaseSpreadDegrees = 2.0
 BaseReloadTime = 2.4
 MagazineSize = 8
 StartingReserve = 72
-MaxReserve = 140
 Penetration = 3
 Knockback = 0.4
 Trait = 6

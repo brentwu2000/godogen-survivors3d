@@ -139,13 +139,28 @@ public sealed class MeshBuilder
     /// normals silently fails to receive shadows (godot.md:45), and a smoothed
     /// normal on a six-sided tube would light it as though it were round, which
     /// is a lie the silhouette contradicts from every angle.
-    public void Tube(Vector3 from, Vector3 to, float radius, Color colour, int sides = 6)
+    public void Tube(Vector3 from, Vector3 to, float radius, Color colour, int sides = 6) =>
+        Tube(from, to, radius, radius, colour, sides);
+
+    /// A tube that is not the same width at both ends.
+    ///
+    /// **This is the cheapest thing in the project that makes a body stop looking
+    /// like plumbing, and it costs exactly zero extra triangles.** Every limb was
+    /// a constant-radius cylinder: a thigh the same width at the knee as at the
+    /// hip, a forearm the same width at the wrist as at the elbow. Nothing about
+    /// a person is, and a stack of equal cylinders reads as pipework however good
+    /// the proportions between them are.
+    ///
+    /// The two rings were already being generated separately — the only change is
+    /// that they no longer have to share a number.
+    public void Tube(Vector3 from, Vector3 to, float fromRadius, float toRadius, Color colour,
+                     int sides = 6)
     {
         colour = colour.SrgbToLinear();
 
         Vector3 axis = to - from;
         float length = axis.Length();
-        if (length < 0.0001f || radius <= 0.0f || sides < 3)
+        if (length < 0.0001f || (fromRadius <= 0.0f && toRadius <= 0.0f) || sides < 3)
             return;
 
         axis /= length;
@@ -167,8 +182,8 @@ public sealed class MeshBuilder
             float angle = Mathf.Tau * i / sides;
             Vector3 direction = u * Mathf.Cos(angle) + v * Mathf.Sin(angle);
             outward[i] = direction;
-            lower[i] = from + direction * radius;
-            upper[i] = to + direction * radius;
+            lower[i] = from + direction * fromRadius;
+            upper[i] = to + direction * toRadius;
         }
 
         for (int i = 0; i < sides; i++)
@@ -187,6 +202,68 @@ public sealed class MeshBuilder
         // "counter-clockwise from outside" reverses when the outside is the other
         // end of the tube, which is the one thing about capping that is easy to
         // get backwards and invisible until something looks hollow.
+        for (int i = 0; i < sides; i++)
+        {
+            int j = (i + 1) % sides;
+            TriangleOutward(to, upper[i], upper[j], axis, colour);
+            TriangleOutward(from, lower[j], lower[i], -axis, colour);
+        }
+    }
+
+    /// A tapered tube with an oval cross-section.
+    ///
+    /// **A torso is not a box and it is not a cylinder.** It was a box, and a box
+    /// is a crate: four hard vertical edges catching the light in four flat
+    /// bands, which is the single thing that made these bodies read as furniture
+    /// with legs. A round tube is no better — a person is much wider than they
+    /// are deep, and a cylindrical chest reads as a barrel someone is wearing.
+    ///
+    /// Two radii per ring, across and front-to-back, so a chest can be broad and
+    /// shallow and a waist can pinch in one axis without pinching in the other.
+    /// Eight sides costs twenty triangles more than the box it replaces and is
+    /// the best-spent twenty in the file.
+    public void Barrel(Vector3 from, Vector3 to, Vector2 fromRadii, Vector2 toRadii,
+                       Color colour, int sides = 8)
+    {
+        colour = colour.SrgbToLinear();
+
+        Vector3 axis = to - from;
+        float length = axis.Length();
+        if (length < 0.0001f || sides < 3)
+            return;
+
+        axis /= length;
+
+        Vector3 reference = Mathf.Abs(axis.Y) > 0.9f ? Vector3.Right : Vector3.Up;
+        Vector3 u = axis.Cross(reference).Normalized();
+        Vector3 v = axis.Cross(u);
+
+        var lower = new Vector3[sides];
+        var upper = new Vector3[sides];
+        var outward = new Vector3[sides];
+
+        for (int i = 0; i < sides; i++)
+        {
+            float angle = Mathf.Tau * i / sides;
+            float c = Mathf.Cos(angle), sn = Mathf.Sin(angle);
+
+            lower[i] = from + u * (c * fromRadii.X) + v * (sn * fromRadii.Y);
+            upper[i] = to + u * (c * toRadii.X) + v * (sn * toRadii.Y);
+
+            // The normal of an oval is not the direction to the point on it: a
+            // wide flat chest lit as though it were round comes out shaded like a
+            // pipe. Scaling the two components by the *other* radius is the
+            // ellipse's own gradient, and it is the difference between a torso
+            // that turns away from the light and one that rolls.
+            outward[i] = (u * (c * fromRadii.Y) + v * (sn * fromRadii.X)).Normalized();
+        }
+
+        for (int i = 0; i < sides; i++)
+        {
+            int j = (i + 1) % sides;
+            Quad(lower[i], lower[j], upper[j], upper[i], (outward[i] + outward[j]).Normalized(), colour);
+        }
+
         for (int i = 0; i < sides; i++)
         {
             int j = (i + 1) % sides;

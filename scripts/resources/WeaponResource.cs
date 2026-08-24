@@ -109,9 +109,30 @@ public partial class WeaponResource : Resource
     /// instead of selling.
     [Export] public int StartingReserve { get; set; }
 
-    /// What the reserve can hold. A cap is what stops ammo from being a pure
-    /// hoard — past it, rounds are only worth their sale price.
-    [Export] public int MaxReserve { get; set; } = 300;
+    /// What the reserve can hold, or **0 for no limit**.
+    ///
+    /// It was a hard cap on every weapon, and the reasoning was that a cap stops
+    /// ammo being a pure hoard: past it, rounds are only worth their sale price.
+    /// That is a real trade and it is the wrong one to force on the player — what
+    /// it actually produced was a rifle at 240 of 240 walking past ammunition it
+    /// could not pick up, which reads as the game refusing loot rather than as an
+    /// economy.
+    ///
+    /// The interesting decision was always "is this round worth a slot in the
+    /// bag", and that decision is made by `CarryCapacity`, which is unchanged.
+    /// Ammo still competes for space with everything else worth carrying out; it
+    /// simply no longer stops being takeable.
+    ///
+    /// Kept as a field rather than deleted so a weapon can still declare one — a
+    /// launcher that could stockpile forty charges would be a different game — and
+    /// zero is the sentinel because "no maximum" has to be expressible.
+    [Export] public int MaxReserve { get; set; }
+
+    /// Whether this weapon caps what it can carry.
+    public bool CapsReserve => MaxReserve > 0;
+
+    /// `rounds` clamped to whatever this weapon will hold.
+    public int FitReserve(int rounds) => CapsReserve ? Mathf.Min(rounds, MaxReserve) : rounds;
 
     /// How many enemies one shot passes through. 1 stops at the first.
     [Export] public int Penetration { get; set; } = 1;

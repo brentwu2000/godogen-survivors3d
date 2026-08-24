@@ -69,7 +69,7 @@ public partial class ItemProbe : SceneTree
         {
             case 0: return RunStage(StageHealCosts, "using a heal costs its sale value");
             case 1: return RunStage(StageWasteNothing, "nothing is spent when it would not help");
-            case 2: return RunStage(StageAmmo, "looted rounds refill the reserve, up to a cap");
+            case 2: return RunStage(StageAmmo, "looted rounds refill the reserve, and it has no ceiling");
             case 3: return RunStage(StageAdrenaline, "adrenaline is speed for a price, and expires");
             case 4: return RunStage(StageDryThenSwap, "a dry rifle stops; the sidearm does not");
             case 5: return RunStage(StageSlotsAreSeparate, "each slot keeps its own ammo and levels");
@@ -301,20 +301,48 @@ public partial class ItemProbe : SceneTree
         int spent = _player.TryUseBest();
         int after = _weapons.Reserve;
 
-        // Fill the rest of the way through the same entry point the item uses,
-        // then confirm a full reserve refuses the stack and leaves it worth its
-        // sale price instead.
-        _weapons.AddReserve(rifle.MaxReserve);
-        bool atCap = !_weapons.WantsAmmo;
-        int refused = _player.TryUseBest();
+        // No shipped weapon caps its reserve any more, and this stage used to
+        // assert the opposite.
+        //
+        // It filled the rifle to `MaxReserve`, checked the stack was refused, and
+        // called that correct because "a cap stops ammo being a pure hoard". What
+        // the cap actually produced was a player at 240 of 240 walking past
+        // rounds they could not pick up, which reads as the game refusing loot.
+        // The decision worth keeping — "is this round worth a slot in the bag" —
+        // belongs to `CarryCapacity` and is untouched.
+        //
+        // So the assertion inverts: a great deal of ammunition goes in, and the
+        // weapon still wants more.
+        _weapons.AddReserve(10_000);
+        bool stillWants = _weapons.WantsAmmo;
+        int hoarded = _weapons.Reserve;
 
-        GD.Print($"  reserve {before} -> {after} for {spent} of value; " +
-                 $"cap {rifle.MaxReserve} reached = {atCap}, and refuses more = {refused == 0}");
+        GD.Print($"  reserve {before} -> {after} for {spent} of value; "
+               + $"10k more accepted -> {hoarded}, still takes ammo = {stillWants}");
+
+        bool uncapped = hoarded >= 10_000 && stillWants && !rifle.CapsReserve;
+
+        if (!uncapped)
+        {
+            GD.PushError($"  {rifle.WeaponName} stopped at {hoarded} rounds — "
+                       + "ammunition is capped again");
+        }
+
+        // And the mechanism still works for a weapon that declares one, which is
+        // the half of this that would otherwise rot: `MaxReserve` was kept as a
+        // field precisely so a launcher stockpiling forty charges stays
+        // expressible, and a feature nothing exercises is a feature that quietly
+        // stops working.
+        var capped = new WeaponResource { MagazineSize = 10, MaxReserve = 25 };
+        bool fits = capped.FitReserve(9) == 9 && capped.FitReserve(99) == 25 && capped.CapsReserve;
+
+        if (!fits)
+            GD.PushError("  a weapon that declares a cap no longer honours it");
 
         return spent == rounds.Value
             && after - before == Mathf.RoundToInt(rounds.EffectAmount)
-            && atCap
-            && refused == 0;
+            && uncapped
+            && fits;
     }
 
     private bool? StageAdrenaline(int tick)

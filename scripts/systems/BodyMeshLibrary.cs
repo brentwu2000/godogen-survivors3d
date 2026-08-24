@@ -304,14 +304,21 @@ public static class BodyMeshLibrary
             Vector3 hip = new(x, hipY, 0.0f);
 
             mesh.SetRig(spec.LegSwing, hipY, phase, spec.Bob);
-            mesh.Tube(knee, hip, spec.LimbRadius * 1.05f, trousers);
+            // Tapered, at no cost — see `MeshBuilder.Tube`. A thigh the same width
+            // at the knee as at the hip is the single thing that made these read
+            // as plumbing rather than as legs, and the fix is one more argument.
+            mesh.Tube(knee, hip, spec.LimbRadius * 0.86f, spec.LimbRadius * 1.18f, trousers);
 
             // Four hundredths of a turn leaves enough disagreement to bend the
             // knee beneath the body, while 92% of the thigh's travel makes both
             // sections nearly collinear at full extension. A larger lag shortened
             // the leg precisely when its forward silhouette needed the reach.
             mesh.SetRig(spec.LegSwing * 0.92f, kneeY, phase + 0.04f, spec.Bob);
-            mesh.Tube(ankle, knee, spec.LimbRadius * 0.88f, spec.Limb);
+            // Narrowest at the ankle. The calf is above the midpoint on a real
+            // leg, but a second segment to say so costs twelve triangles per leg
+            // for something nobody will see at this distance — the taper alone
+            // carries it.
+            mesh.Tube(ankle, knee, spec.LimbRadius * 0.62f, spec.LimbRadius * 0.92f, spec.Limb);
             mesh.Box(new Vector3(x, 0.04f, -spec.LimbRadius * 1.25f),
                      new Vector3(spec.LimbRadius * 2.15f, 0.08f, spec.LimbRadius * 3.9f),
                      Darken(spec.Limb, 0.62f));
@@ -330,25 +337,67 @@ public static class BodyMeshLibrary
         }
         else
         {
-            mesh.Box(Lean(new Vector3(0.0f, hipY + chestHeight * 0.60f, 0.0f), lean, hipY),
-                     new Vector3(spec.ShoulderWidth * 0.82f, chestHeight * 0.72f, spec.TorsoDepth),
-                     spec.Torso);
+            // A ribcage: narrow at the waist, broadest just under the arms,
+            // and much wider than it is deep. See `MeshBuilder.Barrel` — the box
+            // this replaces was four hard vertical edges catching the light in
+            // four flat bands, which is most of why these read as furniture.
+            float waist = spec.ShoulderWidth * 0.30f;
+            float chest = spec.ShoulderWidth * 0.45f;
+
+            mesh.Barrel(Lean(new Vector3(0.0f, hipY + chestHeight * 0.24f, 0.0f), lean, hipY),
+                        Lean(new Vector3(0.0f, hipY + chestHeight * 0.96f, 0.0f), lean, hipY),
+                        new Vector2(waist, spec.TorsoDepth * 0.42f),
+                        new Vector2(chest, spec.TorsoDepth * 0.54f),
+                        spec.Torso);
         }
 
         // Separating hips, ribs and shoulder line costs two boxes but removes the
         // wardrobe silhouette: the waist can now pinch while the brute keeps the
         // full width which is its warning at fog distance.
-        mesh.Box(Lean(new Vector3(0.0f, hipY + chestHeight * 0.10f, 0.0f), lean, hipY),
-                 new Vector3(spec.ShoulderWidth * 0.58f, chestHeight * 0.25f,
-                             spec.TorsoDepth * 0.92f), trousers);
-        mesh.Box(Lean(new Vector3(0.0f, shoulderY - chestHeight * 0.06f, 0.0f), lean, hipY),
-                 new Vector3(spec.ShoulderWidth, chestHeight * 0.20f,
-                             spec.TorsoDepth * 1.04f), Darken(spec.Torso, 0.86f));
+        // The pelvis, tapering the other way — wide where the legs leave it and
+        // narrower where the ribs sit on it. Two barrels meeting at the waist is
+        // what gives a body a middle, and a middle is what a box never had.
+        mesh.Barrel(Lean(new Vector3(0.0f, hipY - chestHeight * 0.06f, 0.0f), lean, hipY),
+                    Lean(new Vector3(0.0f, hipY + chestHeight * 0.26f, 0.0f), lean, hipY),
+                    new Vector2(spec.ShoulderWidth * 0.34f, spec.TorsoDepth * 0.46f),
+                    new Vector2(spec.ShoulderWidth * 0.29f, spec.TorsoDepth * 0.40f),
+                    trousers);
+        // The shoulder line, across rather than up. A barrel lying on its side:
+        // the axis runs from one shoulder to the other, so the taper is the
+        // *deltoid* falling away at each end rather than a slab with two square
+        // corners. It is the last hard-edged box on the upper body and the one
+        // the eye lands on, because it is where the arms are supposed to join.
+        //
+        // The brute's warning is still its width — nothing here narrows it, the
+        // corners are simply no longer square.
+        float halfSpan = spec.ShoulderWidth * 0.5f;
+        Vector3 shoulderLine = Lean(new Vector3(0.0f, shoulderY - chestHeight * 0.06f, 0.0f), lean, hipY);
+
+        // Two, from the middle outward, each thinning as it goes.
+        //
+        // One barrel end to end has the same radius the whole way and reads as a
+        // girder laid across the back — which on the bulwark, whose shoulders are
+        // 1.6 m wide, looked like something it was carrying. A deltoid falls
+        // away, and the only way to say that with a tapered primitive is to run
+        // it from the centre out in both directions.
+        Color deltoid = Darken(spec.Torso, 0.86f);
+        var inner = new Vector2(chestHeight * 0.13f, spec.TorsoDepth * 0.52f);
+        var outer = new Vector2(chestHeight * 0.075f, spec.TorsoDepth * 0.30f);
+
+        foreach (int side in new[] { -1, 1 })
+        {
+            mesh.Barrel(shoulderLine,
+                        shoulderLine + new Vector3(side * halfSpan, -chestHeight * 0.04f, 0.0f),
+                        inner, outer, deltoid, 6);
+        }
 
         // --- head ------------------------------------------------------------
+        // Wider where it meets the shoulders than where it meets the skull. A
+        // constant-width neck is a bolt, and it is the join the eye goes to first
+        // because the head is the only part of a body anyone looks at.
         mesh.Tube(Lean(new Vector3(0.0f, shoulderY, 0.0f), lean, hipY),
                   Lean(new Vector3(0.0f, neckY, 0.0f), lean, hipY),
-                  spec.LimbRadius * 1.1f, spec.Limb);
+                  spec.LimbRadius * 1.35f, spec.LimbRadius * 0.95f, spec.Limb);
 
         Vector3 head = Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY);
         mesh.Ball(head, headRadius, spec.Head, 6, 4);
@@ -397,12 +446,12 @@ public static class BodyMeshLibrary
             float swing = carrying ? spec.ArmSwing * 0.25f : spec.ArmSwing;
 
             mesh.SetRig(swing, shoulder.Y, phase, spec.Bob);
-            mesh.Tube(shoulder, elbow, armRadius, spec.Limb);
+            mesh.Tube(shoulder, elbow, armRadius * 1.15f, armRadius * 0.86f, spec.Limb);
 
             // One shoulder rotation keeps the elbow sealed and lets a hanging
             // arm read as one line. A second absolute pivot cannot behave like a
             // child bone and was turning the small resting bend into a doll kink.
-            mesh.Tube(elbow, wrist, armRadius * 0.82f, spec.Head);
+            mesh.Tube(elbow, wrist, armRadius * 0.9f, armRadius * 0.66f, spec.Head);
             mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.75f, -armRadius * 0.10f),
                      new Vector3(armRadius * 1.65f, armRadius * 1.75f, armRadius * 1.25f),
                      spec.Head);

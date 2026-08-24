@@ -11,7 +11,6 @@ BaseRange = 18.0
 BaseSpreadDegrees = 9.0
 BaseReloadTime = 2.2
 StartingReserve = 240
-MaxReserve = 360
 Knockback = 0.08
 Trait = 1
 TraitAmount = 0.09

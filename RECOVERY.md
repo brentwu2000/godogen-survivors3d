@@ -486,6 +486,59 @@ costs no draw calls and no textures.
 E1, then E2, then E3, then E4. E4 is last because it is the one that improves the three existing
 biomes as well, and doing it first would change the baseline every other stage is judged against.
 
+## ✅ G — The bodies stop being plumbing
+
+**Asked for by the owner on 2026-08-24:** the characters and monsters look crude.
+
+They did, and the reason was smaller than it looked. The proportions were fine — C4 and C5 had already
+given the torso separate hips, ribs and a shoulder line, and every variant had its own build. What
+made them read as furniture with legs was that **every primitive was the same width at both ends**.
+
+`MeshBuilder.Tube` takes two radii now, and this cost **zero triangles**: it already generated the two
+rings separately, and the only change is that they no longer have to share a number. Every limb in
+the game tapers — thigh thick at the hip, shin narrow at the ankle, forearm narrow at the wrist.
+
+`MeshBuilder.Barrel` is the other half: a tapered tube with an **oval** cross-section. A torso is not
+a box, which is a crate with four hard vertical edges catching the light in four flat bands; and it is
+not a cylinder either, because a person is much wider than they are deep and a round chest reads as a
+barrel somebody is wearing. Two radii per ring — across and front-to-back — lets a chest be broad and
+shallow while a waist pinches in one axis and not the other.
+
+Its normals are the **ellipse's own gradient**, not the direction to the point on the surface. A wide
+flat chest lit as though it were round comes out shaded like a pipe, which would have thrown away
+most of what the shape bought.
+
+The chest is a ribcage, the pelvis a second barrel tapering the other way, and the two meeting at the
+waist is what gives a body a middle. The shoulder line is two more, running from the centre outward
+and thinning as they go — one barrel end to end has a constant radius and reads as a girder laid
+across the back, which on the bulwark's 1.6 m shoulders looked like something it was carrying.
+
+400 to 522 triangles a body against a budget of about 600, all nine still watertight.
+
+### ✅ G2 — Ammunition has no ceiling
+
+`MaxReserve` was a hard cap on every weapon, on the reasoning that a cap stops ammunition being a
+pure hoard. That is a real trade and it is the wrong one to force: what it produced was a player at
+240 of 240 walking past rounds they could not pick up, which reads as the game refusing loot rather
+than as an economy.
+
+The decision worth keeping is "is this round worth a slot in the bag", and that one belongs to
+`CarryCapacity` and is untouched. The field stays with zero meaning no limit, because a launcher that
+could stockpile forty charges would be a different game and that has to stay expressible.
+
+`ItemProbe`'s stage inverted with the design: it used to fill the rifle to the cap and assert the
+stack was refused. It now pushes ten thousand rounds in and asserts the weapon still wants more — and
+separately that a weapon which *does* declare a cap still honours it, because a mechanism nothing
+exercises is one that quietly stops working.
+
+### G3 — Still crude
+
+- **Hands and feet are boxes.** Cheap to improve and the least visible thing on the list.
+- **Heads are a six-by-four sphere with a visor box.** Every variant shares the shape; only the
+  colour differs.
+- **No joint geometry.** Limbs meet the torso by overlapping rather than by anything sealing the
+  gap, which shows on the widest variants when an arm swings.
+
 ## Half F — the things in your hands
 
 **The owner's goal, stated 2026-08-24:** scene, characters, monsters, items and skills all
