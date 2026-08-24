@@ -90,6 +90,7 @@ public partial class EnemyTypeProbe : SceneTree
             case 5: return RunStage(StageComposition, "composition follows intensity");
             case 6: return RunStage(StageDrawnHeight, "each variant stands at its designed height");
             case 7: return RunStage(StageHitFlash, "a hit that does not kill lights the target, briefly");
+            case 8: return RunStage(StageSolidHeight, "and stands at it as a solid body too");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -101,6 +102,64 @@ public partial class EnemyTypeProbe : SceneTree
     {
         _kills++;
         _lastKilledType = type;
+    }
+
+    /// The same question of the path the game actually ships.
+    ///
+    /// **The stage above measured the sprite and passed while the bodies were
+    /// wrong.** `SpriteScale` exists to cancel a sprite's fill fraction — a brute
+    /// painting filling 71.5% of its frame needs 2.098 to come out three metres
+    /// tall — and `BodyRenderer` was multiplying the *mesh* by it as well. A mesh
+    /// has no fill fraction: it is built at `DesignHeightMeters` and a bake is
+    /// refused unless it stands at that height, so it is already the right size.
+    ///
+    /// The result was that every variant whose art did not fill its frame was
+    /// drawn at the wrong size on the solid path: the brute at 6.3 m instead of
+    /// 3.0, the bloater at 3.8, and the boss at **seventeen metres** instead of
+    /// five and a half. It never looked like a bug — a boss is supposed to be
+    /// enormous, and the two variants the eye calibrates on, the walker and the
+    /// spitter, both fill their frames and scale by exactly 1.0.
+    ///
+    /// Asked of `BodyRenderer` rather than recomputed here, so that putting
+    /// `SpriteScale` back into the instance scale fails this rather than passing
+    /// a test of arithmetic nobody changed.
+    private bool? StageSolidHeight(int tick)
+    {
+        bool ok = true;
+
+        foreach (EnemyTypeResource type in _horde!.Types)
+        {
+            float drawn = BodyRenderer.DrawnHeight(type);
+
+            // What the body is *supposed* to measure, which is not always its
+            // design height.
+            //
+            // A leaning variant genuinely stands shorter than it is long: the
+            // runner is tipped twenty-six degrees at the hip, so 1.8 m of body
+            // occupies 1.71 m of vertical space, and that is correct rather than
+            // a scaling error. `BodyMeshLibrary.StandingHeight` is the library's
+            // own answer for a spec and already accounts for it — it is what
+            // `BodyShot` frames against.
+            //
+            // Comparing to the design height with a loose tolerance would have
+            // worked too, and would have been a band wide enough to hide a real
+            // error. This is exact.
+            float expected = string.IsNullOrEmpty(type.BakedBodyPath)
+                ? BodyMeshLibrary.StandingHeight(
+                      BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters))
+                : type.DesignHeightMeters;
+
+            bool matches = Mathf.Abs(drawn - expected) <= 0.05f;
+            float lean = expected - type.DesignHeightMeters;
+
+            GD.Print($"  {type.TypeName,-8} body draws {drawn:F2} m against {expected:F2} m"
+                   + (Mathf.Abs(lean) > 0.02f ? $" ({type.DesignHeightMeters:F1} m less {-lean:F2} of lean)" : "")
+                   + (matches ? "" : " <-- off"));
+
+            ok &= matches;
+        }
+
+        return ok;
     }
 
     /// How tall each variant actually draws, measured from the sprite rather than

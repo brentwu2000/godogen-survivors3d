@@ -97,6 +97,23 @@ public sealed class BodyRenderer
     /// against, and a bake made against a different number is a variant that hits
     /// for a brute's damage at a walker's size. Caught here rather than there,
     /// because here it can still fall back to something correct.
+    /// Everything that scales one drawn body, in one place.
+    ///
+    /// Factored out so `EnemyTypeProbe` can ask what an ordinary enemy is drawn
+    /// at without standing up a horde — and so that putting `SpriteScale` back in
+    /// here fails a probe instead of silently doubling every variant whose art
+    /// does not fill its frame. See the note at the call site.
+    public static float InstanceScale(byte elite, float emerge) =>
+        Elites.ScaleBonus(elite) * Horde.EmergeScale(emerge);
+
+    /// How tall a variant is actually drawn, at rest and un-elite.
+    ///
+    /// The mesh's own bounds times whatever scales it, which is the number the
+    /// player sees and the number nothing was checking. It should equal
+    /// `DesignHeightMeters` exactly — that is what the field means.
+    public static float DrawnHeight(EnemyTypeResource type) =>
+        MeshFor(type).GetAabb().Size.Y * InstanceScale(0, 1.0f);
+
     private static ArrayMesh MeshFor(EnemyTypeResource type)
     {
         ArrayMesh Procedural() => BodyMeshLibrary.Build3D(
@@ -179,13 +196,28 @@ public sealed class BodyRenderer
 
             EnemyTypeResource type = types[variant];
             byte elite = pool.Elite[i];
-            // Scaled by how far out of the ground it is. Cosmetic only — the
-            // flow field, the collider and the damage all treat a half-risen
-            // enemy as fully present, because a body that could be walked through
-            // while it grew is a rule the player learns by being killed by
-            // something they took for scenery.
-            float scale = type.SpriteScale * Elites.ScaleBonus(elite)
-                          * Horde.EmergeScale(pool.Emerge[i]);
+            // **No `SpriteScale` here, and its absence is the correction.**
+            //
+            // `SpriteScale` exists to cancel a *sprite's fill fraction*: the
+            // billboard quad is one size for every layer, so a brute painting
+            // that fills 71.5% of its frame needs 2.098 to come out three metres
+            // tall. A mesh has no fill fraction. `MeshFor` builds it at
+            // `DesignHeightMeters` and a bake is refused unless it stands at that
+            // height — so the body is already the right size before anything
+            // multiplies it.
+            //
+            // Multiplying anyway meant every variant whose art did not fill its
+            // frame was drawn at the wrong size on the solid path, which is the
+            // path the game actually ships: the brute at 6.3 m instead of 3.0,
+            // the bloater at 3.8, and the boss at **seventeen metres** instead of
+            // five and a half. It never looked like a bug because a boss is
+            // supposed to be enormous and there was nothing on screen to measure
+            // it against — the walker and the spitter, the two the eye calibrates
+            // on, both fill their frames and have a scale of 1.0.
+            //
+            // `EnemyTypeProbe` measured the sprite path and reported 3.00 m for
+            // the brute, correctly, for as long as this was wrong.
+            float scale = InstanceScale(elite, pool.Emerge[i]);
 
             // Planted for drawing only. The pool's Y stays zero — the flow
             // field, the collider and every distance test in the horde are flat,

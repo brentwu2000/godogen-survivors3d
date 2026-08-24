@@ -174,7 +174,7 @@ public partial class Horde : Node3D
     /// stacked at that layer, and the byte stored per instance — so they cannot
     /// drift apart the way three separate lists would.
     public static readonly string[] TypeNames =
-        { "walker", "runner", "brute", "bloater", "spitter", "boss", "stalker" };
+        { "walker", "runner", "brute", "bloater", "spitter", "boss", "stalker", "bulwark", "lantern" };
 
     /// A kill, for anything that wants to count them. A plain C# event rather
     /// than a Godot signal: both ends are C#, and EmitSignal marshals a Variant

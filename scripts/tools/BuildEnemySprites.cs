@@ -64,6 +64,22 @@ public partial class BuildEnemySprites : SceneTree
         // plating, one arm mutated past the other — because the size difference
         // is doing enough work already and the silhouette was doing none.
         ("boss", "boss", 5.5f),
+
+        // The three authored after the solid-body path became the primary one.
+        //
+        // **Their absence was a real defect and `EnemyTypeProbe` caught it.** The
+        // billboard array is a fallback for hardware that cannot afford a hundred
+        // and fifty meshes, and a variant with no layer in it draws a magenta
+        // placeholder there — so the horde shipped correct on one path and
+        // visibly broken on the other, with a warning in every log that had
+        // started to look like part of the scenery.
+        //
+        // Order matters and is not cosmetic: this array is the stack order of the
+        // Texture2DArray, and `SpriteLayer` in `BuildEnemyTypes.cs` is the index
+        // into it. Stalker 6, bulwark 7, lantern 8 — append only.
+        ("stalker", "stalker", 1.3f),
+        ("bulwark", "bulwark", 1.5f),
+        ("lantern", "lantern", 1.9f),
     };
 
     /// The quad height a scale of 1.0 draws, matching Horde.SpriteHeight.

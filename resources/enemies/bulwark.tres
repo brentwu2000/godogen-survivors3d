@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyTypeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyTypeResource.cs" id="1_sklyg"]
+
+[resource]
+script = ExtResource("1_sklyg")
+TypeName = "bulwark"
+MaxHealth = 140.0
+MoveSpeed = 1.1
+SpriteScale = 1.6
+DesignHeightMeters = 1.5
+SpriteLayer = 7
+KnockbackScale = 0.15
+SpawnWeight = 0.45
+UnlockIntensity = 0.55
+ExperienceValue = 6.0

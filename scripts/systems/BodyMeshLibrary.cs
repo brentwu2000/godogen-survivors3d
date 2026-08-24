@@ -97,7 +97,19 @@ public static class BodyMeshLibrary
 
         /// What it is carrying. Defaulted, so every existing construction site —
         /// seven variants and the player — is unchanged by this field arriving.
-        Carry Held = Carry.None);
+        Carry Held = Carry.None,
+
+        /// A lit organ in the chest, and eyes to match.
+        ///
+        /// The glow travels in the **alpha of the vertex colour**, which was the
+        /// only channel left and was being written and ignored — see
+        /// `body.gdshader`. Alpha below one means lit; everything already in the
+        /// game writes one and is unaffected.
+        bool Lantern = false,
+
+        /// What the organ burns, when `Lantern` is set. Its alpha is the glow,
+        /// so this wants an alpha near zero.
+        Color Sac = default);
 
     /// The variants, by the same names `Horde.TypeNames` uses.
     ///
@@ -130,6 +142,38 @@ public static class BodyMeshLibrary
         "bloater" => new Build(height, 0.46f, 0.085f, 0.30f, 4.0f, 0.30f, 0.30f, 0.075f,
             new Color(0.44f, 0.46f, 0.30f), new Color(0.40f, 0.42f, 0.32f),
             new Color(0.56f, 0.56f, 0.40f), true),
+
+        // Wider than it is tall, and that is the entire idea.
+        //
+        // Every other thing in the horde is an upright biped of roughly human
+        // proportion, including the brute — which is a big one, not a different
+        // shape. This is the first silhouette in the set that is *horizontal*,
+        // and at twenty metres in fog the only thing the player can read is the
+        // outline. A wall that walks.
+        //
+        // It exists to block rather than to chase. The numbers in the table give
+        // it the health and the knockback resistance; the shape has to be what
+        // says so before the player has been hit once.
+        "bulwark" => new Build(height, 1.62f, 0.16f, 0.44f, -8.0f, 0.20f, 0.16f, 0.030f,
+            new Color(0.26f, 0.25f, 0.24f), new Color(0.33f, 0.30f, 0.27f),
+            new Color(0.42f, 0.38f, 0.33f), true),
+
+        // Dark, and carrying a light.
+        //
+        // The arena goes black at somewhere between twenty-four and forty-four
+        // metres depending on the place, and until now the dark was uniformly
+        // empty — a thing either was in the lit part or was not there at all.
+        // This is the first enemy that is visible *before* it arrives, which
+        // inverts what the fog means: an approaching glow is information the
+        // player gets for free and has to decide what to do with.
+        //
+        // The body is the darkest in the set on purpose. The sac has to be the
+        // brightest thing on screen and the creature around it has to be nearly
+        // nothing, or what approaches is a lit man rather than a light.
+        "lantern" => new Build(height, 0.40f, 0.052f, 0.19f, 16.0f, 0.50f, 0.34f, 0.045f,
+            new Color(0.13f, 0.14f, 0.16f), new Color(0.16f, 0.16f, 0.18f),
+            new Color(0.20f, 0.21f, 0.22f), false,
+            Carry.None, true, new Color(0.55f, 0.92f, 0.72f, 0.0f)),
 
         // Long-armed and narrow, because it fights at eight metres and the reach
         // is the tell.
@@ -357,6 +401,44 @@ public static class BodyMeshLibrary
             // amount" and nothing else.
             if (carrying)
                 Weapon(mesh, spec, shoulder, wrist, armRadius);
+        }
+
+        // The organ, last, so it sits over the torso rather than inside it.
+        if (spec.Lantern)
+        {
+            // On the torso's rig — which is no rig at all: the chest does not
+            // swing, so the sac rides the bob and nothing else. A sac on an arm
+            // pivot would swing out of the body every stride.
+            mesh.ClearRig();
+            mesh.SetRig(0.0f, 0.0f, 0.0f, spec.Bob);
+
+            // Mid-chest, not the gut. At 0.42 of the chest it sat at the waist
+            // and read as something the creature was carrying; a light at the
+            // sternum reads as something inside it. The difference matters more
+            // than it sounds, because this is the one enemy the player meets as
+            // a shape in the dark before they meet it as a body.
+            float sacY = hipY + chestHeight * 0.66f;
+            float sacR = spec.ShoulderWidth * 0.38f;
+
+            mesh.Ball(Lean(new Vector3(0.0f, sacY, -spec.ShoulderWidth * 0.24f), lean, hipY),
+                      sacR, spec.Sac, 7, 5);
+
+            // A dimmer collar around it, so the bright core has an edge rather
+            // than ending at the torso. Half the glow, which at this size is the
+            // difference between a lamp and a hole cut in the body.
+            var collar = new Color(spec.Sac.R * 0.6f, spec.Sac.G * 0.6f, spec.Sac.B * 0.6f, 0.5f);
+            mesh.Ball(Lean(new Vector3(0.0f, sacY, -spec.ShoulderWidth * 0.18f), lean, hipY),
+                      sacR * 1.35f, collar, 7, 4);
+
+            // Eyes. Two points at head height are what make the glow read as a
+            // creature looking at you rather than as a lamp being carried.
+            float eyeY = shoulderY + (headY - shoulderY) * 0.55f;
+            foreach (int side in new[] { -1, 1 })
+            {
+                mesh.Box(Lean(new Vector3(side * spec.ShoulderWidth * 0.13f, eyeY,
+                                          -spec.ShoulderWidth * 0.30f), lean, hipY),
+                         new Vector3(0.045f, 0.03f, 0.03f), spec.Sac);
+            }
         }
 
         mesh.ClearRig();

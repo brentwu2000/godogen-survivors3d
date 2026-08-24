@@ -141,7 +141,7 @@ public partial class BodyShot : SceneTree
         };
         root.AddChild(floor);
 
-        string[] names = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
+        string[] names = Variants();
         float[] heights = HeightsFor(names);
 
         // `carry` shows the player holding each of the three silhouettes instead
@@ -257,6 +257,34 @@ public partial class BodyShot : SceneTree
     ///
     /// The table is what the game balances against, and a lineup drawn at heights
     /// this file invented would be a picture of bodies that do not exist.
+    /// Every variant `MeshBuilder` draws, taken from the horde rather than
+    /// listed here.
+    ///
+    /// It was a hand-written array of six, and it stayed six while the horde grew
+    /// to nine — so the lineup this tool exists to produce quietly stopped being
+    /// a lineup of the horde. The bulwark and the lantern were built, tabled,
+    /// spawning, and absent from the one picture anybody would look at to judge
+    /// them. Same mistake `EnemyTypeProbe` had already been fixed for once.
+    ///
+    /// Baked variants are skipped, and that is not the same oversight: they are
+    /// not built by `BodyMeshLibrary` at all, so there is no `Build` spec to
+    /// stand up. `BodyShot -- baked:res://...` shows those, one at a time.
+    private static string[] Variants()
+    {
+        var names = new System.Collections.Generic.List<string>();
+
+        foreach (string name in Horde.TypeNames)
+        {
+            var type = GD.Load<EnemyTypeResource>($"res://resources/enemies/{name}.tres");
+            if (type != null && !string.IsNullOrEmpty(type.BakedBodyPath))
+                continue;
+
+            names.Add(name);
+        }
+
+        return names.ToArray();
+    }
+
     private static float[] HeightsFor(string[] names)
     {
         var heights = new float[names.Length];

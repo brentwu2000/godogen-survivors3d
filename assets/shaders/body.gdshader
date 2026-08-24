@@ -38,6 +38,27 @@ const float REFERENCE_SPEED = 2.4;
 
 varying vec3 body_tint;
 
+// How much of this vertex is lit from inside, 0 to 1.
+//
+// Carried in the **alpha of the vertex colour**, which was the only channel
+// left and was being written and ignored. INSTANCE_CUSTOM is full — pace and
+// phase packed into one float, hue shift, hit flash, brightness jitter — and it
+// is per-instance anyway, which is wrong for this: a glow belongs to a *part* of
+// a body, not to a whole one. A lantern mutant is a dark thing with a bright
+// sac, and the sac is what the player is meant to see coming.
+//
+// Inverted so that opaque means unlit. Everything already in the game writes
+// alpha 1 and glows not at all, so this arrives costing nothing and changing
+// nothing.
+varying float body_glow;
+
+// How brightly a fully glowing vertex burns. High enough to survive the fog it
+// is meant to be seen through, and not so high that it lights the crowd around
+// it — this is emission on a mobile renderer, so it is a colour on the surface
+// rather than a light in the world, and a value that reads as "lit" up close
+// reads as "white blob" at twenty metres.
+const float GLOW_STRENGTH = 2.4;
+
 // Rotate about the grey axis, then put the luminance back.
 //
 // The obvious way to mark an elite is to multiply its colour by a tint, and it
@@ -111,6 +132,8 @@ void vertex() {
     // Twice a stride: the body rises on each footfall, and there are two feet.
     VERTEX.y += bob * amount * sin(phase * 2.0 * TAU);
 
+    body_glow = 1.0 - COLOR.a;
+
     vec3 colour = shift_hue(COLOR.rgb, INSTANCE_CUSTOM.y);
 
     // A crowd of identical bodies reads as a texture rather than as a crowd.
@@ -127,6 +150,13 @@ void vertex() {
 
 void fragment() {
     ALBEDO = body_tint;
+
+    // Emission, not a light. The mobile renderer has no global illumination and
+    // this is a hundred and fifty bodies deep, so the sac brightens itself and
+    // nothing around it. What sells it is the *contrast*: the rest of the
+    // creature is the darkest thing in the set, so a bright patch on it reads as
+    // a source even though it lights nothing.
+    EMISSION = body_tint * body_glow * GLOW_STRENGTH;
 
     // Vertex colours arrive linear — MeshBuilder converts them once, at build
     // time, because a vertex colour is handed to the shader as-is while a texture

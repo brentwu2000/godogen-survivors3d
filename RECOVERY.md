@@ -128,21 +128,96 @@ body and a procedural body given the same colour end up the same colour is not.
 Also fixed: a `#` prefix on the colour argument is a PowerShell comment, so `-- ... #6b5f52` arrived
 as no argument at all. An unreadable colour is now refused rather than ignored.
 
-### D2b — The rest of the horde  ·  *needs D1*
+### ✅ D2b — A wall that walks, and something that arrives lit
 
-Six variants exist and read as one silhouette family: upright, bilateral, human-sized. Threat comes
-from breaking that, not from adding more of it.
+Two more variants, procedural rather than baked — both are shapes `MeshBuilder` can express, and the
+baker exists for the ones it cannot.
 
-Candidates, each of which has to be legible as a *silhouette in fog at twenty metres*:
+**The bulwark is wider than it is tall.** Every other thing in the crowd is an upright biped of
+roughly human proportion, the brute included — which is a big one, not a different shape. This is the
+first *horizontal* silhouette in the set, and at twenty metres in fog the outline is all the player
+can read.
 
-- something with four legs and no upright posture, so the crowd is not all one height
-- something much wider than it is tall, that blocks rather than chases
-- something that glows, so the dark stops being uniformly empty
-- something that arrives in a knot rather than as individuals
+It blocks rather than chases. A hundred and forty health against the brute's thirty-odd, six damage,
+and knockback that barely shifts it. At 1.1 m/s the player can always walk around it, so it never
+removes an option — it makes the option cost time, which is the resource the run is actually about.
+Experience is worth roughly the time it costs and no more, because paying out for a kill the player
+was supposed to avoid would argue with the whole design of it.
 
-The existing table already carries what a variant costs: `EnemyTypeResource` has speed, health,
-contact damage, behaviour and design height. A new variant is a `.tres`, a baked body, and a row in
-`Horde.TypeNames` — the systems do not need to change.
+**The lantern is dark and carries a light.** Until now the dark was uniformly empty: a thing was
+either in the lit part or was not there. This is the first enemy visible *before* it arrives, which
+inverts what the fog means — an approaching glow is free information the player has to decide what to
+do with. Fragile and it hurts, so seeing it coming is the compensation for letting it reach you.
+
+Its body is the darkest in the set on purpose. The sac has to be the brightest thing on screen and
+the creature around it nearly nothing, or what approaches is a lit man rather than a light.
+
+##### The glow channel
+
+It travels in the **alpha of the vertex colour**. `INSTANCE_CUSTOM` was full — pace and phase packed
+into one float, hue shift, hit flash, brightness jitter — and it is per-instance anyway, which is
+wrong for this: a glow belongs to a *part* of a body, not to a whole one. Alpha was the only channel
+left and was being written and ignored. Inverted so that opaque means unlit, so every body already in
+the game arrives unaffected.
+
+Emission rather than a light: the mobile renderer has no global illumination and this is a hundred
+and fifty bodies deep, so the sac brightens itself and nothing around it. Contrast sells it, not
+illumination.
+
+##### And the lineup had stopped being a lineup
+
+`BodyShot` held a hand-written array of six names and stayed six while the horde grew to nine — so
+the bulwark and the lantern were built, tabled, spawning, and **absent from the one picture anybody
+would look at to judge them**. It reads `Horde.TypeNames` now, skipping baked variants because those
+have no `Build` spec to stand up. `EnemyTypeProbe` had already been fixed for exactly this once.
+
+##### The probe refused to pass, and it was right twice
+
+`EnemyTypeProbe` failed on the bulwark and the lantern the moment they were tabled, and its own
+comment had anticipated the case: *"A variant with neither a sprite nor a bake has nothing at all to
+draw it, which is worth failing over."*
+
+**That was a real defect, not a test artefact.** The billboard array is the fallback path for hardware
+that cannot afford a hundred and fifty meshes, every sprite in it comes from a painting in `art-src/`
+matted with rembg, and nobody had painted the three new creatures — so the horde shipped correct on
+one path and drew magenta placeholders on the other. The warnings had been in every log since the
+stalker landed and had started to read as scenery.
+
+Codex generated the three reference paintings against the existing ones for style; rembg matted them;
+`BuildEnemySprites` fitted them and printed the `SpriteScale` each needs. That is the pipeline the
+project already had, used for the first time end to end.
+
+##### And then the numbers exposed a much older bug
+
+`BuildEnemySprites` prints the scale a sprite needs to cancel its fill fraction: a brute painting
+filling 71.5% of its frame needs 2.098 to come out three metres tall. **`BodyRenderer` was
+multiplying the mesh by that number too.**
+
+A mesh has no fill fraction. `MeshFor` builds it at `DesignHeightMeters` and a bake is refused unless
+it stands at that height, so the body is already the right size before anything touches it.
+Multiplying anyway meant every variant whose art did not fill its frame was drawn wrong **on the path
+the game actually ships**: the brute at 6.3 m instead of 3.0, the bloater at 3.8, and the boss at
+**seventeen metres** instead of five and a half.
+
+It never looked like a bug. A boss is supposed to be enormous, and the two variants the eye
+calibrates against — the walker and the spitter — both fill their frames and scale by exactly 1.0, so
+there was nothing on screen to measure the error with. `EnemyTypeProbe` reported the brute at 3.00 m
+for the whole time it was wrong, because it was measuring the sprite.
+
+There is a stage for the solid path now, asked of `BodyRenderer` rather than recomputed, so putting
+`SpriteScale` back into the instance scale fails a probe instead of silently doubling half the crowd.
+It compares against `BodyMeshLibrary.StandingHeight` rather than the design height, because a leaning
+variant genuinely stands shorter than it is long — the runner is tipped twenty-six degrees and 1.8 m
+of body occupies 1.71 m of vertical space. A loose tolerance would have worked and would have been a
+band wide enough to hide a real error.
+
+### D2c — Still open in the horde
+
+- **Something that arrives in a knot rather than as individuals.** The fourth candidate from the
+  original list, and the only one untouched. It is a spawner change rather than a body.
+- **The brute, the bloater and the boss are now half the size they have been drawing at.** That is
+  the correction above, and it is a real change to what a run looks and feels like at every
+  intensity. It has not been re-measured against the balance table.
 
 ### D3 — More than one survivor  ·  *independent of D1*
 

@@ -174,11 +174,14 @@ public partial class BuildEnemyTypes : SceneTree
                 MoveSpeed = 4.2f,
                 ContactDamagePerSecond = 7.0f,
 
-                // Under one, unlike everything else in the table. `SpriteScale`
-                // multiplies the billboard on the fallback path and the body on
-                // this one, and a creature designed at 1.3 m does not want the
-                // walker's 1.0 on top of it.
-                SpriteScale = 0.72f,
+                // What the sprite needs, printed by `BuildEnemySprites`: the
+                // painting is a long low quadruped and fills 48.4% of a frame
+                // shaped for a standing figure, so it takes 1.342 to come out at
+                // 1.3 m on the billboard path.
+                //
+                // It has no effect on the solid body, which is built at
+                // `DesignHeightMeters` and drawn at it — see `BodyRenderer`.
+                SpriteScale = 1.342f,
 
                 // Shoved easily. Four legs low to the ground is a shape that
                 // should skid, and it is the compensation for how hard it is to
@@ -192,6 +195,87 @@ public partial class BuildEnemyTypes : SceneTree
                 // that they stop looking like people.
                 UnlockIntensity = 0.3f,
                 ExperienceValue = 2.0f,
+            },
+
+            // A wall that walks.
+            //
+            // The first thing in the horde whose job is to *stop* the player
+            // rather than to reach them. Enormous health, almost no damage, and
+            // knockback that barely moves it — shooting it is a decision to spend
+            // time, and time is the resource the run is actually about.
+            //
+            // Slow on purpose and not merely slow: at 1.1 m/s the player can
+            // always walk around it, so it never removes an option. What it does
+            // is make the option *cost* something, which is the difference
+            // between an obstacle and a wall.
+            new()
+            {
+                TypeName = "bulwark",
+                SpriteLayer = 7,
+                DesignHeightMeters = 1.5f,
+
+                // Four times the brute. Nothing else in the table is close, and
+                // that is the point: the player has to learn to leave it alone.
+                MaxHealth = 140.0f,
+                MoveSpeed = 1.1f,
+
+                // Low. It is not a damage threat and pretending otherwise would
+                // make ignoring it wrong, which is the one behaviour it is meant
+                // to teach.
+                ContactDamagePerSecond = 6.0f,
+
+                // Wider than tall, so the painting fills 46.9% of an upright
+                // frame and needs 1.600 to stand 1.5 m on the billboard path.
+                // The solid body carries its own proportions.
+                SpriteScale = 1.600f,
+
+                // Barely shifts. A shotgun blast that skids a brute moves this a
+                // hand's width.
+                KnockbackScale = 0.15f,
+
+                SpawnWeight = 0.45f,
+
+                // Late. It is a lesson about spending ammunition, and the player
+                // needs to have something worth spending first.
+                UnlockIntensity = 0.55f,
+
+                // Worth the time it costs, and no more. Paying out for a kill
+                // the player was supposed to walk around would argue with the
+                // whole design of it.
+                ExperienceValue = 6.0f,
+            },
+
+            // Dark, and carrying a light.
+            //
+            // The arena goes black somewhere between twenty-four and forty-four
+            // metres depending on the biome, and until now the dark was
+            // uniformly empty — a thing was either in the lit part or was not
+            // there. This is the first enemy visible *before* it arrives, which
+            // inverts what the fog means: an approaching glow is free
+            // information the player has to decide what to do with.
+            //
+            // Fragile, fast-ish, and it hurts. The bargain is that it announces
+            // itself from further away than anything else and is worse than
+            // average to let reach you — seeing it coming is the compensation
+            // for what happens if you ignore it.
+            new()
+            {
+                TypeName = "lantern",
+                SpriteLayer = 8,
+                DesignHeightMeters = 1.9f,
+                MaxHealth = 14.0f,
+                MoveSpeed = 3.0f,
+                ContactDamagePerSecond = 16.0f,
+                SpriteScale = 0.950f,
+                KnockbackScale = 1.2f,
+                SpawnWeight = 0.5f,
+
+                // Between the stalker and the bulwark. The horde's lessons in
+                // order: things get faster, they stop looking like people, they
+                // start seeing you first, and some of them are not worth
+                // shooting.
+                UnlockIntensity = 0.42f,
+                ExperienceValue = 3.0f,
             },
         };
 
