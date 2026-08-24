@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="CharacterResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_ien6x"]
+
+[resource]
+script = ExtResource("1_ien6x")
+CharacterName = "Drifter"
+Blurb = "no edges, no gaps; everything the shop sells is priced for this one"

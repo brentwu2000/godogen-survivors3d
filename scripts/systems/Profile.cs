@@ -133,6 +133,9 @@ public sealed class Profile
     /// could not have been built for, which is the entire reason it exists.
     public int Biome { get; set; }
 
+    /// The survivor last chosen. Zero is the Drifter, which every profile has.
+    public int Character { get; set; }
+
     /// Whether this player has ever been shown the base screen.
     ///
     /// A brand-new player opening the game meets a shop with fifteen rows, three
@@ -454,6 +457,7 @@ public sealed class Profile
             { "unlocked", Unlocked },
             { "bosses_killed", BossesKilled },
             { "biome", Biome },
+            { "character", Character },
             { "seen_base", HasSeenBase },
             { "daily", Daily },
             { "most_crates", MostCrates },
@@ -593,6 +597,13 @@ public sealed class Profile
 
         if (root.TryGetValue("biome", out Variant biome))
             profile.Biome = biome.AsInt32();
+
+        // Absent means a save written before the roster existed, and zero is the
+        // Drifter — whose numbers are what every one of those saves was played
+        // with. An old profile therefore loads as exactly the character it has
+        // always been.
+        if (root.TryGetValue("character", out Variant character))
+            profile.Character = character.AsInt32();
 
         // Absent means a file written before the first-run path existed, and
         // those players have very much seen the base screen. Defaulting to false

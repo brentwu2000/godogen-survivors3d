@@ -201,9 +201,22 @@ public static class BodyMeshLibrary
     public static Build ForPlayer(float height) => ForPlayer(height, Carry.None);
 
     public static Build ForPlayer(float height, Carry held) =>
+        ForPlayer(height, held,
+                  new Color(0.22f, 0.34f, 0.52f), new Color(0.26f, 0.30f, 0.38f),
+                  new Color(0.72f, 0.60f, 0.48f));
+
+    /// A named survivor, in their own colours.
+    ///
+    /// Proportions are shared and only the palette moves, which is a decision
+    /// rather than laziness. The player is the one body that must never be
+    /// mistaken for the horde for even a frame, and what carries that is hue:
+    /// blue against a crowd of greens, greys and reds. Three survivors that were
+    /// three *silhouettes* would each have to win that fight separately, and two
+    /// of them would lose it — there is exactly one shape in this game that
+    /// reads as "not one of them", and all three get it.
+    public static Build ForPlayer(float height, Carry held, Color torso, Color limb, Color head) =>
         new(height, 0.48f, 0.065f, 0.24f, 4.0f, 0.60f, 0.33f, 0.040f,
-            new Color(0.22f, 0.34f, 0.52f), new Color(0.26f, 0.30f, 0.38f),
-            new Color(0.72f, 0.60f, 0.48f), false, held);
+            torso, limb, head, false, held);
 
     /// Which silhouette a weapon category carries.
     ///

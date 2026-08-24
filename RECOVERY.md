@@ -219,18 +219,49 @@ band wide enough to hide a real error.
   the correction above, and it is a real change to what a run looks and feels like at every
   intensity. It has not been re-measured against the balance table.
 
-### D3 — More than one survivor  ·  *independent of D1*
+### ✅ D3 — Three survivors, and none of them is a difficulty setting
 
-One player character, one silhouette, one set of numbers. Multiple characters with different
-abilities is a progression axis the game does not have, and it is the cheapest of the three to build
-because `Player`, `WeaponHandler` and `RunModifiers` already separate what a character *is* from what
-it *carries*.
+A character is the one decision made **before** the loadout, and it has to change what the loadout is
+*for*. None of the abilities is damage or fire rate: those are what the shop already sells, and a
+survivor selling them again is a difficulty setting with a name on it.
 
-A character is a `.tres`: body build, base health, base speed, and one ability that is not a weapon.
-The shop already sells weapons and gear; characters unlock the same way.
+**The Drifter is what `Player` shipped with, to the digit**, and that is the whole reason the other
+two can exist safely. Eleven phases of balance work, forty-odd probes and every number in the shop
+were tuned against one hundred health, six metres a second and twenty of bulk — a "default" that
+improved on any of them would have re-balanced the game as a side effect of adding a menu.
 
-Probe: whatever is added, the assertion is that two characters produce measurably different runs —
-`BalanceSweep` with a character arm, the same way it grew a zone arm and then a tier arm.
+The **Courier** gets in, takes everything, and does not stay: eight more bulk and a wider reach on a
+crate against twenty per cent less health, which here is not a health bar so much as a number of
+mistakes. The **Warden** stands somewhere and makes the crowd come to it: forty per cent more health,
+a blade already turning and cold ground underfoot, against six fewer bulk and a slower walk. Smaller
+bag *and* slower is two costs and it needs both — with only one, the extra health made it the safe
+pick for a bad player and the strong pick for a good one.
+
+**Every ability is an existing `RunModifiers` field granted at the start of a run.** The kit cards,
+the gear and the trinkets all reach the same numbers, so a survivor is a head start on a strategy the
+deck can be built around rather than a mechanic nothing else in the game speaks to.
+
+**Proportions are shared and only the palette moves.** The player is the one body that must never be
+mistaken for the horde for even a frame, and hue is what carries that. Three survivors that were
+three *silhouettes* would each have to win that fight separately, and two of them would lose it.
+
+The choice sits at the gate on `[C]`. The armoury was the other candidate — the survivor and the
+loadout are one decision, since the Warden's fourteen bulk changes what is worth buying and the
+Courier's twenty-eight changes it the other way — but both of the armoury's keys already mean
+something, and the gate is literally the question "who is going".
+
+`CharacterProbe` asserts the two things that pull against each other: nothing is strictly better than
+the Drifter, and every difference is at least fifteen per cent so it can be felt rather than read. It
+writes the Drifter's three numbers down rather than reading them from the resource — reading them
+would compare the table against itself and pass for any value at all.
+
+### D3b — Still open
+
+- **No `BalanceSweep` character arm.** The original plan asked for one, and the probe answers the
+  design question ("is this a ladder?") rather than the empirical one ("do three survivors actually
+  produce different runs?"). The arm is the same shape as the zone and tier arms already in there.
+- **Three survivors is where cycling stops being obviously right**, the same note the biome list
+  carries at five. A fourth wants a list rather than a key.
 
 ## Half E — places, not one field with three tints
 

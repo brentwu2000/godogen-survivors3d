@@ -63,6 +63,7 @@ public partial class BodyShot : SceneTree
     private string _extra = string.Empty;
     private string _baked = string.Empty;
     private bool _carry;
+    private bool _roster;
     private int _frame;
 
     public override void _Initialize()
@@ -98,6 +99,9 @@ public partial class BodyShot : SceneTree
 
             if (argument == "carry")
                 _carry = true;
+
+            if (argument == "roster")
+                _roster = true;
         }
 
         var shader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
@@ -160,7 +164,23 @@ public partial class BodyShot : SceneTree
             carried.Add(BodyMeshLibrary.Carry.Blade);
         }
 
-        int slots = _carry ? carried.Count : 1 + names.Length;
+        // `roster` stands the survivors side by side instead of the horde.
+        //
+        // Three bodies that share every proportion and differ only in palette,
+        // which is the decision this lineup exists to check: the player is the
+        // one body that must never be mistaken for the horde, hue is what carries
+        // that, and three survivors have to each win that fight on their own.
+        var roster = new System.Collections.Generic.List<CharacterResource>();
+        if (_roster)
+        {
+            foreach (CharacterResource who in CharacterBook.All)
+                roster.Add(who);
+
+            names = System.Array.Empty<string>();
+            carried.Clear();
+        }
+
+        int slots = _roster ? roster.Count : _carry ? carried.Count : 1 + names.Length;
         float span = slots * Spacing;
         float x = -span * 0.5f;
 
@@ -169,6 +189,14 @@ public partial class BodyShot : SceneTree
         foreach (BodyMeshLibrary.Carry held in carried)
         {
             Add(shader, BodyMeshLibrary.ForPlayer(1.75f, held), root, x);
+            x += Spacing;
+        }
+
+        foreach (CharacterResource who in roster)
+        {
+            Add(shader, BodyMeshLibrary.ForPlayer(who.BodyHeight, BodyMeshLibrary.Carry.Longarm,
+                                                  who.Torso, who.Limb, who.Head),
+                root, x);
             x += Spacing;
         }
 

@@ -18,6 +18,12 @@ public static class GameSession
     /// this project has now written down four times.
     public static int Biome { get; set; }
 
+    /// Which survivor the run is played as, as an index into `CharacterBook.All`.
+    ///
+    /// Here for the same reason the biome is: `Player` needs it in `_Ready` and
+    /// the base screen decides it in a scene that no longer exists by then.
+    public static int Character { get; set; }
+
     /// The date key when this run is today's challenge, or empty for a normal
     /// run. A string rather than a bool, because what the meta layer has to do
     /// when the run ends is write a result under a date — and a bool would mean

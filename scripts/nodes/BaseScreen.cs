@@ -144,6 +144,16 @@ public partial class BaseScreen : Control
             case Fitting.Board: Reroll(); break;
             case Fitting.Map: LaunchDaily(); break;
 
+            // Who walks out, at the door they walk out of.
+            //
+            // The armoury would have been the other candidate — the survivor and
+            // the loadout are one decision, because the Warden's fourteen bulk
+            // changes what is worth buying and the Courier's twenty-eight changes
+            // it the other way — but both of the armoury's keys already mean
+            // something. The gate is not a consolation: it is the last thing
+            // before launching and it is literally the question "who is going".
+            case Fitting.Gate: CycleCharacter(); break;
+
             default:
                 (_, _, string second) = Shelter.Prompt(Focus);
                 if (second.Length == 0)
@@ -382,6 +392,37 @@ public partial class BaseScreen : Control
         Persist();
     }
 
+    /// Cycles the survivor, skipping any not yet earned.
+    ///
+    /// At the gate rather than on a screen of its own. A roster screen would make
+    /// choosing a survivor a separate act from equipping one, and it is not: the
+    /// Warden's fourteen bulk changes what is worth buying and the Courier's
+    /// twenty-eight changes it the other way, so the two are one decision made in
+    /// two rooms.
+    private void CycleCharacter()
+    {
+        int count = CharacterBook.All.Length;
+        for (int step = 1; step <= count; step++)
+        {
+            int next = (_profile.Character + step) % count;
+            if (!CharacterBook.Allows(_profile, next))
+                continue;
+
+            _profile.Character = next;
+            _message = $"playing as {CharacterBook.Load(next).CharacterName}";
+            Persist();
+            return;
+        }
+
+        // Not silence. A key that appears to do nothing is read as a broken key,
+        // and the honest answer — "you have not earned another one" — is also the
+        // one that tells the player there is something to earn.
+        CharacterResource next2 = CharacterBook.Load((_profile.Character + 1) % count);
+        _message = count > 1
+            ? $"{next2.CharacterName} opens after {next2.OpensAfter} extractions"
+            : "only one survivor so far";
+    }
+
     /// Steps to the next place the player has opened, skipping the rest.
     ///
     /// Cycling rather than a submenu: the list is on screen with what each place
@@ -451,6 +492,11 @@ public partial class BaseScreen : Control
         // gets the default rather than whatever the player last chose.
         GameSession.Biome = _profile.Biome;
 
+        // And who is going. Same reasoning: a probe or a capture script never
+        // touches this screen, so it gets index zero — the Drifter, whose numbers
+        // are the ones every probe was written against.
+        GameSession.Character = _profile.Character;
+
         Persist();
         GetTree().ChangeSceneToFile("res://scenes/Main.tscn");
     }
@@ -481,6 +527,13 @@ public partial class BaseScreen : Control
             : "";
 
         text.AppendLine($"heading for  {here.BiomeName} — {here.Blurb}   [B] change{more}");
+
+        // Who is going, next to where they are going. The two lines are read
+        // together because the choice is made together.
+        CharacterResource who = CharacterBook.Load(_profile.Character);
+        text.AppendLine($"playing as   {who.CharacterName} — {who.Blurb}");
+        text.AppendLine($"             {who.MaxHealth:F0} hp   {who.MoveSpeed:F1} m/s   "
+                      + $"{who.CarryCapacity} bulk   [C] at the gate to change");
 
         // What the cursor is on, in the piece's own numbers.
         //
@@ -850,6 +903,7 @@ public partial class BaseScreen : Control
         text.AppendLine("  [1][2][3] take a contract");
         text.AppendLine($"  [R] reroll contracts ({ContractBook.RerollCost} cr)");
         text.AppendLine("  [B] change terrain      [D] today's run");
+        text.AppendLine("  [C] at the gate: change survivor");
         text.AppendLine("  [S] sell stash          [L] launch");
 
         if (_message.Length > 0)

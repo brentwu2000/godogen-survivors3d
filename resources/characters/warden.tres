@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="CharacterResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_ogn4e"]
+
+[resource]
+script = ExtResource("1_ogn4e")
+CharacterName = "Warden"
+Blurb = "holds ground; a blade already turning, and the floor is cold"
+MaxHealth = 140.0
+MoveSpeed = 5.3
+CarryCapacity = 14
+BodyHeight = 2.25
+Torso = Color(0.3, 0.28, 0.44, 1)
+Limb = Color(0.24, 0.24, 0.3, 1)
+Head = Color(0.7, 0.58, 0.46, 1)
+StartingBlades = 1
+StartingChill = 0.25
+OpensAfter = 8

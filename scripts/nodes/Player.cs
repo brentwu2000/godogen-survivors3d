@@ -154,8 +154,7 @@ public partial class Player : CharacterBody3D
         parent.RemoveChild(_body.Node);
         _body.Node.QueueFree();
 
-        _body = new SoloBody(_bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight, _held),
-                             _horde?.ArenaExtent ?? 60.0f);
+        _body = new SoloBody(_bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
 
         parent.AddChild(_body.Node);
     }
@@ -175,6 +174,8 @@ public partial class Player : CharacterBody3D
         _sprite = GetNode<Sprite3D>("Sprite");
         _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
+        ApplyCharacter();
+
         _rig = GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
 
@@ -192,8 +193,7 @@ public partial class Player : CharacterBody3D
             else
             {
                 _bodyShader = bodyShader;
-                _body = new SoloBody(bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight, _held),
-                                     _horde?.ArenaExtent ?? 60.0f);
+                _body = new SoloBody(bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
 
                 // Added to the parent, not to the player. The transform inside a
                 // MultiMesh is world space, so a node parented to a moving player
@@ -487,6 +487,45 @@ public partial class Player : CharacterBody3D
     /// In-run upgrades. Health is granted as current as well as maximum: a pick
     /// that only raises the ceiling is worth nothing at the moment it is offered,
     /// which is exactly when the player is deciding whether it saves them.
+    /// This survivor's body, in this survivor's colours, holding whatever is
+    /// in hand. One place, because it is built twice — once at `_Ready` and again
+    /// every time the carried silhouette changes — and two copies would drift the
+    /// first time a character gained a proportion of its own.
+    private BodyMeshLibrary.Build BodySpec()
+    {
+        CharacterResource who = CharacterBook.Load(GameSession.Character);
+        return BodyMeshLibrary.ForPlayer(BodyHeight, _held, who.Torso, who.Limb, who.Head);
+    }
+
+    /// Becomes whoever the base screen picked.
+    ///
+    /// Applied in `_Ready` before anything reads the numbers: `Health` is set
+    /// from `MaxHealth` further down, `WeaponHandler` sizes nothing off this, and
+    /// the backpack takes its capacity here. Applying it later would leave a
+    /// survivor with the Warden's health bar and the Drifter's hundred points in
+    /// it.
+    ///
+    /// **The exports stay as the fallback.** They hold the Drifter's numbers, so
+    /// a scene opened without a session — which is most probes — behaves exactly
+    /// as it did before the roster existed.
+    private void ApplyCharacter()
+    {
+        CharacterResource who = CharacterBook.Load(GameSession.Character);
+
+        MaxHealth = who.MaxHealth;
+        MoveSpeed = who.MoveSpeed;
+        CarryCapacity = who.CarryCapacity;
+        BodyHeight = who.BodyHeight;
+
+        // The ability, as a head start on the deck rather than a mechanic of its
+        // own. Added rather than assigned: a trinket that granted a blade before
+        // this ran would otherwise be silently thrown away.
+        Mods.OrbitBlades += who.StartingBlades;
+        Mods.Chill = Mathf.Max(Mods.Chill, who.StartingChill);
+        Mods.LootValueScale *= who.LootValueScale;
+        Mods.SearchRadiusBonus += who.SearchRadiusBonus;
+    }
+
     public void AddMaxHealth(float amount)
     {
         MaxHealth += amount;
