@@ -15,3 +15,6 @@ DepthRarityBias = 1.4
 SpawnRingScale = 0.78
 GroundTint = Color(0.82, 0.8, 0.86, 1)
 PropTint = Color(0.88, 0.87, 0.92, 1)
+GroundSlabMetres = 2.4
+GroundSeamDarkness = 0.42
+GroundSlabVariation = 0.14

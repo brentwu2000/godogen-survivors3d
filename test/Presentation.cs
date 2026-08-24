@@ -23,6 +23,17 @@ public partial class Presentation : SceneTree
 {
     private const float ArriveDistance = 1.2f;
 
+    /// Whether there is anything to record on.
+    ///
+    /// `--write-movie` needs a rendering device, and headless has none: the run
+    /// plays out, every frame writes nothing, and the script exits after
+    /// `--quit-after` having produced no video and no error. This was on the
+    /// sweep's skip list by name, which worked until the list was derived from
+    /// the guard instead — and then the only thing keeping a forty-second
+    /// scripted run out of every sweep was that its name happened to be spelled
+    /// the same in two files.
+    private bool _refused;
+
     // Compressed pacing, for the camera only.
     private const int OpeningHorde = 36;
 
@@ -149,6 +160,13 @@ public partial class Presentation : SceneTree
 
     public override void _Initialize()
     {
+        // See `_refused`. Refuses rather than recording forty seconds of nothing.
+        if (!Display.Required(this, "Presentation"))
+        {
+            _refused = true;
+            return;
+        }
+
         var scene = GD.Load<PackedScene>("res://scenes/Main.tscn")?.Instantiate();
         if (scene == null)
         {
@@ -197,6 +215,13 @@ public partial class Presentation : SceneTree
 
     public override bool _PhysicsProcess(double delta)
     {
+        // `Quit` schedules the exit rather than taking it, so a refused run still
+        // gets ticks — and every one of them would walk a scene that was never
+        // built. Returning true stops the tree instead of throwing a null
+        // reference per frame until the quit lands.
+        if (_refused)
+            return true;
+
         if (!_bound)
         {
             Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);

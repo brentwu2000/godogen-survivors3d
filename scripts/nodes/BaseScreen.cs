@@ -384,8 +384,13 @@ public partial class BaseScreen : Control
 
     /// Steps to the next place the player has opened, skipping the rest.
     ///
-    /// Cycling rather than a submenu: there are three, the list is on screen with
-    /// what each one costs you, and a menu for a three-way choice is a menu.
+    /// Cycling rather than a submenu: the list is on screen with what each place
+    /// costs you, and a menu for a choice this small is a menu for its own sake.
+    ///
+    /// It was written when there were three and there are five now, which is
+    /// about where cycling stops being obviously right — one more and pressing
+    /// [B] five times to get back to where you started is worse than a list.
+    /// Left as it is until then rather than pre-emptively rebuilt.
     private void CycleBiome()
     {
         int count = BiomeBook.All.Length;

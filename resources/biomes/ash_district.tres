@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="BiomeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/BiomeResource.cs" id="1_u3d63"]
+
+[resource]
+script = ExtResource("1_u3d63")
+BiomeName = "Ash District"
+Blurb = "long streets, blind corners; the crowd comes down one"
+TileWeights = PackedFloat32Array(0.9, 0.55, 3, 1.1)
+ClusterCountScale = 0.95
+ClusterSizeScale = 1.65
+CorridorGap = 4.6
+CrateCount = 9
+DepthRarityBias = 2.1
+SpawnRingScale = 0.88
+PropSet = PackedInt32Array(7, 8, 9, 10, 11, 12, 13)
+LandmarkSet = PackedInt32Array(0, 2)
+GroundTint = Color(0.86, 0.86, 0.9, 1)
+PropTint = Color(0.94, 0.93, 0.96, 1)
+GroundSlabMetres = 3.2
+GroundSeamDarkness = 0.5
+GroundSeamWidth = 0.038
+GroundSlabVariation = 0.17
+SunAngleDegrees = Vector2(-28, 62)
+SunColour = Color(1, 0.78, 0.55, 1)
+SunEnergy = 1.05
+AmbientColour = Color(0.34, 0.36, 0.48, 1)
+AmbientEnergy = 0.5
+FogColour = Color(0.1, 0.07, 0.06, 1)
+FogBegin = 13.0
+FogEnd = 44.0

@@ -42,6 +42,12 @@ public partial class LootContainer : Node3D
     public bool Looted { get; private set; }
     public bool PlayerInRange { get; private set; }
 
+    /// Which of the two shapes this is. The level scatters crates; the director
+    /// and the boss drop caches.
+    [Export] public LootLibrary.Look Look { get; set; } = LootLibrary.Look.Crate;
+
+    private Node3D? _lid;
+
     /// What was rolled and would not fit.
     ///
     /// The crate keeps it. Previously a full backpack emptied the container and
@@ -59,6 +65,56 @@ public partial class LootContainer : Node3D
     public int RemainingBulk => _remains?.UsedBulk ?? 0;
     public int RemainingValue => _remains?.TotalValue ?? 0;
 
+    /// Builds the box and the lid that will open on it.
+    ///
+    /// Here rather than at the two call sites, each of which hand-rolled a
+    /// `BoxMesh` with **no material on it at all** — that is the white cube in
+    /// every screenshot ever taken of this game, including the ones used to
+    /// judge the ground shader, the fog, the bodies and every biome. It survived
+    /// because no probe asks what a thing looks like, and because a cube reads
+    /// as "placeholder for something", which is a category the eye skips.
+    ///
+    /// Two call sites meant two cubes and a third would have been a third, so
+    /// the container owns its own appearance now. Called from `_Ready` rather
+    /// than from a constructor because the tier is read off `RarityBias`, and
+    /// the generator assigns that before the node enters the tree.
+    private void BuildBody()
+    {
+        // A container built with `new` for a test never enters the tree and
+        // never gets here, which is correct — `RollIntoForTesting` wants a table
+        // and not a mesh.
+        // The meshes arrive with their material already on them and are shared
+        // between every container of the same look and tier — six meshes for the
+        // whole game rather than two per crate rebuilt on every regeneration,
+        // which the base screen triggers on each biome change.
+        int tier = LootLibrary.TierFor(RarityBias);
+
+        AddChild(new MeshInstance3D { Name = "Mesh", Mesh = LootLibrary.Body(Look, tier) });
+
+        // The lid hangs on its own node at the hinge, so opening it is a
+        // rotation rather than a swap to a second mesh.
+        _lid = new Node3D { Name = "Lid", Position = LootLibrary.Hinge(Look) };
+        _lid.AddChild(new MeshInstance3D { Name = "Mesh", Mesh = LootLibrary.Lid(Look, tier) });
+        AddChild(_lid);
+
+        if (Looted)
+            ShowOpen();
+    }
+
+    /// Stands the lid open.
+    ///
+    /// An emptied crate looked exactly like a full one, from anywhere, for as
+    /// long as crates have existed — nothing in this file ever touched its mesh.
+    /// The minimap knew, and the minimap is a nine-centimetre square in the
+    /// corner of the screen. This puts the same information where the player is
+    /// already looking, which is the difference between an arena you are working
+    /// through and an arena you are wandering around.
+    private void ShowOpen()
+    {
+        if (_lid != null)
+            _lid.Rotation = new Vector3(LootLibrary.OpenAngle, 0.0f, 0.0f);
+    }
+
     private Player? _player;
     private ItemResource[] _table = System.Array.Empty<ItemResource>();
     private float _weightTotal;
@@ -66,6 +122,8 @@ public partial class LootContainer : Node3D
 
     public override void _Ready()
     {
+        BuildBody();
+
         _player = GetTree().Root.FindChild("Player", recursive: true, owned: false) as Player;
 
         // Seeded from the spawn position so each crate rolls differently but the
@@ -175,7 +233,14 @@ public partial class LootContainer : Node3D
 
         int taken = Transfer(_remains, _player.Backpack);
         AnnounceCuriosities();
+        bool wasLooted = Looted;
         Looted = _remains.EntryCount == 0;
+
+        // The moment it empties, not a frame later. `Looted` is also read by
+        // `_PhysicsProcess` to stop searching, so this is the only place the
+        // transition happens.
+        if (Looted && !wasLooted)
+            ShowOpen();
 
         // Reset rather than held at 1. Held, the search completes again on the
         // very next tick against a bag that is still full, and the crate emits a

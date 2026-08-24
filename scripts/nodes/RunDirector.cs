@@ -335,14 +335,14 @@ public partial class RunDirector : Node3D
             // shipped paid four set pieces and three supplies, which is a reward
             // that makes the next five minutes harder.
             Curiosities = false,
-        };
 
-        cache.AddChild(new MeshInstance3D
-        {
-            Name = "Mesh",
-            Mesh = new BoxMesh { Size = new Vector3(1.4f, 1.1f, 1.4f) },
-            Position = new Vector3(0.0f, 0.55f, 0.0f),
-        });
+            // The other shape. A cache is packed and dropped rather than
+            // scavenged — moulded shell, chute harness still attached, a beacon
+            // panel on top where it clears cover. The player is meant to run
+            // toward this one, so it must not be mistaken at fifty metres for a
+            // crate that was always there.
+            Look = LootLibrary.Look.Cache,
+        };
 
         crates.AddChild(cache);
         return true;

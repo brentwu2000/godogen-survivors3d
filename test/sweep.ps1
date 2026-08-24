@@ -13,24 +13,48 @@
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-# Not probes.
+# Not probes, listed by hand because nothing in the source distinguishes them.
 #
-# The five capture scripts and TouchProbe need a real display; they refuse
-# headless now (see test/Display.cs) rather than spinning a core forever, which
-# is what they used to do. AutoPlay and BalanceSweep are balance instruments and
-# take minutes each. HordePerf prints timings and "PERF DONE" — it has no pass
-# or fail. BotDrive is a helper class with no SceneTree, so Godot cannot run it
-# at all. Display is the guard itself.
+# AutoPlay and BalanceSweep are balance instruments and take minutes each.
+# HordePerf prints timings and "PERF DONE" — it has no pass or fail. BotDrive and
+# Fresh are helper classes with no SceneTree, so Godot cannot run them at all.
+# ModelReport describes a `.glb` and answers no question on its own. Display is
+# the guard itself.
 $skip = @(
-    'Display', 'TouchProbe', 'ScaleProbe', 'Screenshot', 'BaseShot',
-    'DebriefShot', 'BillboardCompare', 'Presentation', 'BodyShot',
-    'AutoPlay', 'BalanceSweep', 'HordePerf', 'BotDrive', 'Fresh', 'ModelReport'
+    'Display', 'Fresh', 'BotDrive', 'ModelReport',
+    'AutoPlay', 'BalanceSweep', 'HordePerf',
+
+    # TouchProbe runs headless perfectly well and has been on this list since
+    # before there was a reason written down for it. Left alone: taking a name
+    # off a skip list is how a sweep starts hanging, and finding out why costs
+    # more than the one probe is worth. Worth revisiting deliberately, not in
+    # passing.
+    'TouchProbe'
 )
+
+# The capture scripts, found rather than listed.
+#
+# **A name missing from a hand-kept list is not a caught error — it is a sweep
+# that hangs.** A capture script run headless spins at 100% of a core forever
+# printing nothing (see test/Display.cs), and a probe that has hung looks exactly
+# like a probe that is slow. `PropShot` was added to this folder and not to the
+# list, and two sweeps died at the entry alphabetically before it while being
+# read as "the long run probes are slow".
+#
+# So the list is derived: anything that calls `Display.Required` has *said* it
+# needs a display, and that declaration is in the file where somebody writing a
+# capture script cannot forget it. One place to get right instead of two.
+$needsDisplay = Get-ChildItem "$root\test\*.cs" |
+                Where-Object { (Get-Content $_.FullName -Raw) -match 'Display\.Required' } |
+                ForEach-Object { $_.BaseName }
 
 $names = Get-ChildItem "$root\test\*.cs" |
          ForEach-Object { $_.BaseName } |
-         Where-Object { $skip -notcontains $_ } |
+         Where-Object { $skip -notcontains $_ -and $needsDisplay -notcontains $_ } |
          Sort-Object
+
+Write-Output "skipping $($needsDisplay.Count) capture script(s): $($needsDisplay -join ', ')"
+Write-Output ""
 
 $failed = @()
 

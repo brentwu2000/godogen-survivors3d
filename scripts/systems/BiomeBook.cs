@@ -14,7 +14,8 @@ public static class BiomeBook
     /// Names in the order they are listed, so a saved index means the same place
     /// after a restart. Sorted by filename rather than by directory order, which
     /// differs between the editor and an exported build.
-    private static readonly string[] Order = { "rail_yard", "old_town", "the_flats" };
+    private static readonly string[] Order =
+        { "rail_yard", "old_town", "the_flats", "ash_district", "cold_storage" };
 
     public static BiomeResource[] All
     {

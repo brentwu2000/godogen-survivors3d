@@ -109,6 +109,10 @@ public partial class LevelGenerator : Node3D
 
     private ulong _rng;
     private PropRenderer? _props;
+
+    /// The cover, for a probe that needs to know what was actually placed rather
+    /// than what the layout intended. Nothing in the game reads it.
+    public PropRenderer? Props => _props;
     private ScatterField? _scatter;
 
     /// Ankle-high decoration per map, across all three kinds.
@@ -179,6 +183,9 @@ public partial class LevelGenerator : Node3D
         // seed's offset — a floor that looks like perfectly good ground while
         // being a different landscape from everything standing on it.
         GetParent()?.GetNodeOrNull<GroundMesh>("Ground")?.Rebuild();
+
+        Relight();
+        Roof();
 
         Node3D obstacles = Container("Obstacles");
         Node3D crates = Container("LootContainers");
@@ -474,7 +481,7 @@ public partial class LevelGenerator : Node3D
             var half = new Vector2(size * 0.5f * (0.6f + NextFloat() * 0.8f),
                                    size * 0.5f * (0.6f + NextFloat() * 0.8f));
 
-            blocks.Add(new Block(center + offset, half, PickProp(tile, half),
+            blocks.Add(new Block(center + offset, half, Biome.Prop(PickRole(tile, half)),
                                  Yaw(half), 0.85f + NextFloat() * 0.3f));
         }
     }
@@ -498,31 +505,51 @@ public partial class LevelGenerator : Node3D
                 ? new Vector2(length * 0.5f, thickness * 0.5f)
                 : new Vector2(thickness * 0.5f, length * 0.5f);
 
-            blocks.Add(new Block(center + offset, half, PropKind.Wall, Yaw(half), 1.0f));
+            blocks.Add(new Block(center + offset, half, Biome.Prop(PropRole.Wall), Yaw(half), 1.0f));
         }
     }
 
-    /// What a footprint should be drawn as. Shape first, then the tile: a long
-    /// thin footprint is a wall whatever cell it is in, because a container drawn
+    /// What a footprint should be *for*. Shape first, then the tile: a long thin
+    /// footprint is a barricade whatever cell it is in, because a container drawn
     /// across it arrives stretched into something nobody recognises.
-    private PropKind PickProp(Tile tile, Vector2 half)
+    ///
+    /// This returns a role and the biome names the prop, which is the whole of
+    /// how a laboratory differs from a rail yard without differing as a fight.
+    /// **The rolls and thresholds below are untouched from when they were tuned**
+    /// — deliberately, because changing the furniture and the layout in the same
+    /// phase would leave no way to tell which one a regression came from.
+    private PropRole PickRole(Tile tile, Vector2 half)
     {
         float longest = Mathf.Max(half.X, half.Y);
         float shortest = Mathf.Max(0.01f, Mathf.Min(half.X, half.Y));
 
         if (longest / shortest > 2.6f)
-            return PropKind.Wall;
+            return PropRole.Wall;
 
         float roll = NextFloat();
 
         return tile switch
         {
-            Tile.Yard => roll < 0.62f ? PropKind.Container : PropKind.Rubble,
-            Tile.Rubble => roll < 0.4f ? PropKind.Barrier
-                : roll < 0.72f ? PropKind.Rubble
-                : PropKind.Dumpster,
-            _ => roll < 0.5f ? PropKind.Rubble : PropKind.Barrier,
+            Tile.Yard => roll < 0.62f ? PropRole.Bulk : PropRole.Heap,
+            Tile.Rubble => roll < 0.4f ? PropRole.Low
+                : roll < 0.72f ? PropRole.Heap
+                : PropRole.Odd,
+            _ => roll < 0.5f ? PropRole.Heap : PropRole.Low,
         };
+    }
+
+    private static bool SameKinds(PropKind[] a, PropKind[] b)
+    {
+        if (a.Length != b.Length)
+            return false;
+
+        for (int i = 0; i < a.Length; i++)
+        {
+            if (a[i] != b[i])
+                return false;
+        }
+
+        return true;
     }
 
     /// Props are drawn along their footprint, so a footprint deeper than it is
@@ -530,9 +557,129 @@ public partial class LevelGenerator : Node3D
     /// across the short axis of the ground it occupies.
     private static float Yaw(Vector2 half) => half.Y > half.X ? 90.0f : 0.0f;
 
+    /// Puts a lid on the arena, or takes one off.
+    ///
+    /// See `CeilingMesh` for why an interior needs this and why the sun, the fog
+    /// and the floor together were not enough.
+    ///
+    /// Rebuilt rather than kept and hidden, because the height and colour are
+    /// the biome's and the base screen changes biome without reloading the
+    /// scene. Cheap: one mesh of a few hundred triangles, once per generation.
+    private void Roof()
+    {
+        // Detached before it is freed, and that is the same care the prop
+        // renderer needed twenty lines up.
+        //
+        // `QueueFree` alone defers to the end of the frame, so the old node is
+        // still a child when the replacement is added — and Godot renames the
+        // newcomer to "Ceiling2" to avoid the collision. The *next* generation
+        // then finds the queued-and-doomed "Ceiling" again, frees nothing that
+        // matters, and leaves "Ceiling2" in the tree forever. Two generations
+        // in one frame and the arena has two roofs; a third has three.
+        // `BiomeProbe` calls `Generate` once per biome in a single stage.
+        if (GetNodeOrNull<MeshInstance3D>("Ceiling") is MeshInstance3D old)
+        {
+            RemoveChild(old);
+            old.QueueFree();
+        }
+
+        if (Biome.CeilingHeight <= 0.0f)
+            return;
+
+        // Clear of the camera, whatever the biome asked for. The eye sits 5.7 m
+        // up; a roof below that draws the arena from inside the slab, which
+        // looks like the ceiling has vanished rather than like the camera is in
+        // the wrong place.
+        float height = Mathf.Max(Biome.CeilingHeight, 7.0f);
+
+        MeshInstance3D ceiling = CeilingMesh.Build(Extent, height, Biome.CeilingColour);
+        ceiling.Name = "Ceiling";
+        AddChild(ceiling);
+    }
+
+    /// Points the sun and sets the fog to whatever this place is.
+    ///
+    /// Here rather than in `BuildMain` because the scene is built once and the
+    /// biome is chosen every run — a lighting rig baked into `Main.tscn` is a
+    /// lighting rig that belongs to whichever biome happened to be first.
+    ///
+    /// **Every default on `BiomeResource` is the number `BuildMain` already
+    /// wrote**, so a biome that says nothing about light is lit exactly as it was
+    /// before this existed. That is what makes it safe to add a fourth place
+    /// without re-lighting the three that were tuned against the old rig.
+    ///
+    /// Overriding rather than replacing: the scene still carries a complete
+    /// environment, so opening `Main.tscn` in the editor still looks like the
+    /// game rather than like an unlit grey box.
+    private void Relight()
+    {
+        Node? parent = GetParent();
+        if (parent == null)
+            return;
+
+        var sun = parent.GetNodeOrNull<DirectionalLight3D>("Sun");
+        if (sun != null)
+        {
+            sun.RotationDegrees = new Vector3(Biome.SunAngleDegrees.X, Biome.SunAngleDegrees.Y, 0.0f);
+            sun.LightColor = Biome.SunColour;
+            sun.LightEnergy = Biome.SunEnergy;
+        }
+        else
+        {
+            GD.PushWarning("LevelGenerator: no Sun to aim — the biome's light is ignored");
+        }
+
+        var world = parent.GetNodeOrNull<WorldEnvironment>("Environment");
+        if (world?.Environment is not Godot.Environment env)
+        {
+            GD.PushWarning("LevelGenerator: no Environment — the biome's fog is ignored");
+            return;
+        }
+
+        env.AmbientLightColor = Biome.AmbientColour;
+        env.AmbientLightEnergy = Biome.AmbientEnergy;
+
+        env.FogLightColor = Biome.FogColour;
+        env.FogDepthBegin = Biome.FogBegin;
+
+        // Never behind the beginning. Depth fog with end <= begin is a division
+        // by a non-positive range: Godot does not complain, and the arena comes
+        // back either completely clear or completely opaque depending on the
+        // sign. A `.tres` edited by hand is one typo away from that.
+        env.FogDepthEnd = Mathf.Max(Biome.FogEnd, Biome.FogBegin + 1.0f);
+
+        // The sky takes the fog colour, so an interior's near-black fog pulls the
+        // horizon down with it and there is no dusk visible through the ceiling.
+        if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
+        {
+            sky.SkyHorizonColor = Biome.FogColour;
+            sky.GroundHorizonColor = Biome.FogColour;
+        }
+    }
+
     /// Builds the bodies and the props, once the layout can no longer change.
     private void Emit(Node3D obstacles, System.Collections.Generic.List<Block> blocks)
     {
+        // Rebuilt when the furniture changes, not just when it is missing.
+        //
+        // `??=` alone was correct while every biome drew the same five props and
+        // becomes a silent empty arena the moment they do not: the renderer holds
+        // one MultiMesh per kind *it was built for*, so a laboratory generated
+        // after a rail yard would place server racks into a renderer that only
+        // knows about shipping containers, and every one of them would be
+        // dropped. The base screen switches biome without reloading the scene, so
+        // this is the ordinary path rather than an edge case.
+        if (_props != null && !SameKinds(_props.Kinds, Biome.Kinds()))
+        {
+            // Detached before it is freed. `QueueFree` alone defers to the end of
+            // the frame, and the replacement is added in the next statement — so
+            // for one frame both sets of cover are in the tree and the arena is
+            // drawn with the old biome's furniture standing inside the new one's.
+            _props.Node.GetParent()?.RemoveChild(_props.Node);
+            _props.Node.QueueFree();
+            _props = null;
+        }
+
         _props ??= CreateProps();
         _props.Clear();
 
@@ -709,11 +856,25 @@ public partial class LevelGenerator : Node3D
 
         material.SetShaderParameter("zones", ImageTexture.CreateFromImage(image));
         material.SetShaderParameter("arena_extent", Extent);
+
+        // The floor's scale, from the biome. Clamped rather than trusted: a slab
+        // size of zero divides by zero in the shader and gives a floor of solid
+        // seam, which is a black arena with no error anywhere.
+        material.SetShaderParameter("slab_metres", Mathf.Max(0.25f, Biome.GroundSlabMetres));
+        material.SetShaderParameter("seam_darkness", Mathf.Clamp(Biome.GroundSeamDarkness, 0.0f, 1.0f));
+        material.SetShaderParameter("seam_width", Mathf.Clamp(Biome.GroundSeamWidth, 0.002f, 0.2f));
+        material.SetShaderParameter("slab_variation", Mathf.Clamp(Biome.GroundSlabVariation, 0.0f, 0.4f));
     }
 
     private PropRenderer CreateProps()
     {
-        var renderer = new PropRenderer(capacityPerKind: 128, arenaExtent: Extent + 24.0f);
+        // Only this biome's furniture is allocated. Every kind in the enum used
+        // to get a MultiMesh whether or not the place had one, which was free at
+        // five kinds and stops being free the moment a second and third biome
+        // bring their own — twenty-odd meshes built at load, most of them for
+        // somewhere the player is not.
+        var renderer = new PropRenderer(Biome.Kinds(), capacityPerKind: 128,
+                                        arenaExtent: Extent + 24.0f);
 
         // Under this node rather than beside it. Generation happens in _Ready,
         // and the parent is still adding its own children at that point —
@@ -757,7 +918,9 @@ public partial class LevelGenerator : Node3D
             return (rng >> 11) * (1.0f / 9007199254740992.0f);
         }
 
-        var kinds = System.Enum.GetValues<LandmarkKind>();
+        // The biome's list, not the enum's. A silo belongs in a rail yard and
+        // not in a laboratory, and until this line every place got all three.
+        LandmarkKind[] kinds = Biome.Landmarks();
         float baseAngle = Roll() * Mathf.Tau;
 
         for (int i = 0; i < kinds.Length; i++)
@@ -812,7 +975,7 @@ public partial class LevelGenerator : Node3D
             float angle = baseAngle + Mathf.Tau * i / count + (NextFloat() - 0.5f) * 0.3f;
             var spot = new Vector2(Mathf.Cos(angle) * radius, Mathf.Sin(angle) * radius);
 
-            PropKind kind = NextFloat() < 0.5f ? PropKind.WaterTower : PropKind.Billboard;
+            PropKind kind = Biome.Prop(NextFloat() < 0.5f ? PropRole.Tall : PropRole.Sign);
             float scale = 0.8f + NextFloat() * 0.5f;
 
             _props!.Add(kind, spot, new Vector2(4.0f, 4.0f) * scale,
@@ -1017,17 +1180,44 @@ public partial class LevelGenerator : Node3D
                 Name = $"Crate{i}",
                 Position = Terrain.Plant(new Vector3(spot.X, 0.0f, spot.Y)),
                 RarityBias = Mathf.Lerp(1.0f, Biome.DepthRarityBias, depth),
+
+                // Turned a little, so a scatter of crates is not a scatter of
+                // identically-aligned boxes.
+                //
+                // **Hashed from the seed and the index, not drawn from `_rng`.**
+                // The first version called `NextFloat()` here, which costs one
+                // draw per crate — and every draw the generator makes after that
+                // point shifts, so crate two lands somewhere else, and so does
+                // every crate after it. Same seed, different map, nothing
+                // errors, and every balance number and probe expectation
+                // measured against the old layout is quietly measuring a
+                // different one.
+                //
+                // This file has made that exact mistake once before, with the
+                // terrain offset, and it cost two probes and an hour of blaming
+                // the terrain. Cosmetic rolls take a side stream.
+                Rotation = new Vector3(0.0f, (Spin(i) - 0.5f) * 1.4f, 0.0f),
             };
 
-            crate.AddChild(new MeshInstance3D
-            {
-                Name = "Mesh",
-                Mesh = new BoxMesh { Size = new Vector3(1.0f, 0.8f, 1.0f) },
-                Position = new Vector3(0.0f, 0.4f, 0.0f),
-            });
-
+            // The mesh is the container's own business now — see
+            // `LootContainer.BuildBody`. This built a `BoxMesh` with no material
+            // on it, which is the white cube in every screenshot of this game.
             parent.AddChild(crate);
         }
+    }
+
+    /// A cosmetic roll that costs the layout nothing.
+    ///
+    /// Deterministic in the seed and the index, and drawn from neither `_rng` nor
+    /// any running state — so adding one, removing one, or changing what it is
+    /// used for cannot move a single thing on the map.
+    private float Spin(int index)
+    {
+        ulong mix = (Seed ^ 0xD6E8FEB86659FD93UL) + (ulong)index * 0x9E3779B97F4A7C15UL;
+        mix ^= mix >> 32;
+        mix *= 0xD6E8FEB86659FD93UL;
+        mix ^= mix >> 32;
+        return (mix >> 40) / 16777216.0f;
     }
 
     private static bool InsideAnyBlock(Vector2 point, System.Collections.Generic.List<Block> blocks, float margin)

@@ -14,3 +14,7 @@ CrateCount = 7
 DepthRarityBias = 3.0
 GroundTint = Color(1.06, 1.02, 0.9, 1)
 PropTint = Color(1.04, 1, 0.92, 1)
+GroundSlabMetres = 9.0
+GroundSeamDarkness = 0.16
+GroundSeamWidth = 0.018
+GroundSlabVariation = 0.06

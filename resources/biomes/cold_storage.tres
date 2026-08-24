@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="BiomeResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/BiomeResource.cs" id="1_djrbh"]
+
+[resource]
+script = ExtResource("1_djrbh")
+BiomeName = "Cold Storage"
+Blurb = "rooms and doorways; nothing has a long shot"
+TileWeights = PackedFloat32Array(0.35, 0.7, 3.6, 1.4)
+ClusterCountScale = 1.5
+ClusterSizeScale = 1.45
+CorridorGap = 4.2
+CrateCount = 12
+DepthRarityBias = 1.3
+SpawnRingScale = 0.74
+PropSet = PackedInt32Array(14, 15, 16, 17, 18, 19, 20)
+LandmarkSet = PackedInt32Array(-1)
+GroundTint = Color(0.72, 0.76, 0.84, 1)
+PropTint = Color(0.8, 0.84, 0.9, 1)
+CeilingHeight = 9.0
+CeilingColour = Color(0.15, 0.17, 0.19, 1)
+GroundSlabMetres = 1.2
+GroundSeamDarkness = 0.24
+GroundSeamWidth = 0.022
+GroundSlabVariation = 0.05
+SunAngleDegrees = Vector2(-78, 15)
+SunColour = Color(0.8, 0.88, 0.95, 1)
+SunEnergy = 0.85
+AmbientColour = Color(0.4, 0.48, 0.58, 1)
+AmbientEnergy = 0.78
+FogColour = Color(0.09, 0.11, 0.13, 1)
+FogBegin = 7.0
+FogEnd = 28.0

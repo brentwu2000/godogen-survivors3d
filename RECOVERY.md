@@ -97,7 +97,38 @@ vertex and zero on the torso, and the two sides must be half a turn apart. A bak
 zeroes produces a body that renders perfectly and never moves, which is the failure this file has
 seen three times in other forms.
 
-### D2 — A horde worth being afraid of  ·  *needs D1*
+### ✅ D2a — The stalker, and the colour that never arrived
+
+The first authored horde variant: a quadruped, 424 triangles, 1.30 m tall and 2.18 m long, baked
+from a `.glb` into `resources/bodies/stalker.res` and drawn from inside the horde's `MultiMesh`. It
+spawns, it walks, and it is the first thing in the crowd that is not an upright biped.
+
+Three things the baker got wrong on the way, all of which produce a body that renders perfectly:
+
+**It read surface 0 and dropped the rest.** 96 of 424 triangles, gone, on a model with two
+materials. Now every surface is merged with its own albedo.
+
+**A quadruped hip is not a broken rig.** The baker refused the stalker because its hip sat above
+two thirds of its height — which is true of every four-legged animal ever born, and would have
+refused all of them. Replaced with "something that swings reaches the floor", which holds for both
+postures; the posture itself is now reported rather than ruled on.
+
+**The colour was never applied, and nothing said so.** `body.gdshader` writes COLOR into ALBEDO and
+ALBEDO is linear; a hex code is sRGB. `MeshBuilder` converts once at build time and the baker did
+not, so a stalker written as dark brown arrived at roughly twice the brightness and rendered a
+washed near-white. It passed every soundness check there is — watertight, correctly scaled,
+correctly classified, rigged on both phases — and was simply the wrong colour.
+
+`BakeProbe` now holds the two paths against each other: the same hex through `MeshBuilder` and
+through `BakeBody.Tint` must agree to within one 8-bit channel step, and a mid grey must come out
+below 0.30 so that two paths which *both* skipped the conversion cannot agree their way to a pass.
+Asserting that the baker calls `SrgbToLinear` would have been a tautology; asserting that a baked
+body and a procedural body given the same colour end up the same colour is not.
+
+Also fixed: a `#` prefix on the colour argument is a PowerShell comment, so `-- ... #6b5f52` arrived
+as no argument at all. An unreadable colour is now refused rather than ignored.
+
+### D2b — The rest of the horde  ·  *needs D1*
 
 Six variants exist and read as one silhouette family: upright, bilateral, human-sized. Threat comes
 from breaking that, not from adding more of it.
@@ -126,11 +157,436 @@ The shop already sells weapons and gear; characters unlock the same way.
 Probe: whatever is added, the assertion is that two characters produce measurably different runs —
 `BalanceSweep` with a character arm, the same way it grew a zone arm and then a tier arm.
 
+## Half E — places, not one field with three tints
+
+**Asked for by the owner on 2026-08-24:** the arena has to look end-of-the-world too, and there
+should be several kinds of place — a city, a laboratory, and others.
+
+### What is actually there now
+
+Three biomes exist and are already real *as gameplay*: `rail_yard`, `old_town` and `the_flats` each
+carry their own tile weights, cluster count and size, corridor gap, crate count, depth bias and spawn
+ring, and they were tuned against each other so that neither is simply the harder one. That part does
+not need rebuilding.
+
+**What they do not have is a look.** `BiomeResource` carries exactly two appearance fields —
+`GroundTint` and `PropTint` — and every biome draws the same five pieces of cover from
+`PropLibrary`: container, barrier, rubble, wall, dumpster. A laboratory built out of tinted shipping
+containers is a rail yard with a colour grade on it, and the player will read it as one.
+
+So the work is not "add biomes". It is **give a biome the vocabulary to be somewhere**, then use it.
+
+### ✅ E1 — A biome owns its cover
+
+`PropKind` is a flat enum and `LevelGenerator` draws from all of it. A biome needs to name its own
+set, with weights, or every new prop leaks into every existing place — add a server rack for the lab
+and it appears in the rail yard the same afternoon.
+
+Built as a **role table** rather than a weight list, and that choice is the whole of why the
+existing biomes are unaffected. `PropRole` names what a piece of cover is *for* — Wall, Bulk, Heap,
+Low, Odd, plus Tall and Sign for scenery — and the generator picks a role with exactly the rolls and
+thresholds it was already tuned with. The biome then names the furniture. A laboratory therefore has
+the same cover density and the same sight lines as the rail yard it replaced and differs only in
+what the player is looking at; a per-biome weight table would have changed the fight and the scenery
+at once and made neither measurable.
+
+Three things had to change behind it:
+
+**`PropRenderer` allocates per biome.** It built one `MultiMesh` per enum value, which is free at
+five kinds and stops being free at twenty-one. It now takes the biome's list, keeps the arrays
+sparse so `Add` is still an array index, and **warns loudly** on a kind it was not built for — the
+silent version is a piece of cover the flow field routes around and nothing draws.
+
+**`Commit` stopped trusting child order.** It found each instance with `Node.GetChild(index)`, which
+was only ever correct because every kind got a child in enum order. The moment a biome can skip one,
+that indexes the wrong node and the wrong prop turns invisible.
+
+**The renderer is rebuilt when the furniture changes.** `_props ??= CreateProps()` is correct while
+every biome shares a set and becomes an empty arena the moment they do not — and the base screen
+switches biome without reloading the scene, so it is the ordinary path rather than an edge case.
+
+**Probe:** `BiomeProbe` regenerates into every biome in one scene and asserts that each places props
+only from its own set, that it places *some* (a renderer built for the wrong set drops every `Add`
+and leaves a bare arena, which photographs as an open biome rather than a broken one), and that the
+tables are role-correct. It states its premise first and fails if every biome names the same
+furniture, because then the whole stage would pass on a system that does not work.
+
+### ✅ E2a — Ash District
+
+The city, and it is a third *question* rather than a third skin. Old Town has no line of fire and
+The Flats is nothing but line of fire; both are answers a build can be assembled around before the
+run starts. A street is a line of fire **that has a direction** — fifty metres one way and eight the
+other — so the same build is right or wrong depending on which way it is facing, and the decision
+moves off the loadout screen and into the run. Corridor-heavy with a wide gap, which sounds like a
+contradiction and is the point: long walls, easy ways through, nothing ever sealed and everything
+channelled.
+
+Seven props, all boxes with vertex colour, one shared material, same as the existing five: a site
+hoarding, a gutted bus, a three-car pile-up, water-filled traffic barriers with a downed signal
+across them, a shuttered kiosk, a leaning tower block and a broken overpass.
+
+**A prop has to fill its footprint.** The collider is the layout's block, not the mesh's bounds, so
+anything that leaves a corner empty hands the player an invisible wall. That is why the pile-up is
+three cars rather than one flattened one, and why the kiosk is a stall with its stock stacked beside
+it rather than a narrow booth.
+
+**Strong horizontal banding reads as a cake.** Props are scaled in X and Z and left alone in Y, so
+the first kiosk — base, body, counter, canopy, sign — arrived three metres wide as five coloured
+trays with nothing tall enough to dominate. A prop authored for this arena needs one dominant
+vertical mass and everything else low.
+
+`test/PropShot.cs` is the tool that caught both, and it exists for the reason `BodyShot` does: every
+judgement made about an asset viewed on its own has been wrong. It photographs a set at the size the
+arena draws it, and keeps cover and scenery in separate shots — framed together, the camera backs
+off far enough for a twenty-two metre tower block and every piece of cover becomes forty pixels of
+grey.
+
+Two capture bugs fell out of using it:
+
+**`Screenshot -- biome:N` never worked.** It was parsed after `AddChild`, so it set the biome for a
+level that had already generated in `_Ready`, and every `biome:` capture ever taken was the rail
+yard with a different filename. Nothing about a screenshot of a real arena says it is the wrong
+arena.
+
+**`aerial` had to exist.** The game's camera is four metres up and eight back, which is where you
+judge a fight and not where you judge a map — cover is generated in clusters across a hundred and
+ten metres and the spawn is deliberately clear, so two arenas with ten times the cover between them
+photograph identically from the ground. The aerial also has to switch the fog off: the arena fades
+to near-black by forty metres on purpose, so the first attempt came back as a photograph of nothing
+at all, with no error anywhere.
+
+### ✅ E2b — Cold Storage
+
+The first **interior**, and the fourth question. Every other place is a field with things standing
+in it and the layout varies the things; a building varies the *space*. Cover is nearly all long
+partitions, so the arena is a set of rooms with doorways between them and the fight is about which
+room you are in rather than what you are standing behind. Twelve crates at the lowest depth bias in
+the game, because rooms are where things are kept and the danger here is being cornered rather than
+being caught in the open.
+
+Seven props: clean-room partitions, server racks, a fallen suspended ceiling, laboratory benches, a
+specimen tank, an exhaust stack and a gantry crane. The palette is the other half of the work —
+everything else in the game is weathered outdoor material, and painted panel against stainless
+against dark glass is most of what makes this read as inside.
+
+**The specimen tank should glow and does not.** Emission is a property of the material and every
+prop shares one, so a glowing tank costs the set a second draw call in both the main and the shadow
+pass. Written down rather than done, because in this arena's lighting a glow would be invisible
+anyway — it wants the dark that E3 provides and a light source of its own.
+
+### ✅ E3 — A biome owns its light
+
+`BiomeResource` gains sun angle, colour and energy; ambient colour and energy; fog colour and range.
+`LevelGenerator.Relight()` applies them, because the scene is built once and the biome is chosen
+every run — a lighting rig baked into `Main.tscn` belongs to whichever biome happened to be first.
+
+**Every default is the number `BuildMain` already hard-coded, to the digit.** That is the only way
+this could be added safely: three biomes and forty-odd probes were tuned against one rig, and a
+resource that "improved" the defaults would have re-lit the whole game as a side effect of adding a
+fourth place.
+
+The interior is three numbers. The sun points almost straight down, because nothing says *ceiling*
+like shadows that fall under things rather than away from them — a raking sun paints long shadows,
+which is a statement about a horizon, and a horizon is the thing a room does not have. It is cold
+and weak: strip lighting, not daylight. And the fog closes at twenty-four metres, which is the wall.
+The arena is still a hundred and ten metres across and every metre is still walkable; the player can
+only ever see the room they are in, so the map is discovered rather than surveyed.
+
+`BiomeProbe` asserts both halves separately, and the split is the point: that generating somewhere
+applies its light (a `Relight` that never ran leaves a perfectly lit arena that is the wrong arena's
+lighting — invisible in a screenshot and invisible to every other probe), *and* that Cold Storage is
+measurably enclosed (a resource carrying fog fields set to the outdoor defaults passes the first
+assertion completely and is still a field with partitions in it).
+
+### ✅ E4 — The ground stops being one plane
+
+`ground.gdshader` already drew slabs with a seam between them and every biome used the same four
+metres. It is one of the strongest scale cues in the frame — the arena reads as large partly because
+the floor has a known size to pace out — and handing it to the biome costs no textures, no draw
+calls and no geometry. Old Town is 2.4 m setts, The Flats 9 m bays with a seam you have to look for,
+Ash District 3.2 m patched asphalt with wide dark joints, Cold Storage a 1.2 m tile grid.
+
+The tile grid is doing as much work as the fog is. It is the clearest possible statement that this
+is a floor somebody laid rather than ground somebody stands on, and against The Flats' nine-metre
+bays it makes the same arena feel a different size without moving a wall.
+
+### ✅ E5 — Two things the new places exposed
+
+Neither was caused by Half E. Both were live and invisible.
+
+**Nothing may spawn inside the camera.** The spawn ring starts at twelve metres, the camera stands
+eleven and a half behind the player, and `SpawnRingScale` multiplied the first without knowing about
+the second — so **Old Town has been spawning enemies 2.3 m inside the lens since the day it
+shipped**. What it looks like is a two-metre body across the corner of the screen, over the HUD, with
+nothing to say what it is or where it came from; what it looked like in a screenshot is nothing,
+because every capture taken since was of the rail yard, where the scale is 1.0. Found by looking at
+the first Cold Storage screenshot and not believing the minimap.
+
+Fixed with a floor rather than by raising each biome's number, so the ring stays a design decision
+and the framing stays a constraint. The camera standoff is **measured off the rig**, not typed: a
+copy of 11.7 m here would be a second place to change the framing, silently wrong the first time
+somebody moved the camera and never wrong in a way anyone would think to look for.
+
+`BiomeProbe` asks the real `Horde` — `ApplyBiome` once per biome, then measures the ring — because a
+clamp that was written but never reached passes a test of the formula. It also fails if no biome
+pulls the ring in at all, since then the whole stage passes on a clamp nothing exercises.
+
+**A grain silo was standing in a laboratory.** The three glTF landmarks are a separate system from
+`PropKind` and were placed one-of-each in every biome. Nothing in the code was wrong; it had been
+right for as long as every place was outdoors. A biome names its own now: the city takes a pylon and
+a wrecked coach, the lab takes none and uses its gantry cranes and vent stacks instead.
+
+The probe counts **across both systems** and fails a place with fewer than three things tall enough
+to steer by. That matters because opting out is now possible: the landmarks are the only answer to
+"which corner am I in" that does not involve reading the compass, and an arena without one is a flat
+plane of repeating cover where crossing fifty metres feels like standing still.
+
+### E6 — Still open here
+
+### E2 — Two new places  ·  *needs E1*
+
+- **The specimen tank does not glow.** Needs a second material, and needs E3's dark to be worth
+  having. It is the only supernatural note the environment has been given room for.
+- **No biome has authored glTF landmarks of its own.** The city and the lab use procedural `PropKind`
+  scenery for their skyline, which works and is not the same as a modelled beacon.
+- **The three existing biomes now spawn from 14.7 m rather than 12 m.** That is the camera floor
+  biting on all of them, including the rail yard, which had 0.3 m of clearance. It makes the opening
+  seconds fractionally easier everywhere and it has not been re-measured against the balance table.
+
+**The laboratory.** Cover is server racks, benches, specimen tanks, and containment doors torn off
+their frames. It is the first *interior*: the sky is not the light source, the room is. That is what
+makes it worth building rather than being a fourth field — and it is what the glowing horde variant
+(D2) was always going to need somewhere to be seen.
+
+### E3 — A biome owns its light  ·  *needs E2*
+
+The lab does not work as data alone. `BiomeResource` gains fog colour and density, sun colour, angle
+and energy, and ambient level; `LevelGenerator` applies them instead of the one hard-coded set in
+`GameRoot`. An interior is then a biome with a low ceiling of fog, a cold weak sun and props that
+carry their own emission.
+
+**Do not fold this into E1.** Lighting changes every screenshot in the project at once, and mixing
+it with the prop-set change would make any regression impossible to attribute.
+
+### E4 — The ground stops being one plane  ·  *independent*
+
+`GroundMesh` is a tinted height field with slab seams. A road is not a slab grid and a lab floor is
+not asphalt. Cheapest honest version: the biome names a ground *pattern* — seam spacing, a second
+tint, and how strongly the two mix — which is a vertex-colour variation inside the existing mesh and
+costs no draw calls and no textures.
+
+### Order
+
+E1, then E2, then E3, then E4. E4 is last because it is the one that improves the three existing
+biomes as well, and doing it first would change the baseline every other stage is judged against.
+
+## Half F — the things in your hands
+
+**The owner's goal, stated 2026-08-24:** scene, characters, monsters, items and skills all
+refined. Half E is the scene. This is items and skills, and it is where the least work has been done
+of anything in the game — not because it was deprioritised, but because none of it ever showed up in
+a probe. A probe asks whether a thing *works*.
+
+### ✅ F1 — The loot crate stops being an untextured cube
+
+`LevelGenerator` built a `BoxMesh` and gave it **no material at all**, and `RunDirector` did the same
+for the supply cache. That was the white cube in every screenshot ever taken of this game — including
+the ones used to judge the ground shader, the fog, the bodies and all five biomes. It lasted because
+no probe asks what a thing looks like, and because a cube reads as "placeholder for something", which
+is a category the eye skips over.
+
+`LootLibrary` builds two shapes, six meshes total, on one shared material. A **crate** was already
+here and is what the layout scatters: planks, corner irons, two steel bands, feet. A **cache** is
+packed and dropped mid-run: moulded shell, ribs, chute harness still attached, spilled canopy. They
+have to be distinguishable at fifty metres, because one is scenery you might get to and the other is
+a thing you are meant to run toward.
+
+Two things fell out of doing it properly rather than just adding a colour:
+
+**The rarity bias is on the box now.** It already rose with distance from the spawn — a far crate
+really was worth more — and the player had to take that entirely on trust, because the far crate and
+the near one were the same white cube. Three tiers, stencilled on two opposite faces so it can be
+priced without walking around it, and the top tier is the only warm colour on a loot container
+anywhere.
+
+**An emptied crate stands open.** Nothing in `LootContainer` had ever touched its mesh, so a looted
+crate and a full one were identical from any distance. The minimap knew; the minimap is a
+nine-centimetre square in the corner of the screen. A lid on a hinge puts the same information where
+the player is already looking, and it is the difference between an arena you are working through and
+an arena you are wandering around.
+
+`Shelter.cs:276` is a signboard with a material on it and is left alone.
+
+### ✅ F1b — The sweep could be hung by adding a file
+
+Found while running the above, and it had already cost two sweeps.
+
+`PropShot` is a capture script, and the sweep runs every `.cs` in `test/` that is not on a
+hand-written skip list. A capture script run headless does not fail — it spins at 100% of a core
+forever, printing nothing (`test/Display.cs` documents this) — and **a probe that has hung looks
+exactly like a probe that is slow**. Both sweeps stalled at `MusicProbe`, the entry alphabetically
+before it, and I read it twice as "the long run probes are slow" before checking whether anything was
+still running.
+
+Two fixes, because either alone leaves the other as a single point of failure:
+
+- `PropShot` and `Presentation` now call `Display.Required` and refuse rather than spin. Presentation
+  had never had it either: `--write-movie` headless plays the whole forty-second scripted run, writes
+  nothing, and exits reporting success.
+- **The skip list is derived rather than written.** Anything calling `Display.Required` has declared
+  what it needs, in the file where whoever writes the next capture script cannot forget it. One place
+  to get right instead of two.
+
+`TouchProbe` stays on the hand list. It has been there since before a reason was written down, it
+claims in its own header to run headless, and taking a name off a skip list is exactly how a sweep
+starts hanging — worth revisiting deliberately rather than in passing.
+
+### F2 — The player is not holding anything
+
+`BodyMeshLibrary` has no weapon geometry. Not a placeholder, not a stub — there is no reference to a
+weapon anywhere in the file, and the survivor has been fighting bare-handed on screen since the body
+existed.
+
+C6 made the weapons *feel* different — pitch and level from the weapon's own numbers, a separate
+recoil channel, tracers tinted per weapon — and it answered the original complaint ("武器種類無感")
+in the ear and in the hands. It did nothing for the eye. Nine weapons across four categories, and the
+silhouette holding them is identical.
+
+The rig is the constraint and it is a real one: `SetRig` turns a vertex about a fixed Y, so a held
+object is a piece of geometry parented to the arm's swing rather than a separate node. It has to be
+built into the body mesh, which means the weapon is part of the build spec, which means
+`BodyMeshLibrary.Build` needs to know what is being carried.
+
+Two shapes are probably enough to start: something long held across the body, and something short
+held at the side. A player who can tell a rifle from a knife at a glance has more information than
+the sound alone gives them.
+
+### F3 — Four skills, one visual language
+
+`RunKit` has Orbit, Shockwave, Chain and Chill, and all four are expressed through `EffectPool`
+puffs — the same quads, differing in tint and size. They resolve differently, which B3 established
+and `KitProbe` still asserts; they do not *look* different, and a card the player cannot see working
+is a card they have to read the tooltip to believe.
+
+Orbit is geometry that already exists in the world and could be drawn. Shockwave is a ring with a
+radius that is already computed. Chain has a start and an end point per jump. Chill has an area. All
+four have the numbers; none of them have a shape.
+
+### F4 — Nothing on the ground says what it is
+
+Items go from a crate straight into the bag. There is no dropped-item representation at all, so the
+"收集無感" complaint was answered in C7 by making the *collection screen* visible rather than by
+making collecting visible. Worth revisiting once F1 exists, because a crate that opens and leaves
+something behind is a different feeling from a crate that opens and increments a counter.
+
+### Order
+
+F1 is done. F2 next, then F3. F4 last and only if it still feels missing once a crate is a crate.
+
+---
+
+### ✅ E7 — A ceiling, and four bugs a second reader found
+
+The owner asked for Codex to be used more, including for external verification. Two passes were
+run against the uncommitted Half E work, both read-only, both while a sweep was occupying Godot.
+Both paid for themselves, and the way they paid is worth recording because it was not the way
+expected.
+
+##### The art pass  ·  `codex exec -s read-only -i <four screenshots>`
+
+Its first finding was the one that mattered and the one that had been missed: **Cold Storage read as
+an outdoor arena at night rather than as an interior.** The sun points straight down, the light is
+cold and weak, the fog closes at twenty-four metres and the floor is a 1.2 m tile grid — every one of
+those is right, and none of them is what makes a room. What gave it away was the top of the frame: an
+unobstructed black sky, air dust drifting against it like stars, and a far boundary spanning the view
+like a horizon instead of converging into corners.
+
+**A ceiling was the obvious answer and it is not the answer.** `CeilingMesh` builds one — a deck,
+beams crossed both ways, hanging strip fixtures, two service runs, one draw call, no shadow pass
+(a shadow-casting lid under a vertical sun correctly and uselessly blacks out the level). Then the
+screenshot came back identical.
+
+The camera is why. The eye sits 5.7 m up, tilted 26° down, with a 60° field — so it never looks more
+than about four degrees above horizontal, and a roof at eight metres only enters the frame past forty
+metres, which is well beyond where the fog has gone black. **The roof is there, it does occlude the
+sky, and it is indistinguishable from the sky it occludes.** The only proof it existed was that the
+aerial capture came back as one flat colour, because that camera *does* look at it.
+
+What the game camera can see is whatever stands between the player and the fog. So the fix was to
+make the walls walls: `Partition` went from 3 m to 7.6 m, floor to ceiling. A three-metre screen in a
+room with an eight-metre ceiling is a cubicle in a field; a full-height wall breaks the horizon line
+and closes the arena down to the room you are standing in. It costs nothing mechanically — shots and
+sight lines resolve in two dimensions, so prop height here is entirely cosmetic. The fog went from 24
+to 28 m at the same time, because at 24 the nearest wall that broke the horizon was already black:
+the arena closed down without ever showing what was closing it, which is the same picture as an empty
+field at night, only darker.
+
+The roof stays. It is one draw call, it is correct, and it is what makes `CeilingHeight` mean
+something if the fog is ever pulled back. But it is not what made the room, and the comment in
+`CeilingMesh` says so.
+
+**One thing this exposed that is not fixed:** the spawn clearance is 8 m and the fog closes at 28, so
+the *opening* view of a run is empty ground in every biome, whatever the place is made of. The first
+Cold Storage screenshot after the walls went in still looked like a field, because the seed put no
+cover within thirty metres of the spawn. It only read as an interior once the player was moved
+somewhere the arena actually is. That is worth taking seriously: the first ten seconds of every run
+are a screenshot of the ground shader.
+
+Its other substantial points, recorded and not yet acted on: the ground plane extends well past the
+play space and reads from above as an oversized base mesh; props read as isolated samples rather than
+as compositions with debris trailing from them; and nothing darkens the ground under a prop cluster,
+so several look slightly airborne.
+
+Two of its findings were wrong, which is worth writing down too. It called the cyan-and-orange shapes
+near the player "editor gizmos or debug vectors" — they are arrows in flight. And the "pale
+untextured cubes" it found in the aerials were the *old* loot crates, in shots taken before F1: it
+confirmed a bug already closed rather than finding a new one.
+
+##### The correctness pass  ·  `codex exec -s read-only` over `git diff`
+
+Four real bugs, two of which would have shipped:
+
+**A non-indexed surface merged with an indexed one vanishes.** The merge writes one global index
+array, so the moment any surface is indexed every surface must be — and a non-indexed one contributed
+its vertices and nothing pointing at them. Correctly placed, correctly coloured, referenced by no
+triangle. glTF exporters mix the two freely.
+
+**The ceiling repeated the prop renderer's `QueueFree` collision**, twenty lines below the comment
+explaining why the prop renderer detaches before freeing. The old node is still a child when the
+replacement is added, Godot renames the newcomer to `Ceiling2`, and the next generation frees the
+doomed original and leaves the survivor in the tree forever. `BiomeProbe` generates once per biome in
+a single stage, which is exactly the sequence that triggers it.
+
+**An out-of-range `PropKind` passed validation.** `RoleOf` maps anything unrecognised to `Heap`, so a
+hand-edited `.tres` with `999` in the Heap slot satisfied the role check and reached `PropRenderer`,
+which indexes its arrays at 999.
+
+**`_baseRingMin <= 0` is a sentinel the export can legally hold.** A probe setting `SpawnRingMin = 0`
+would leave the flag true forever, so the second `ApplyBiome` captures the already-clamped 14.7 as
+the new base. Now a bool.
+
+It also confirmed, correctly, that the crate-rotation roll had already been moved off `_rng` — that
+one was caught here first, by remembering what the terrain offset cost.
+
+##### What this says about how to use it
+
+Codex cannot run Godot or restore NuGet, so it cannot verify anything it says. What it can do is
+**read**, and both passes worked because they were given a bounded artefact and a blunt instruction
+not to be agreeable. The art pass got four screenshots and "do not compliment, if something looks
+fine say nothing"; the review got a diff and an explicit list of what not to comment on. It ran
+concurrently with a sweep, which is otherwise dead time — Godot is single-occupancy here and the
+review needs none of it.
+
 ### Asset pipeline
 
 Codex builds models from an image or a description; `codex exec -s workspace-write` is how it is
 driven, and it cannot run Godot or restore NuGet in its sandbox, so **it writes and this session
-verifies**. That split has held for two rounds of character work.
+verifies**. That split has held for two rounds of character work, and now for two rounds of review.
+
+Known limit, found by the review: **the baker reads one mesh node.** A model exported as separate
+nodes — body, coat, horns — bakes whichever the tree walk reaches first and silently omits the rest,
+producing a sound bake that is missing a coat. It now refuses and names the nodes instead. Merging
+them is the surface merge with two more lookups per node, and nothing needs it yet.
 
 Everything imported goes through `ModelReport` first and `BodyShot -- model:res://...` second. The
 first says whether it can be used; the second says whether it belongs, and every judgement made about

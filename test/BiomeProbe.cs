@@ -78,6 +78,9 @@ public partial class BiomeProbe : SceneTree
             case 2: return RunStage(StageLootTrades, "the emptier place pays better for the walk");
             case 3: return RunStage(StageDenseIsNotSealed, "the crowd still gets through the dense layout");
             case 4: return RunStage(StagePlayerCanCross, "and so can the player, to every pad");
+            case 5: return RunStage(StageFurnitureStaysHome, "a place only ever puts out its own furniture");
+            case 6: return RunStage(StageLightFollowsThePlace, "generating somewhere re-lights it, and the interior is one");
+            case 7: return RunStage(StageNothingSpawnsInTheLens, "no place spawns the crowd inside the camera");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -315,6 +318,307 @@ public partial class BiomeProbe : SceneTree
                  (unreachable.Count > 0 ? $" (unreachable: {string.Join(", ", unreachable)})" : ""));
 
         return wanted > 0 && reached == wanted;
+    }
+
+    /// A biome draws its own props and nothing else's.
+    ///
+    /// The mechanism is a role table: the layout picks a `PropRole` with the same
+    /// rolls it always used and the biome names the `PropKind`. What that buys is
+    /// that a laboratory is not a rail yard with a colour grade on it — and what
+    /// it costs is a new way to be wrong, because the renderer allocates one
+    /// MultiMesh per kind *the biome declared*. A prop placed outside that set is
+    /// dropped: the collider is still there, so the player walks into a piece of
+    /// cover that nothing draws.
+    ///
+    /// Two things are asserted, and the second is the one that matters:
+    ///
+    ///   - every biome's table is role-correct, so nothing lands in the wrong slot
+    ///   - regenerating from one biome into another **replaces** the furniture
+    ///
+    /// The second was a real bug and not a hypothetical one. `_props` was created
+    /// with `??=`, which is correct while every biome shares a set and becomes an
+    /// empty arena the moment they do not — and the base screen switches biome
+    /// without reloading the scene, so it is the ordinary path.
+    private bool? StageFurnitureStaysHome(int tick)
+    {
+        bool ok = true;
+
+        // The premise, stated so the stage cannot pass by having nothing to
+        // compare. If every biome names the same furniture then "a prop stayed
+        // home" is true of a system that does not work at all.
+        var sets = new System.Collections.Generic.HashSet<string>();
+        foreach (BiomeResource biome in BiomeBook.All)
+            sets.Add(string.Join(",", biome.Kinds()));
+
+        if (sets.Count < 2)
+        {
+            GD.PushError($"  all {BiomeBook.All.Length} biomes name the same props — "
+                       + "this stage would pass whatever the code did");
+            return false;
+        }
+
+        // Role correctness. `BiomeResource.Prop` already falls back rather than
+        // returning a landmark where cover belongs, so the arena would survive
+        // this — it would just quietly be the default set, which is the failure
+        // that looks like success.
+        foreach (BiomeResource biome in BiomeBook.All)
+        {
+            var roles = System.Enum.GetValues<PropRole>();
+            for (int i = 0; i < roles.Length; i++)
+            {
+                if (biome.PropSet == null || i >= biome.PropSet.Length)
+                    continue;
+
+                var declared = (PropKind)biome.PropSet[i];
+                if (PropLibrary.RoleOf(declared) == roles[i])
+                    continue;
+
+                GD.PushError($"  {biome.BiomeName} lists {declared} as its {roles[i]}, "
+                           + $"but {declared} is a {PropLibrary.RoleOf(declared)}");
+                ok = false;
+            }
+        }
+
+        // And the arena actually swaps. Generated in each biome in turn, in the
+        // same scene, which is the sequence the base screen produces.
+        foreach (BiomeResource biome in BiomeBook.All)
+        {
+            _level!.Biome = biome;
+            _level.Seed = Seed;
+            _level.Generate();
+
+            PropRenderer? props = _level.Props;
+            if (props == null)
+            {
+                GD.PushError($"  {biome.BiomeName} generated without a prop renderer");
+                ok = false;
+                continue;
+            }
+
+            var owned = new System.Collections.Generic.HashSet<PropKind>(biome.Kinds());
+            var strangers = new System.Collections.Generic.List<string>();
+            int placed = 0;
+
+            foreach (PropKind kind in System.Enum.GetValues<PropKind>())
+            {
+                int count = System.Array.IndexOf(props.Kinds, kind) >= 0 ? props.Count(kind) : 0;
+                placed += count;
+
+                if (count > 0 && !owned.Contains(kind))
+                    strangers.Add($"{kind} x{count}");
+            }
+
+            // Nothing placed is the way this fails quietly: a renderer built for
+            // the wrong set drops every `Add` and the arena is bare, which reads
+            // on a screenshot as an open biome rather than as a broken one.
+            if (placed == 0)
+            {
+                GD.PushError($"  {biome.BiomeName} placed no props at all");
+                ok = false;
+            }
+
+            if (strangers.Count > 0)
+            {
+                GD.PushError($"  {biome.BiomeName} placed {string.Join(", ", strangers)}, "
+                           + "which it does not own");
+                ok = false;
+            }
+
+            // Something to navigate by, from either system.
+            //
+            // A biome can now opt out of the glTF landmarks — Cold Storage does,
+            // because a transmission tower and a grain silo are outdoor objects
+            // and its fog stops at twenty-four metres anyway. What it must not do
+            // is end up with *nothing* tall: the landmarks are the only answer to
+            // "which corner am I in" that does not involve reading the compass,
+            // and an arena without one is a flat plane of repeating cover where
+            // crossing fifty metres feels like standing still.
+            //
+            // Counted across both systems on purpose. The lab has no glTF
+            // landmark and four gantry cranes, and that is a place with beacons.
+            int beacons = _level.Landmarks.Count;
+            foreach (PropKind kind in props.Kinds)
+            {
+                if (PropLibrary.IsLandmark(kind))
+                    beacons += props.Count(kind);
+            }
+
+            if (beacons < 3)
+            {
+                GD.PushError($"  {biome.BiomeName} has {beacons} thing(s) tall enough to steer by "
+                           + "— nothing says which corner of the arena you are in");
+                ok = false;
+            }
+
+            GD.Print($"  {biome.BiomeName}: {placed} props from "
+                   + $"{string.Join("/", System.Array.ConvertAll(biome.Kinds(), k => k.ToString()))}"
+                   + $", {beacons} beacon(s)");
+        }
+
+        return ok;
+    }
+
+    /// Generating in a place applies that place's light, and the interior is
+    /// actually interior.
+    ///
+    /// Two assertions, and the split matters. The first is mechanical: after
+    /// `Generate`, the sun and the fog in the scene are the biome's numbers and
+    /// not the ones `BuildMain` baked in. It is the kind of thing that fails
+    /// silently — a `Relight` that never ran leaves a perfectly lit arena that
+    /// happens to be the wrong arena's lighting, which is invisible in a
+    /// screenshot and invisible in every other probe.
+    ///
+    /// The second is about content: `Cold Storage` has to be measurably enclosed.
+    /// A biome resource that carries fog fields and sets them to the outdoor
+    /// defaults would pass the first assertion completely and still be a field
+    /// with partitions standing in it.
+    private bool? StageLightFollowsThePlace(int tick)
+    {
+        Node? parent = _level?.GetParent();
+        var sun = parent?.GetNodeOrNull<DirectionalLight3D>("Sun");
+        var world = parent?.GetNodeOrNull<WorldEnvironment>("Environment");
+
+        if (sun == null || world?.Environment is not Godot.Environment env)
+        {
+            GD.PushError("  the scene has no Sun or no Environment");
+            return false;
+        }
+
+        bool ok = true;
+        BiomeResource? interior = null;
+
+        foreach (BiomeResource biome in BiomeBook.All)
+        {
+            _level!.Biome = biome;
+            _level.Seed = Seed;
+            _level.Generate();
+
+            bool applied = Mathf.Abs(sun.LightEnergy - biome.SunEnergy) < 0.001f
+                        && Mathf.Abs(sun.RotationDegrees.X - biome.SunAngleDegrees.X) < 0.01f
+                        && Mathf.Abs(env.FogDepthEnd - biome.FogEnd) < 0.01f
+                        && Mathf.Abs(env.AmbientLightEnergy - biome.AmbientEnergy) < 0.001f;
+
+            if (!applied)
+            {
+                GD.PushError($"  {biome.BiomeName}: asked for sun {biome.SunEnergy:F2} at "
+                           + $"{biome.SunAngleDegrees.X:F0}° and fog to {biome.FogEnd:F0} m, "
+                           + $"got {sun.LightEnergy:F2} at {sun.RotationDegrees.X:F0}° "
+                           + $"and {env.FogDepthEnd:F0} m");
+                ok = false;
+            }
+
+            // The one that is meant to be indoors, found by name rather than by
+            // index so reordering the book does not quietly test nothing.
+            if (biome.BiomeName == "Cold Storage")
+                interior = biome;
+
+            GD.Print($"  {biome.BiomeName}: sun {biome.SunEnergy:F2} at {biome.SunAngleDegrees.X:F0}°, "
+                   + $"fog {biome.FogBegin:F0}–{biome.FogEnd:F0} m");
+        }
+
+        if (interior == null)
+        {
+            GD.PushError("  no biome named Cold Storage — the interior half of this stage tested nothing");
+            return false;
+        }
+
+        // What "indoors" has to mean, in numbers. Overhead sun, and you cannot
+        // see as far as you can outdoors.
+        float outdoorFog = 0.0f;
+        foreach (BiomeResource biome in BiomeBook.All)
+        {
+            if (biome != interior)
+                outdoorFog = Mathf.Max(outdoorFog, biome.FogEnd);
+        }
+
+        if (interior.SunAngleDegrees.X > -70.0f)
+        {
+            GD.PushError($"  Cold Storage's sun is at {interior.SunAngleDegrees.X:F0}° — "
+                       + "a raking sun paints long shadows, which is a statement about a horizon");
+            ok = false;
+        }
+
+        if (interior.FogEnd > outdoorFog * 0.8f)
+        {
+            GD.PushError($"  Cold Storage sees {interior.FogEnd:F0} m against {outdoorFog:F0} m "
+                       + "outdoors — that is not a room");
+            ok = false;
+        }
+
+        GD.Print($"  interior: sun at {interior.SunAngleDegrees.X:F0}°, sees {interior.FogEnd:F0} m "
+               + $"against {outdoorFog:F0} m outdoors");
+
+        return ok;
+    }
+
+    /// No biome can put an arrival behind the camera.
+    ///
+    /// **This was live for five phases and nothing saw it.** The spawn ring
+    /// starts at twelve metres, the camera stands eleven and a half behind the
+    /// player, and `SpawnRingScale` multiplies the first without knowing about
+    /// the second — so Old Town at 0.78 has been spawning enemies 2.3 m inside
+    /// the lens since it shipped. What it looks like is a two-metre body across
+    /// the corner of the screen, over the HUD, with no indication of what it is;
+    /// what it looked like in a screenshot is nothing, because every capture
+    /// taken since was of the rail yard, where the scale is 1.0.
+    ///
+    /// Asked of the real `Horde` rather than of the numbers: `ApplyBiome` is
+    /// called once per biome and the resulting ring is measured. That is the code
+    /// the game runs, and a clamp that was written but never reached would pass a
+    /// test of the formula and fail this one.
+    private bool? StageNothingSpawnsInTheLens(int tick)
+    {
+        float standoff = _horde!.CameraStandoff();
+        float floor = Horde.SpawnFloor(standoff);
+
+        bool ok = true;
+        int clamped = 0;
+
+        foreach (BiomeResource biome in BiomeBook.All)
+        {
+            _horde.ApplyBiome(biome);
+
+            if (_horde.SpawnRingMin < floor - 0.001f)
+            {
+                GD.PushError($"  {biome.BiomeName} spawns from {_horde.SpawnRingMin:F1} m with the "
+                           + $"camera at {standoff:F1} m — inside the lens");
+                ok = false;
+            }
+
+            // The ring has to stay a ring.
+            if (_horde.SpawnRingMax <= _horde.SpawnRingMin)
+            {
+                GD.PushError($"  {biome.BiomeName}: ring {_horde.SpawnRingMin:F1}–"
+                           + $"{_horde.SpawnRingMax:F1} m is inside out");
+                ok = false;
+            }
+
+            // How many places the clamp actually saves. Reported rather than
+            // asserted, because a table that never needed it is a fine table —
+            // but see below.
+            if (biome.SpawnRingScale < 1.0f)
+                clamped++;
+
+            GD.Print($"  {biome.BiomeName}: x{biome.SpawnRingScale:F2} -> "
+                   + $"{_horde.SpawnRingMin:F1}–{_horde.SpawnRingMax:F1} m");
+        }
+
+        // The premise. If no biome asks for a ring tighter than the camera, this
+        // whole stage passes on a clamp that is never reached — and it would go
+        // on passing after somebody deleted it.
+        if (clamped == 0)
+        {
+            GD.PushError("  no biome pulls the ring in at all, so nothing here exercised the clamp");
+            ok = false;
+        }
+
+        GD.Print($"  camera at {standoff:F1} m, floor {floor:F1} m, {clamped} of "
+               + $"{BiomeBook.All.Length} places needed it");
+
+        // Put it back the way the scene had it, or every stage after this one is
+        // measuring a horde that belongs to whichever biome happened to be last.
+        _horde.ApplyBiome(BiomeBook.Load(GameSession.Biome));
+        return ok;
     }
 
     private float AverageDistance()

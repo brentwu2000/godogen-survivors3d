@@ -16,19 +16,32 @@ public sealed class PropRenderer
 {
     private const int FloatsPerInstance = 12;
 
-    private readonly MultiMesh[] _multi;
-    private readonly float[][] _buffers;
+    // Indexed by PropKind, and sparse on purpose: a biome brings seven kinds out
+    // of however many the enum has grown to, and the gaps are left null rather
+    // than compacted so `Add(kind, ...)` stays an array index instead of a lookup
+    // on the hot path.
+    private readonly MultiMesh?[] _multi;
+    private readonly MultiMeshInstance3D?[] _nodes;
+    private readonly float[]?[] _buffers;
     private readonly int[] _counts;
+    private readonly PropKind[] _kinds;
 
-    /// Holds one MultiMeshInstance3D per kind. Added to the scene by the caller.
+    /// Holds one MultiMeshInstance3D per kind this biome uses. Added to the scene
+    /// by the caller.
     public Node3D Node { get; }
 
-    public PropRenderer(int capacityPerKind, float arenaExtent)
+    /// `kinds` is what the biome actually places — see `BiomeResource.Kinds`.
+    /// Anything outside that list is refused by `Add` rather than drawn, because a
+    /// prop from the wrong biome appearing in one is the exact failure this was
+    /// built to make impossible.
+    public PropRenderer(PropKind[] kinds, int capacityPerKind, float arenaExtent)
     {
-        var kinds = System.Enum.GetValues<PropKind>();
-        _multi = new MultiMesh[kinds.Length];
-        _buffers = new float[kinds.Length][];
-        _counts = new int[kinds.Length];
+        int span = System.Enum.GetValues<PropKind>().Length;
+        _multi = new MultiMesh[span];
+        _nodes = new MultiMeshInstance3D[span];
+        _buffers = new float[span][];
+        _counts = new int[span];
+        _kinds = kinds;
 
         Node = new Node3D { Name = "Props" };
         StandardMaterial3D material = PropLibrary.Material();
@@ -36,6 +49,13 @@ public sealed class PropRenderer
         foreach (PropKind kind in kinds)
         {
             int index = (int)kind;
+
+            // A biome may name the same prop for two roles, and that is a
+            // reasonable thing for a sparse place to do. Building it twice would
+            // give it two MultiMeshes and leave the second one holding every
+            // instance while the first drew nothing.
+            if (_multi[index] != null)
+                continue;
 
             // Landmarks are placed one at a time and there are never many, but a
             // separate path for them would be a second way to get the AABB wrong.
@@ -54,7 +74,7 @@ public sealed class PropRenderer
 
             _buffers[index] = new float[capacity * FloatsPerInstance];
 
-            Node.AddChild(new MultiMeshInstance3D
+            _nodes[index] = new MultiMeshInstance3D
             {
                 Name = kind.ToString(),
                 Multimesh = _multi[index],
@@ -78,9 +98,15 @@ public sealed class PropRenderer
                 CustomAabb = new Aabb(
                     new Vector3(-arenaExtent, -1.0f, -arenaExtent),
                     new Vector3(arenaExtent * 2.0f, PropLibrary.Height(kind) * 2.0f + 2.0f, arenaExtent * 2.0f)),
-            });
+            };
+
+            Node.AddChild(_nodes[index]);
         }
     }
+
+    /// Which kinds this renderer was built for. A probe reads it to assert that a
+    /// biome placed nothing it does not own.
+    public PropKind[] Kinds => _kinds;
 
     public void Clear()
     {
@@ -93,13 +119,24 @@ public sealed class PropRenderer
     public void Add(PropKind kind, Vector2 centre, Vector2 footprint, float yawDegrees, float heightScale = 1.0f)
     {
         int index = (int)kind;
+        float[]? buffer = _buffers[index];
+
+        // Loud, because the silent version of this is a piece of cover that the
+        // flow field routes around and nothing draws: the player walks into thin
+        // air and stops. It is the same class of bug as the missing sprite that
+        // took the whole horde down, and it cost an afternoon.
+        if (buffer == null)
+        {
+            GD.PushWarning($"PropRenderer: {kind} is not in this biome's set — not drawn");
+            return;
+        }
+
         int slot = _counts[index];
-        if (slot * FloatsPerInstance >= _buffers[index].Length)
+        if (slot * FloatsPerInstance >= buffer.Length)
             return;
 
         float yaw = Mathf.DegToRad(yawDegrees);
         float cos = Mathf.Cos(yaw), sin = Mathf.Sin(yaw);
-        float[] buffer = _buffers[index];
         int b = slot * FloatsPerInstance;
 
         // Row-major 3x4: the basis rows first, then the translation in the last
@@ -122,15 +159,23 @@ public sealed class PropRenderer
     /// to avoid paying seventy times.
     public void Commit()
     {
-        foreach (PropKind kind in System.Enum.GetValues<PropKind>())
+        foreach (PropKind kind in _kinds)
         {
             int index = (int)kind;
-            _multi[index].Buffer = _buffers[index];
-            _multi[index].VisibleInstanceCount = _counts[index];
+            if (_multi[index] is not MultiMesh multi)
+                continue;
+
+            multi.Buffer = _buffers[index];
+            multi.VisibleInstanceCount = _counts[index];
 
             // An empty MultiMesh still costs a draw call; hiding it gives that
             // back on the seeds that never place a given kind.
-            Node.GetChild<MultiMeshInstance3D>(index).Visible = _counts[index] > 0;
+            //
+            // Through the stored node rather than `Node.GetChild(index)`, which
+            // was only ever right because every kind got a child in enum order.
+            // It stopped being right the moment a biome could skip one, and the
+            // symptom would have been the wrong prop turning invisible.
+            _nodes[index]!.Visible = _counts[index] > 0;
         }
     }
 

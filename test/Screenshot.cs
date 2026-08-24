@@ -96,6 +96,21 @@ public partial class Screenshot : SceneTree
                 generator.Seed = seed;
         }
 
+        // `biome:N` picks the place, and it lives up here for the same reason the
+        // seed does.
+        //
+        // It was down with the cosmetic flags, *after* `AddChild` — so it set
+        // `GameSession.Biome` for a level that had already generated, and every
+        // `biome:` capture ever taken was the rail yard with a different filename.
+        // The picture looks completely correct, which is what makes it worth a
+        // comment: nothing about a screenshot of a real arena says it is the wrong
+        // arena.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument.StartsWith("biome:") && int.TryParse(argument[6..], out int biome))
+                GameSession.Biome = biome;
+        }
+
         // `sprites` photographs the billboard fallback, which is otherwise code
         // that ships and is never seen. Also before the tree: `Horde._Ready`
         // branches on this and builds a different set of renderers either way.
@@ -129,11 +144,9 @@ public partial class Screenshot : SceneTree
             _throw |= arg == "throw";
             _flash |= arg == "flash";
             _fx |= arg == "fx";
+            _aerial |= arg == "aerial";
             if (arg.StartsWith("frames:") && int.TryParse(arg[7..], out int frames))
                 _warmup = Mathf.Max(1, frames);
-
-            if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
-                GameSession.Biome = biome;
 
             // `seed:` is read before the scene enters the tree, not here — see
             // above `GetRoot().AddChild`. By this point the generator has already
@@ -143,6 +156,77 @@ public partial class Screenshot : SceneTree
 
     private bool _visitZone;
     private bool _showKit;
+    private bool _aerial;
+
+    /// Looks at the whole arena from above, with the HUD off.
+    ///
+    /// The game's camera sits four metres up and eight back, which is the right
+    /// place to judge a *fight* and the wrong place to judge a *map*. Cover is
+    /// generated in clusters across a hundred and ten metres and the spawn is
+    /// deliberately clear, so a ground-level capture of a freshly generated run
+    /// is a picture of an empty field however dense the biome is — two arenas
+    /// with ten times the cover between them produced screenshots that could not
+    /// be told apart, which is what this exists to stop.
+    ///
+    /// A second `Camera3D` marked current, rather than moving the rig: the rig
+    /// re-aims itself every frame from the player, so anything written into it
+    /// is gone by the time the frame is drawn.
+    private void GoAerial()
+    {
+        Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+
+        var level = scene.GetNodeOrNull<LevelGenerator>("Level");
+        float extent = level?.Extent ?? 55.0f;
+
+        // High enough to contain the arena at the camera's own field of view,
+        // and tilted rather than straight down. Vertically down is a floor plan:
+        // every prop becomes its footprint and the one thing being judged —
+        // whether the cover has height and breaks a sight line — disappears.
+        float tilt = Mathf.DegToRad(58.0f);
+        float distance = extent * 1.9f;
+
+        var camera = new Camera3D { Fov = 55.0f, Far = 600.0f, Current = true };
+        scene.AddChild(camera);
+
+        camera.LookAtFromPosition(
+            new Vector3(0.0f, Mathf.Sin(tilt) * distance, Mathf.Cos(tilt) * distance),
+            Vector3.Zero, Vector3.Up);
+
+        // The HUD is a CanvasLayer over everything and covers a fifth of a wide
+        // shot. It is the subject of other captures and never of this one.
+        scene.GetNodeOrNull<CanvasLayer>("Hud")?.Hide();
+        scene.GetNodeOrNull<CanvasLayer>("TouchHud")?.Hide();
+
+        // The fog goes off, and it has to.
+        //
+        // The arena fades to near-black by about forty metres — deliberately, so
+        // the horde *arrives* instead of standing around in plain sight at the
+        // spawn ring. From a hundred metres up that means the entire map is inside
+        // the black, and the first aerial capture came back as a photograph of
+        // nothing at all with no error anywhere.
+        //
+        // Turning it off is honest here rather than a cheat, because this view is
+        // not one the game ever shows: the question being asked is "how is this
+        // arena laid out", not "what does the player see".
+        // And the roof comes off.
+        //
+        // An interior biome builds a solid deck over the whole arena, so an
+        // aerial capture of one photographs the underside of the ceiling and
+        // nothing else — a single flat colour filling the frame, which looks
+        // exactly like a capture that failed.
+        scene.GetNodeOrNull<Node3D>("Level/Ceiling")?.Hide();
+
+        var world = scene.GetNodeOrNull<WorldEnvironment>("Environment");
+        if (world?.Environment is Godot.Environment env)
+        {
+            env.FogEnabled = false;
+            env.AmbientLightEnergy = 0.9f;
+        }
+        else
+        {
+            GD.PushWarning("aerial: no WorldEnvironment — the capture will be dark");
+        }
+    }
 
     /// Puts the player in the middle of the first zone on the map.
     ///
@@ -183,6 +267,9 @@ public partial class Screenshot : SceneTree
 
             if (_visitZone)
                 GoToZone();
+
+            if (_aerial)
+                GoAerial();
 
             if (_showKit && player is Player kitted)
             {
