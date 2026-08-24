@@ -199,6 +199,19 @@ public partial class MetaManager : Node
 
     private void OnRunEnded(int state, int bankedValue)
     {
+        // Cleared here, at the top of a settle, rather than left to the object's
+        // lifetime.
+        //
+        // In practice one manager sees one run — the scene is torn down after the
+        // debrief — so these start empty and the clearing is redundant today. It
+        // is here because the comment on the fields said they were cleared when a
+        // run began and nothing cleared them, which is a comment that would have
+        // been believed. A second settle on one manager would have reported the
+        // first run's finds again, and "you recovered a wedding ring" appearing
+        // twice for one ring is the kind of wrong that gets read as a save bug.
+        _foundThisRun.Clear();
+        _bountyThisRun = 0;
+
         var runState = (RunState)state;
         bool survived = runState == RunState.Extracted;
 
@@ -434,8 +447,9 @@ public partial class MetaManager : Node
         _bountyThisRun += CollectionBook.Claim(Profile);
     }
 
-    /// What this run added to the collection. Cleared when a run begins, because
-    /// a manager that outlives one run would report the last one's finds.
+    /// What this run added to the collection. Cleared at the top of `OnRunEnded`,
+    /// so the answer belongs to the settle that is reporting it rather than to
+    /// however long this node happens to live.
     private readonly System.Collections.Generic.List<string> _foundThisRun = new();
     private int _bountyThisRun;
 
