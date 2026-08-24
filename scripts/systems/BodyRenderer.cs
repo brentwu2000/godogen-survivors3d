@@ -54,9 +54,7 @@ public sealed class BodyRenderer
 
         for (int i = 0; i < variants; i++)
         {
-            ArrayMesh mesh = BodyMeshLibrary.Build3D(
-                BodyMeshLibrary.ForVariant(types[i].TypeName, types[i].DesignHeightMeters));
-
+            ArrayMesh mesh = MeshFor(types[i]);
             mesh.SurfaceSetMaterial(0, new ShaderMaterial { Shader = shader });
 
             _multiMeshes[i] = new MultiMesh
@@ -86,6 +84,52 @@ public sealed class BodyRenderer
 
             Node.AddChild(_nodes[i]);
         }
+    }
+
+    /// The mesh for one variant: a baked body if it names one, procedural if not.
+    ///
+    /// Both arrive carrying the rig in the same two UV channels, so nothing
+    /// downstream can tell them apart — which is what makes `BakeBody` worth
+    /// having rather than a second renderer.
+    ///
+    /// The height check is not ceremony. `BodyProbe` asserts every variant stands
+    /// at its designed height because the enemy table is what the game balances
+    /// against, and a bake made against a different number is a variant that hits
+    /// for a brute's damage at a walker's size. Caught here rather than there,
+    /// because here it can still fall back to something correct.
+    private static ArrayMesh MeshFor(EnemyTypeResource type)
+    {
+        ArrayMesh Procedural() => BodyMeshLibrary.Build3D(
+            BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters));
+
+        if (string.IsNullOrEmpty(type.BakedBodyPath))
+            return Procedural();
+
+        var baked = ResourceLoader.Load<BakedBodyResource>(type.BakedBodyPath);
+        if (baked == null)
+        {
+            GD.PushWarning($"BodyRenderer: {type.TypeName} names {type.BakedBodyPath} and it did "
+                         + "not load — drawing it procedurally");
+            return Procedural();
+        }
+
+        if (Mathf.Abs(baked.StandingHeight - type.DesignHeightMeters) > 0.05f)
+        {
+            GD.PushWarning($"BodyRenderer: {type.TypeName} is designed at "
+                         + $"{type.DesignHeightMeters:F2} m and its bake stands at "
+                         + $"{baked.StandingHeight:F2} m — drawing it procedurally. Re-bake with "
+                         + "the design height.");
+            return Procedural();
+        }
+
+        ArrayMesh? mesh = BakedBody.Build(baked);
+        if (mesh != null)
+            return mesh;
+
+        GD.PushWarning($"BodyRenderer: {type.TypeName}'s bake did not rebuild — "
+                     + "drawing it procedurally");
+
+        return Procedural();
     }
 
     /// Advances every body's stride by how far it walked.

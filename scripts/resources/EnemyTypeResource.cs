@@ -52,6 +52,19 @@ public partial class EnemyTypeResource : Resource
     /// compare it to a brute quietly becoming 2.4 m looks exactly like a brute.
     [Export] public float DesignHeightMeters { get; set; } = 2.0f;
 
+    /// A baked body to draw this variant with, or empty for a procedural one.
+    ///
+    /// The two are interchangeable by the time the renderer sees them — a baked
+    /// body carries the same rig in the same UV channels, which is the whole
+    /// point of `BakeBody` — so this is the only place the game has to know which
+    /// kind a variant is.
+    ///
+    /// Empty is not a fallback, it is a choice. A variant that names a bake and
+    /// fails to load it draws procedurally *and says so*: a silently procedural
+    /// body for a variant that was supposed to be authored is the exact shape of
+    /// failure this project keeps paying for.
+    [Export] public string BakedBodyPath { get; set; } = "";
+
     /// Layer in the horde's Texture2DArray. Layers are stacked in the order the
     /// types are listed, so this is an index into that list.
     [Export] public int SpriteLayer { get; set; }
