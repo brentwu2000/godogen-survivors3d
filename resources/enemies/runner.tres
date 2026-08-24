@@ -10,6 +10,7 @@ MoveSpeed = 4.6
 ContactDamagePerSecond = 4.0
 SpriteScale = 0.9
 DesignHeightMeters = 1.8
+BakedBodyPath = "res://resources/bodies/runner.res"
 SpriteLayer = 1
 SpawnWeight = 0.8
 UnlockIntensity = 0.2

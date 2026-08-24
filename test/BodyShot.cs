@@ -205,7 +205,20 @@ public partial class BodyShot : SceneTree
 
         for (int i = 0; i < names.Length; i++)
         {
-            Add(shader, BodyMeshLibrary.ForVariant(names[i], heights[i]), root, x);
+            ArrayMesh? mesh = MeshFor(names[i], out float height);
+            if (mesh == null)
+                continue;
+
+            var body = new SoloBody(shader, mesh, height, 40.0f);
+            root.AddChild(body.Node);
+            _bodies.Add(body);
+            _placements.Add(new Vector3(x, 0.0f, 0.0f));
+
+            // The spec is only used for the camera framing, and a baked body has
+            // none — so it borrows the player's at its own height, which is what
+            // the framing arithmetic actually wants.
+            _specs.Add(BodyMeshLibrary.ForPlayer(height));
+
             x += Spacing;
         }
 
@@ -300,17 +313,44 @@ public partial class BodyShot : SceneTree
     private static string[] Variants()
     {
         var names = new System.Collections.Generic.List<string>();
-
         foreach (string name in Horde.TypeNames)
-        {
-            var type = GD.Load<EnemyTypeResource>($"res://resources/enemies/{name}.tres");
-            if (type != null && !string.IsNullOrEmpty(type.BakedBodyPath))
-                continue;
-
             names.Add(name);
-        }
 
         return names.ToArray();
+    }
+
+    /// The mesh for one variant, from wherever that variant actually comes from.
+    ///
+    /// **This tool stopped showing the horde and it took a wrong screenshot to
+    /// notice.** It skipped any variant with a `BakedBodyPath`, on the reasoning
+    /// that a baked body has no `Build` spec to stand up — which was true and
+    /// harmless while one variant was authored. Eight of nine are authored now,
+    /// so the lineup rendered the player and the bulwark and nothing else, and it
+    /// did so while I was using it to judge a silhouette rebuild.
+    ///
+    /// Same lesson as the hand-written array of six names it replaced: a tool
+    /// that quietly narrows what it shows is worse than one that fails.
+    private static ArrayMesh? MeshFor(string name, out float height)
+    {
+        height = 1.8f;
+
+        var type = GD.Load<EnemyTypeResource>($"res://resources/enemies/{name}.tres");
+        if (type == null)
+            return null;
+
+        height = type.DesignHeightMeters;
+
+        if (!string.IsNullOrEmpty(type.BakedBodyPath))
+        {
+            var baked = GD.Load<BakedBodyResource>(type.BakedBodyPath);
+            if (baked != null)
+                return BakedBody.Build(baked);
+
+            GD.PushWarning($"{name} names {type.BakedBodyPath} and it did not load");
+            return null;
+        }
+
+        return BodyMeshLibrary.Build3D(BodyMeshLibrary.ForVariant(name, height));
     }
 
     private static float[] HeightsFor(string[] names)

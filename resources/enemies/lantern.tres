@@ -10,6 +10,7 @@ MoveSpeed = 3.0
 ContactDamagePerSecond = 16.0
 SpriteScale = 0.95
 DesignHeightMeters = 1.9
+BakedBodyPath = "res://resources/bodies/lantern.res"
 SpriteLayer = 8
 KnockbackScale = 1.2
 SpawnWeight = 0.5

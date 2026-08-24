@@ -10,6 +10,7 @@ MoveSpeed = 1.15
 ContactDamagePerSecond = 26.0
 SpriteScale = 3.157
 DesignHeightMeters = 5.5
+BakedBodyPath = "res://resources/bodies/boss.res"
 SpriteLayer = 5
 KnockbackScale = 0.0
 DeathBlastRadius = 6.0

@@ -58,6 +58,86 @@ public readonly record struct ZonePlan(
     /// third impossible, however well the player did.
     int Rounds)
 {
+    /// Which zones this map asks for.
+    ///
+    /// **It was `i % 3`, so every map ever generated had exactly one Hold, one
+    /// Purge and one Breach.** The positions moved, the tiers moved, and the
+    /// *structure* of a run never did — once the player had learned the three,
+    /// every map was the same checklist in rearranged geography. That is the
+    /// single clearest reason a second run felt like the first.
+    ///
+    /// The three kinds want different things: Hold rewards nerve and a weapon
+    /// that holds ground, Purge rewards aggression and a weapon that clears, and
+    /// Breach rewards being able to leave in a hurry. A map that always contains
+    /// all three never makes any of those the wrong build. A map with two Holds
+    /// and no Breach does.
+    ///
+    /// Rules, in order of how much they matter:
+    ///
+    ///   - **Never all the same.** Three Holds is one long fight repeated, and a
+    ///     run whose every zone refuses the same loadout is a run the player
+    ///     cannot answer at all.
+    ///   - **A repeat is allowed and is the point.** Two of one kind and one of
+    ///     another is what makes a map lean, and leaning is what makes the choice
+    ///     of what to bring matter.
+    ///   - **Order is shuffled**, so the nearest zone is not always the same
+    ///     kind. The first zone the player meets sets what they expect of the
+    ///     rest.
+    private static ZoneKind[] Composition(int count, System.Func<float> nextFloat)
+    {
+        var kinds = new ZoneKind[count];
+        if (count == 0)
+            return kinds;
+
+        const int Kinds = 3;
+
+        // One kind the map leans on, and a second to keep it from being a
+        // monoculture. Drawn as an offset from the first rather than
+        // independently, so "the other one" can never land back on the same kind
+        // and need re-rolling.
+        int lead = (int)(nextFloat() * Kinds) % Kinds;
+        int other = (lead + 1 + (int)(nextFloat() * (Kinds - 1))) % Kinds;
+
+        for (int i = 0; i < count; i++)
+        {
+            // Two thirds lead, one third other. At three zones that is usually
+            // 2-1 and sometimes 1-2, which are different maps rather than
+            // different orderings of the same one.
+            kinds[i] = (ZoneKind)(nextFloat() < 0.62f ? lead : other);
+        }
+
+        // The guard, and it has to be a guard rather than a tendency: a run of
+        // three identical draws is one map in nine, which is often enough that
+        // somebody would meet it on their second evening.
+        bool same = true;
+        for (int i = 1; i < count && same; i++)
+            same = kinds[i] == kinds[0];
+
+        // Replaced with *whichever it is not*, and that is the whole of the fix.
+        //
+        // The first version wrote `other` unconditionally, which is correct when
+        // the three all came up `lead` and does nothing at all when they all came
+        // up `other` — it overwrites a value with itself. At a 0.38 draw that is
+        // about five per cent of maps, and `StageCompositionVaries` caught two in
+        // forty on its first run. A guard that only covers one of the two ways
+        // its condition can be reached is not a guard.
+        if (same && count > 1)
+        {
+            kinds[count - 1] = kinds[0] == (ZoneKind)lead
+                ? (ZoneKind)other
+                : (ZoneKind)lead;
+        }
+
+        // Shuffled, so the lead kind is not reliably the one nearest the spawn.
+        for (int i = count - 1; i > 0; i--)
+        {
+            int j = (int)(nextFloat() * (i + 1));
+            (kinds[i], kinds[j]) = (kinds[j], kinds[i]);
+        }
+
+        return kinds;
+    }
+
     /// Three zones, sited on a wide ring and spread apart.
     ///
     /// On a ring rather than anywhere, because a zone next to the player's
@@ -74,6 +154,8 @@ public readonly record struct ZonePlan(
         if (plans.Length == 0)
             return plans;
 
+        ZoneKind[] kinds = Composition(plans.Length, nextFloat);
+
         float baseAngle = nextFloat() * Mathf.Tau;
 
         for (int i = 0; i < plans.Length; i++)
@@ -86,7 +168,7 @@ public readonly record struct ZonePlan(
             // the opening minutes.
             float radius = extent * (0.34f + nextFloat() * 0.16f);
 
-            var kind = (ZoneKind)(i % 3);
+            ZoneKind kind = kinds[i % kinds.Length];
 
             // Tier by depth, so the map's own geography says which is worth more
             // before the player has been told anything.

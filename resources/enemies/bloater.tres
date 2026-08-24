@@ -9,6 +9,7 @@ MaxHealth = 25.0
 MoveSpeed = 1.8
 SpriteScale = 1.592
 DesignHeightMeters = 2.4
+BakedBodyPath = "res://resources/bodies/bloater.res"
 SpriteLayer = 3
 DeathBlastRadius = 3.0
 DeathBlastDamage = 25.0

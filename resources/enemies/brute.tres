@@ -10,6 +10,7 @@ MoveSpeed = 1.4
 ContactDamagePerSecond = 14.0
 SpriteScale = 2.098
 DesignHeightMeters = 3.0
+BakedBodyPath = "res://resources/bodies/brute.res"
 SpriteLayer = 2
 KnockbackScale = 0.2
 SpawnWeight = 0.35

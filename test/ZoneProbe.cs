@@ -94,13 +94,14 @@ public partial class ZoneProbe : SceneTree
 
         switch (_stage)
         {
-            case 0: return RunStage(StagePlaced, "three zones, one of each kind, clear of the pads");
+            case 0: return RunStage(StagePlaced, "three zones, not all one kind, clear of the pads");
             case 1: return RunStage(StageDormant, "a zone does nothing until somebody walks in");
             case 2: return RunStage(StageWakes, "walking in wakes it and the first wave arrives");
             case 3: return RunStage(StageReadout, "the readout says which zone and how far through");
             case 4: return RunStage(StagePerimeter, "reinforcements come from the zone's edge, not from around the player");
             case 5: return RunStage(StageHoldPauses, "leaving a hold pauses the clock rather than resetting it");
             case 6: return RunStage(StagePays, "clearing it pays rounds and a cache, and it stops spawning");
+            case 7: return RunStage(StageCompositionVaries, "and the mix of kinds is not the same on every map");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -119,6 +120,100 @@ public partial class ZoneProbe : SceneTree
         _stage++;
         _stageTick = 0;
         return false;
+    }
+
+    /// The composition changes from seed to seed, and never degenerates.
+    ///
+    /// One map cannot show this: the stage above sees whatever this seed happened
+    /// to produce, and would pass on a generator that returned the same three
+    /// kinds forever — which is exactly what it did until now. So this walks many
+    /// layouts and asks about the distribution.
+    ///
+    /// Regenerating in place rather than standing up a scene per seed, the same
+    /// way `BiomeProbe` measures two biomes: a second process would differ in
+    /// more than the seed.
+    private bool? StageCompositionVaries(int tick)
+    {
+        const int Layouts = 40;
+
+        var seen = new System.Collections.Generic.HashSet<string>();
+        var perKind = new int[3];
+        int allSame = 0;
+        int leaning = 0;
+
+        for (int i = 0; i < Layouts; i++)
+        {
+            _level!.Seed = 0x51E5D0A7UL + (ulong)i * 0x9E3779B97F4A7C15UL;
+            _level.Generate();
+
+            var kinds = new System.Collections.Generic.List<int>();
+            Node? container = GetRoot().GetChild(GetRoot().GetChildCount() - 1)
+                                       .GetNodeOrNull<Node3D>("DangerZones");
+
+            foreach (Node child in container?.GetChildren() ?? new Godot.Collections.Array<Node>())
+            {
+                if (child is DangerZone zone)
+                {
+                    kinds.Add(zone.Kind);
+                    perKind[Mathf.Clamp(zone.Kind, 0, 2)]++;
+                }
+            }
+
+            if (kinds.Count == 0)
+                continue;
+
+            kinds.Sort();
+            seen.Add(string.Join("", kinds));
+
+            var distinct = new System.Collections.Generic.HashSet<int>(kinds);
+            if (distinct.Count == 1)
+                allSame++;
+            else if (distinct.Count < kinds.Count)
+                leaning++;
+        }
+
+        GD.Print($"  {Layouts} layouts: {seen.Count} distinct compositions, {leaning} that lean, "
+               + $"{allSame} all-one-kind; kinds seen {perKind[0]}/{perKind[1]}/{perKind[2]}");
+
+        bool ok = true;
+
+        // More than one shape of map. Three would be the old behaviour dressed
+        // up; the count here is of *multisets*, so 4 means the mix genuinely
+        // moves rather than the order changing.
+        if (seen.Count < 4)
+        {
+            GD.PushError($"  only {seen.Count} distinct compositions across {Layouts} layouts — "
+                       + "the structure of a run barely changes");
+            ok = false;
+        }
+
+        // And leaning has to actually happen, or every map is still one of each
+        // and this stage is measuring a shuffle.
+        if (leaning == 0)
+        {
+            GD.PushError("  no map leaned toward one kind — every layout is still one of each");
+            ok = false;
+        }
+
+        // The guard, which is the one thing that must never fire.
+        if (allSame > 0)
+        {
+            GD.PushError($"  {allSame} layouts asked the same question three times");
+            ok = false;
+        }
+
+        // Every kind still shows up. A composition that quietly stopped producing
+        // Breaches would pass everything above.
+        for (int i = 0; i < perKind.Length; i++)
+        {
+            if (perKind[i] == 0)
+            {
+                GD.PushError($"  {(ZoneKind)i} never appeared in {Layouts} layouts");
+                ok = false;
+            }
+        }
+
+        return ok;
     }
 
     /// Fails a stage that has nothing to measure.
@@ -157,11 +252,24 @@ public partial class ZoneProbe : SceneTree
         foreach (DangerZone zone in _zones)
             kinds.Add(zone.Kind);
 
-        // One of each, so a run always offers a choice between two ways of being
-        // paid rather than three of the same encounter.
-        if (kinds.Count != _zones.Length)
+        // Not all the same, and no longer one of each.
+        //
+        // **This asserted `kinds.Count == _zones.Length` — one Hold, one Purge,
+        // one Breach on every map ever generated — and it passed for the whole
+        // life of the game because `ZonePlan` built the kinds as `i % 3`.** The
+        // positions moved and the structure never did, so once a player had
+        // learned the three, every map was the same checklist in rearranged
+        // geography. A probe asserting an invariant that is the *problem* is the
+        // worst kind of green.
+        //
+        // What has to hold now is weaker and is the point: a map may lean, so
+        // that some runs reward holding ground and others reward being able to
+        // leave. What must never happen is three of one kind, which is one long
+        // fight repeated and a run no loadout can answer.
+        if (kinds.Count < 2 && _zones.Length > 1)
         {
-            GD.PushError($"  {kinds.Count} distinct kinds across {_zones.Length} zones");
+            GD.PushError($"  all {_zones.Length} zones are the same kind — "
+                       + "this map asks one question three times");
             ok = false;
         }
 

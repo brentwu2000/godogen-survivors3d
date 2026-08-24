@@ -61,6 +61,21 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "runner",
+
+                // Authored, like every humanoid in the table now.
+                //
+                // `MeshBuilder` still builds these variants and the procedural
+                // path is still the fallback — `BodyRenderer.MeshFor` drops back
+                // to it, loudly, if a bake is missing or stands at the wrong
+                // height. What changed is which one the game draws.
+                //
+                // The models are authored offline in three.js
+                // (`art-src/models/`) against the proportions in
+                // `BodyMeshLibrary.ForVariant`, which is why swapping them is
+                // safe: hip at 46% of height and shoulder at 80% either way, so
+                // the rig, the reach and the fog silhouette are unchanged and
+                // only the surface between the joints is different.
+                BakedBodyPath = "res://resources/bodies/runner.res",
                 SpriteLayer = 1,
                 DesignHeightMeters = 1.8f,
                 MaxHealth = 4.0f,
@@ -77,6 +92,7 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "brute",
+                BakedBodyPath = "res://resources/bodies/brute.res",
                 SpriteLayer = 2,
                 DesignHeightMeters = 3.0f,
                 MaxHealth = 60.0f,
@@ -95,6 +111,7 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "bloater",
+                BakedBodyPath = "res://resources/bodies/bloater.res",
                 SpriteLayer = 3,
                 DesignHeightMeters = 2.4f,
                 MaxHealth = 25.0f,
@@ -114,6 +131,7 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "spitter",
+                BakedBodyPath = "res://resources/bodies/spitter.res",
                 SpriteLayer = 4,
                 DesignHeightMeters = 2.0f,
                 MaxHealth = 8.0f,
@@ -140,6 +158,7 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "boss",
+                BakedBodyPath = "res://resources/bodies/boss.res",
                 SpriteLayer = 5,
                 DesignHeightMeters = 5.5f,
                 MaxHealth = 1600.0f,
@@ -278,6 +297,7 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "lantern",
+                BakedBodyPath = "res://resources/bodies/lantern.res",
                 SpriteLayer = 8,
                 DesignHeightMeters = 1.9f,
                 MaxHealth = 14.0f,

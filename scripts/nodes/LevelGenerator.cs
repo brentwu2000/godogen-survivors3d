@@ -209,7 +209,7 @@ public partial class LevelGenerator : Node3D
         // Before the crates, so a crate is never sited on top of a zone marker.
         // After the pads, because a zone that overlapped the way out would let
         // the player finish it by standing where they were going anyway.
-        BuildZones(zones, blocks);
+        BuildZones(zones, blocks, pads);
         BuildCrates(crates, blocks);
 
         CarvedLastRun = EnsureReachable(blocks, pads, crates);
@@ -1066,7 +1066,7 @@ public partial class LevelGenerator : Node3D
     /// rectangle needs the map, and the map exists for one function inside this
     /// class. The director never learns where they are; the zones find the horde
     /// and the player themselves.
-    private void BuildZones(Node3D parent, System.Collections.Generic.List<Block> blocks)
+    private void BuildZones(Node3D parent, System.Collections.Generic.List<Block> blocks, Node3D pads)
     {
         _zones = ZonePlan.Plan(ZoneCount, Extent, NextFloat);
 
@@ -1080,6 +1080,21 @@ public partial class LevelGenerator : Node3D
             // and the edge is where the enemies come from.
             Vector2 centre = PushOutOfBlocks(plan.Centre, blocks,
                                              Mathf.Max(plan.HalfExtent.X, plan.HalfExtent.Y) * 0.5f);
+
+            // And off the extraction pads.
+            //
+            // **Nothing did this, and the comment above `BuildZones` claimed it
+            // was handled by ordering.** Building zones after pads means the pad
+            // positions are *known*, not that they are avoided — and a zone whose
+            // rectangle contains a pad can be cleared by standing where the
+            // player was already going, which pays a hard encounter's reward for
+            // walking to the exit.
+            //
+            // It never fired until the zone kinds started drawing from the same
+            // stream, which moved every zone. That is worth saying plainly: this
+            // was latent from the day zones shipped and stayed invisible because
+            // one arbitrary sequence of random numbers happened not to hit it.
+            centre = PushOffPads(centre, plan.HalfExtent, pads);
 
             _zones[i] = plan with { Centre = centre };
 
@@ -1102,6 +1117,38 @@ public partial class LevelGenerator : Node3D
             zone.AddChild(BuildZoneMarker(plan));
             parent.AddChild(zone);
         }
+    }
+
+    /// Nudges a zone until no extraction pad is inside it.
+    ///
+    /// Along whichever axis needs the least movement, because a zone is sited on
+    /// a ring at a chosen radius and shoving it the long way would undo the
+    /// placement. Half a metre of margin past the edge, so a pad exactly on the
+    /// boundary does not depend on a floating-point comparison.
+    private static Vector2 PushOffPads(Vector2 centre, Vector2 half, Node3D pads)
+    {
+        foreach (Node child in pads.GetChildren())
+        {
+            if (child is not ExtractionZone pad)
+                continue;
+
+            var at = new Vector2(pad.Position.X, pad.Position.Z);
+            Vector2 delta = at - centre;
+
+            float overlapX = half.X - Mathf.Abs(delta.X);
+            float overlapY = half.Y - Mathf.Abs(delta.Y);
+
+            // Outside on either axis is outside the rectangle.
+            if (overlapX <= 0.0f || overlapY <= 0.0f)
+                continue;
+
+            if (overlapX < overlapY)
+                centre.X -= Mathf.Sign(delta.X == 0.0f ? 1.0f : delta.X) * (overlapX + 0.5f);
+            else
+                centre.Y -= Mathf.Sign(delta.Y == 0.0f ? 1.0f : delta.Y) * (overlapY + 0.5f);
+        }
+
+        return centre;
     }
 
     /// The rectangle on the ground.
