@@ -36,6 +36,16 @@ public partial class EffectDirector : Node3D
     private static readonly Color Blast = new(1.0f, 0.58f, 0.22f, 0.5f);
     private static readonly Color Smoke = new(0.30f, 0.26f, 0.24f, 0.28f);
 
+    // The kit cards, in colours nothing else on screen uses.
+    //
+    // Every other effect here is a warm firearm colour — muzzle, spark, blast —
+    // because they all come from shooting. The cards are things the *player*
+    // bought and the player is blue, so they answer in the cold half of the
+    // wheel. That separation is doing real work: in a crowded frame the question
+    // "was that my card or my gun" has to be answerable without reading a number.
+    private static readonly Color PulseTint = new(0.62f, 0.86f, 1.0f, 0.55f);
+    private static readonly Color ChainTint = new(0.70f, 0.92f, 1.0f, 0.75f);
+
     private EffectPool _pool = null!;
     private MultiMesh _multi = null!;
     private float[] _buffer = System.Array.Empty<float>();
@@ -106,8 +116,30 @@ public partial class EffectDirector : Node3D
         {
             _weapons.Fired += OnFired;
             _weapons.Hit += OnHit;
+            _weapons.Chained += OnChained;
         }
+
+        // The shockwave, which has been invisible since the day it shipped.
+        //
+        // `RunKit.Pulsed` was declared, invoked, and documented as "an event
+        // rather than the kit drawing it, because the effect director owns every
+        // particle in the game" — and nothing ever subscribed. The card damaged,
+        // knocked back, and produced no light at all. Everything about it was
+        // correct except that the last line was never written, which is why it
+        // read as a card that does nothing.
+        //
+        // From the scene root, not from the player: `RunKit` is a sibling. The
+        // first version of this line asked the player for it, got null, and
+        // would have left the shockwave exactly as invisible as it was before —
+        // with a warning nobody had a reason to read yet.
+        _kit = root?.GetNodeOrNull<RunKit>("RunKit");
+        if (_kit != null)
+            _kit.Pulsed += OnPulsed;
+        else
+            GD.PushWarning("EffectDirector: no RunKit — the shockwave will be invisible");
     }
+
+    private RunKit? _kit;
 
     /// The horde's and the weapon's events are plain C# delegates, so they hold a
     /// strong reference to this node — a subscription that outlives the scene is
@@ -124,7 +156,11 @@ public partial class EffectDirector : Node3D
         {
             _weapons.Fired -= OnFired;
             _weapons.Hit -= OnHit;
+            _weapons.Chained -= OnChained;
         }
+
+        if (_kit != null)
+            _kit.Pulsed -= OnPulsed;
     }
 
     public override void _Process(double delta)
@@ -324,6 +360,59 @@ public partial class EffectDirector : Node3D
     /// A kill is the one event the player is trying to cause, so it is the one
     /// that has to be unmistakable. Two puffs: a bright one that is gone almost
     /// at once, and a slower dark one that lingers where the body was.
+    /// A ring of puffs on the wave front, drifting outward.
+    ///
+    /// A ring rather than a burst at the centre, because the radius is the whole
+    /// of what the card does: the player has to learn how far it reaches, and a
+    /// puff at their feet teaches them nothing. Placed *on* the circumference and
+    /// pushed outward, so what is seen is where the damage was.
+    ///
+    /// The count rises with the radius. A fixed number spreads thinner as the
+    /// card is stacked, so the effect would visibly weaken exactly as it got
+    /// stronger.
+    private void OnPulsed(Vector3 centre, float radius)
+    {
+        int count = Mathf.Clamp(Mathf.RoundToInt(radius * 4.0f), 12, 28);
+
+        for (int i = 0; i < count; i++)
+        {
+            float angle = Mathf.Tau * i / count;
+            var out2 = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+
+            _pool.Spawn(centre + new Vector3(out2.X * radius, 0.35f, out2.Y * radius),
+                        0.5f, 1.5f, PulseTint, 0.32f, out2 * 3.4f);
+        }
+    }
+
+    /// The arc, as a line of puffs from the shot to whatever it jumped to.
+    ///
+    /// Stepped along the line rather than drawn as one stretched quad, because
+    /// the effect pool draws billboarded squares and has no notion of a segment.
+    /// Spacing is fixed and the count follows the distance, so a long jump is a
+    /// longer line rather than the same line stretched thinner.
+    private void OnChained(Vector3 from, Vector3 to)
+    {
+        Vector3 span = to - from;
+        float length = span.Length();
+        if (length < 0.05f)
+            return;
+
+        int steps = Mathf.Clamp(Mathf.RoundToInt(length / 0.55f), 2, 14);
+
+        for (int i = 0; i <= steps; i++)
+        {
+            float t = (float)i / steps;
+
+            // Bowed upward in the middle. A dead straight line between two
+            // things on a flat plane reads as a rendering artefact; a sag is
+            // what makes it look thrown.
+            float lift = Mathf.Sin(t * Mathf.Pi) * 0.45f;
+
+            _pool.Spawn(from.Lerp(to, t) + new Vector3(0.0f, 0.5f + lift, 0.0f),
+                        0.34f, 0.05f, ChainTint, 0.16f, Vector2.Zero);
+        }
+    }
+
     private void OnEnemyKilled(int type, Vector3 position)
     {
         Vector3 at = position + new Vector3(0.0f, 0.8f, 0.0f);

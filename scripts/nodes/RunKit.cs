@@ -76,6 +76,7 @@ public partial class RunKit : Node3D
         _touched = new int[256];
 
         BuildBlades();
+        BuildFrost();
     }
 
     public override void _PhysicsProcess(double delta)
@@ -93,6 +94,7 @@ public partial class RunKit : Node3D
 
         StepOrbit(step);
         StepShockwave(step);
+        StepFrost();
     }
 
     // ------------------------------------------------------------------------
@@ -274,6 +276,108 @@ public partial class RunKit : Node3D
         };
 
         AddChild(_blades);
+    }
+
+    /// The chilled ground, as flat shards of ice around the player.
+    ///
+    /// **Chill had never been visible.** `Horde` slows anything inside
+    /// `ChillRadius` on a gradient, and nothing anywhere drew where that was — so
+    /// the card's whole effect was enemies moving at a speed the player could not
+    /// account for, in an area they could not see the edge of. Of the four kit
+    /// cards it is the one whose value depends most on knowing its extent: it is
+    /// bought to make ground defensible, and ground you cannot identify is not
+    /// ground you can choose to stand on.
+    ///
+    /// Shards laid flat rather than a disc. A solid circle on the floor reads as
+    /// a decal or a selection marker — a UI element the player looks past — while
+    /// broken plates read as something that happened to the ground. They also
+    /// leave gaps, so the scatter and the slab seams stay visible through it
+    /// instead of painting over the floor E4 just gave a scale to.
+    ///
+    /// **Built at the real radius, in metres.** The first version authored a unit
+    /// ring and scaled the node by 7.5, which scales the shards too — every plate
+    /// came out over two metres across and the effect read as sheets of blue
+    /// paper dropped round the player. Position scales with the radius; size does
+    /// not, and the only way to have both is to lay it out at full size.
+    private void BuildFrost()
+    {
+        float radius = _horde?.ChillRadius ?? 7.5f;
+
+        var builder = new MeshBuilder();
+        ulong rng = 0x4F6CDD1D2545F491UL;
+
+        // Dark enough to sit on the floor rather than on top of it. The first
+        // pass was around 0.7 and the shards glowed like lit panels; ice in a
+        // dusk arena is a cold *dark* thing with a pale edge.
+        var pale = new Color(0.38f, 0.52f, 0.62f);
+        var deep = new Color(0.17f, 0.26f, 0.35f);
+
+        // Rings out to the edge, each with enough plates to keep the density
+        // roughly even — the count follows the circumference, so the outer ring
+        // is not visibly sparser than the inner one.
+        //
+        // Denser toward the middle even so, because the slow is a gradient and
+        // the drawing should be one. An even scatter would say the edge bites as
+        // hard as the centre, which is the one thing about the card that is not
+        // true.
+        const int Rings = 5;
+
+        for (int ring = 0; ring < Rings; ring++)
+        {
+            float at = radius * (0.14f + ring * 0.21f);
+            float density = 1.0f - ring * 0.12f;
+            int count = Mathf.Max(4, Mathf.RoundToInt(at * 2.6f * density));
+
+            for (int i = 0; i < count; i++)
+            {
+                float angle = Mathf.Tau * i / count + ring * 0.7f + Next(ref rng) * 0.5f;
+                float out2 = at + (Next(ref rng) - 0.5f) * radius * 0.14f;
+
+                // Plates, not chips. Around a third of a metre reads as broken
+                // ice underfoot at this camera; much smaller and it is gravel,
+                // much larger and it is board.
+                float size = 0.26f + Next(ref rng) * 0.22f;
+
+                builder.Box(new Vector3(Mathf.Cos(angle) * out2, 0.02f, Mathf.Sin(angle) * out2),
+                            new Vector3(size, 0.03f, size * 0.72f),
+                            deep.Lerp(pale, Next(ref rng)),
+                            Next(ref rng) * 90.0f);
+            }
+        }
+
+        ArrayMesh mesh = builder.Build();
+        mesh.SurfaceSetMaterial(0, PropLibrary.Material());
+
+        _frost = new MeshInstance3D
+        {
+            Name = "Frost",
+            Mesh = mesh,
+
+            // No shadow. Three centimetres thick and lying on the floor, so its
+            // shadow is a dark copy of itself offset by nothing — which reads as
+            // the ground being dirty rather than frozen.
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            Visible = false,
+        };
+
+        AddChild(_frost);
+    }
+
+    /// Shows the chilled ground while the card is held.
+    private void StepFrost()
+    {
+        if (_frost != null)
+            _frost.Visible = (_player?.Mods.Chill ?? 0.0f) > 0.0f;
+    }
+
+    private MeshInstance3D? _frost;
+
+    private static float Next(ref ulong state)
+    {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        return (state >> 40) / 16777216.0f;
     }
 
     private void DrawBlades(int blades)

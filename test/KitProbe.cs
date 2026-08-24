@@ -14,6 +14,7 @@ public partial class KitProbe : SceneTree
     private Player? _player;
     private Horde? _horde;
     private RunKit? _kit;
+    private Node? _scene;
     private RunGrowth? _growth;
 
     private int _stage;
@@ -48,6 +49,7 @@ public partial class KitProbe : SceneTree
         if (_stage == 0 && _stageTick == 0)
         {
             Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+            _scene = scene;
             _player = scene.GetNodeOrNull<Player>("Player");
             _horde = scene.GetNodeOrNull<Horde>("Horde");
             _kit = scene.GetNodeOrNull<RunKit>("RunKit");
@@ -88,6 +90,7 @@ public partial class KitProbe : SceneTree
             case 4: return RunStage(StageChillIsLocal, "chill slows what is near and nothing far away");
             case 5: return RunStage(StageChillNeverStops, "stacking chill approaches a limit rather than crossing it");
             case 6: return RunStage(StageResetClearsEverything, "a run's modifiers do not survive into the next one");
+            case 7: return RunStage(StageCardsAreVisible, "every card puts something on screen when it works");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -328,6 +331,79 @@ public partial class KitProbe : SceneTree
     }
 
     private int _pulses;
+
+    /// A card that works and cannot be seen is a card that does not work.
+    ///
+    /// **This is the bug that shipped.** `RunKit.Pulsed` was declared, invoked,
+    /// and carried a comment explaining that the effect director draws it "because
+    /// the effect director owns every particle in the game" — and nothing ever
+    /// subscribed. The shockwave damaged, knocked back, and produced no light at
+    /// all for its entire life. Every existing stage above passed the whole time,
+    /// because every one of them asks what the card *did* and none asks whether
+    /// anybody could tell.
+    ///
+    /// Counted rather than sampled. A puff lives about a third of a second, so a
+    /// probe reading the live count a few ticks later sees whatever happens to
+    /// still be alive; `TotalSpawned` is a running total and cannot be missed by
+    /// looking at the wrong moment.
+    ///
+    /// The chill is checked differently because it is not an event: it is a mesh
+    /// that exists whenever the card is held, so the question is whether the node
+    /// is there and visible rather than whether something was emitted.
+    private bool? StageCardsAreVisible(int tick)
+    {
+        EffectDirector? effects = _scene?.GetNodeOrNull<EffectDirector>("Effects");
+        if (effects == null)
+        {
+            GD.PushError("  no EffectDirector in the scene");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _player!.Mods.Reset();
+            _player.Mods.PulseStacks = 4;
+            _player.Mods.Chill = 0.5f;
+
+            _horde.Spawn(_player.GlobalPosition + new Vector3(3.0f, 0.0f, 0.0f), 0);
+
+            // Zeroed here, so what is counted is what this stage caused and not
+            // the muzzle flashes of six stages of shooting before it.
+            effects.Effects.ForgetTotals();
+            return null;
+        }
+
+        if (tick < 4 * 60)
+            return null;
+
+        int spawned = effects.Effects.TotalSpawned;
+
+        // The frost, which is geometry rather than an event.
+        Node? frost = _kit?.GetNodeOrNull("Frost");
+        bool frostShown = frost is MeshInstance3D { Visible: true };
+
+        GD.Print($"  4 s with pulse and chill: {spawned} puff(s) emitted, "
+               + $"frost {(frost == null ? "missing" : frostShown ? "visible" : "hidden")}");
+
+        bool ok = true;
+
+        if (spawned <= 0)
+        {
+            GD.PushError("  the shockwave fired and emitted nothing — "
+                       + "`Pulsed` is not connected to anything");
+            ok = false;
+        }
+
+        if (!frostShown)
+        {
+            GD.PushError("  chill is held and the ground shows nothing — "
+                       + "the player cannot see where the slow applies");
+            ok = false;
+        }
+
+        return ok;
+    }
 
     /// Chill is about the ground the player is standing on, not a global debuff.
     private bool? StageChillIsLocal(int tick)

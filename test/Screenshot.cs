@@ -277,6 +277,13 @@ public partial class Screenshot : SceneTree
                 // is of the ring, not of a random offer agreeing to produce one.
                 kitted.Mods.OrbitBlades = 5;
                 kitted.Mods.PulseStacks = 2;
+
+                // All four, not two. The shockwave was invisible for its whole
+                // life and the chill has never been drawn at all, and neither of
+                // those could be seen in a capture that only granted the two
+                // cards already known to render.
+                kitted.Mods.Chill = 0.5f;
+                kitted.Mods.ChainChance = 1.0f;
             }
 
             var horde = _scene.GetNodeOrNull<Horde>("Horde");

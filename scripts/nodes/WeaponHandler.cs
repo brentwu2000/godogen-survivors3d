@@ -91,6 +91,10 @@ public partial class WeaponHandler : Node3D
     /// feedback that could have said "that landed properly" said nothing.
     public event System.Action<Vector3, WeaponCategory, float>? Hit;
 
+    /// Where a chain arc went from and to. Drawn by `EffectDirector`, which owns
+    /// every particle in the game.
+    public event System.Action<Vector3, Vector3>? Chained;
+
     public WeaponResource? Weapon => _slots[_active].Weapon;
     public int Ammo => _slots[_active].Ammo;
     public int Reserve => _slots[_active].Reserve;
@@ -765,6 +769,15 @@ public partial class WeaponHandler : Node3D
         // A chain jump reads as a smaller event than the shot that started it,
         // because it is: the chain does a fraction of the damage.
         Hit?.Invoke(to, category, damage * ChainFraction);
+
+        // And the jump itself, which nothing drew.
+        //
+        // `Hit` fires at the destination, so a chain has always produced an
+        // impact on a second enemy with nothing connecting it to the first — a
+        // creature at the back of a crowd flinching for no visible reason. The
+        // card is a *chain*; the thing the player bought is the line between the
+        // two, and it was the one part not on screen.
+        Chained?.Invoke(where, to);
     }
 
     /// How far an arc will reach. Short, like the ricochet: this is a crowd

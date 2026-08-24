@@ -485,16 +485,52 @@ has to sit *before* `_held` is written: recording the change and then bailing me
 never fires again and the body stays empty-handed permanently, which is the bug the whole function
 exists to fix.
 
-### F3 — Four skills, one visual language
+### ✅ F3 — Four cards, four things you can see
 
-`RunKit` has Orbit, Shockwave, Chain and Chill, and all four are expressed through `EffectPool`
-puffs — the same quads, differing in tint and size. They resolve differently, which B3 established
-and `KitProbe` still asserts; they do not *look* different, and a card the player cannot see working
-is a card they have to read the tooltip to believe.
+The premise going in was wrong in an interesting way. The note said all four were "expressed through
+`EffectPool` puffs, differing in tint and size". Orbit had real geometry; **the other three had
+nothing at all**, and one of those was a bug rather than a gap.
 
-Orbit is geometry that already exists in the world and could be drawn. Shockwave is a ring with a
-radius that is already computed. Chain has a start and an end point per jump. Chill has an area. All
-four have the numbers; none of them have a shape.
+**The shockwave had been invisible since the day it shipped.** `RunKit.Pulsed` was declared, invoked,
+and carried a comment explaining that the effect director draws it "because the effect director owns
+every particle in the game" — and nothing ever subscribed. The card damaged, knocked back, and
+produced no light at all. Everything about it was correct except that the last line was never
+written, which is precisely why it read as a card that does nothing.
+
+It draws a ring of puffs on the wave front now, drifting outward. A ring rather than a burst at the
+centre, because the radius is the whole of what the card does and a puff at the player's feet teaches
+them nothing about how far it reaches. The count rises with the radius, so stacking the card does not
+visibly thin the effect out as it gets stronger.
+
+**The chain arc was never drawn.** `Hit` fires at the destination, so a chain produced an impact on a
+second enemy with nothing connecting it to the first — a creature at the back of a crowd flinching for
+no visible reason. The thing the player bought is the line between the two, and it was the one part
+not on screen.
+
+**Chill had never been drawn at all.** `Horde` slows anything inside `ChillRadius` on a gradient and
+nothing showed where that was, so the card's whole effect was enemies moving at a speed the player
+could not account for, in an area whose edge they could not see. Of the four it is the one whose
+value depends most on knowing its extent: it is bought to make ground defensible, and ground you
+cannot identify is not ground you can choose to stand on. Flat shards rather than a disc — a solid
+circle on the floor reads as a decal or a selection marker, which the eye looks past.
+
+The card effects are **cold** where every other effect in the director is a warm firearm colour,
+because they are things the player bought and the player is blue. In a crowded frame "was that my
+card or my gun" has to be answerable without reading a number.
+
+Two mistakes on the way, both found by looking:
+
+- The frost was authored at unit radius and the node scaled by 7.5, which scales the shards too.
+  Every plate came out over two metres across and the effect read as sheets of blue paper dropped
+  round the player. Position scales with the radius; size does not, and the only way to have both is
+  to lay it out at full size.
+- The subscription asked the *player* for `RunKit`, and `RunKit` is a sibling. Null, silently, and
+  the shockwave would have stayed exactly as invisible as it was.
+
+**`KitProbe` gains a stage that asks whether each card puts something on screen.** Every stage before
+it asks what a card *did*, and all seven passed for the entire life of a shockwave nobody could see.
+That is the lesson worth keeping from this one: a suite that only ever asks about effects will not
+notice that the game has stopped drawing them.
 
 ### F4 — Nothing on the ground says what it is
 
