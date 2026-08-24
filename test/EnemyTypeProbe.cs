@@ -112,6 +112,16 @@ public partial class EnemyTypeProbe : SceneTree
     /// fill, `BuildEnemyTypes.cs` holds a number written by hand, and a brute that
     /// quietly became 2.4 m tall looks exactly like a brute. This is the only
     /// place the two halves are compared.
+    ///
+    /// Only for variants drawn as billboards. A variant that names a baked body
+    /// is drawn from geometry whose height is baked in, checked by `BakeProbe`
+    /// against the same table and again by `BodyRenderer` before it will use it —
+    /// and it has no sprite to measure, because the billboard path is a fallback
+    /// that substitutes a placeholder rather than requiring 2D art for every
+    /// authored creature.
+    ///
+    /// Skipped, never silently. A variant with neither a sprite nor a bake has
+    /// nothing at all to draw it, which is worth failing over.
     private bool? StageDrawnHeight(int tick)
     {
         bool ok = true;
@@ -122,7 +132,14 @@ public partial class EnemyTypeProbe : SceneTree
             Image? sprite = GD.Load<Texture2D>($"res://assets/sprites/enemies/{type.TypeName}.png")?.GetImage();
             if (sprite == null)
             {
-                GD.PushError($"  {type.TypeName}.png did not load");
+                if (!string.IsNullOrEmpty(type.BakedBodyPath))
+                {
+                    GD.Print($"  {type.TypeName,-8} drawn from {type.BakedBodyPath} — "
+                           + "no sprite to measure, height checked by BakeProbe");
+                    continue;
+                }
+
+                GD.PushError($"  {type.TypeName} has neither a sprite nor a baked body");
                 ok = false;
                 continue;
             }
@@ -224,14 +241,29 @@ public partial class EnemyTypeProbe : SceneTree
     {
         EnemyTypeResource[] types = _horde!.Types;
 
-        // Five that turn up on their own plus the boss, which the director places
-        // by hand. The count is asserted rather than merely tolerated because a
-        // sixth row appearing unannounced would mean the sprite array and the
-        // table had drifted apart, and every layer after the gap would draw the
-        // wrong creature.
-        if (types.Length != 6)
+        // Against `Horde.TypeNames` rather than against a number written here.
+        //
+        // The real property is that the table and the name list agree: the sprite
+        // array is built from the names in order, so a row appearing in one and
+        // not the other means every layer after the gap draws the wrong creature.
+        // A literal count tests that *and* forbids ever adding a variant, which is
+        // not a property anybody wanted — it failed the moment the stalker landed,
+        // and this repository has already had a probe hide three new weapons by
+        // hardcoding a list of six.
+        if (types.Length != Horde.TypeNames.Length)
         {
-            GD.PushError($"PROBE FAILED — expected 6 variants, got {types.Length}");
+            GD.PushError($"PROBE FAILED — {types.Length} variants loaded against "
+                       + $"{Horde.TypeNames.Length} names in Horde.TypeNames");
+            return false;
+        }
+
+        for (int i = 0; i < types.Length; i++)
+        {
+            if (types[i].TypeName == Horde.TypeNames[i])
+                continue;
+
+            GD.PushError($"PROBE FAILED — slot {i} is '{types[i].TypeName}' in the table and "
+                       + $"'{Horde.TypeNames[i]}' in the name list");
             return false;
         }
 
@@ -516,8 +548,16 @@ public partial class EnemyTypeProbe : SceneTree
             return null;
         }
 
-        var early = new int[5];
-        _horde!.SpawnIntensity = 0.0f;
+        // Sized from the table, not from a literal.
+        //
+        // These were `new int[5]`, one slot per spawnable variant at the time, and
+        // the stalker landing at index 6 walked straight off the end of them. The
+        // count of variants is not a constant and writing it down as one is how a
+        // probe becomes the thing that forbids adding content.
+        int variants = _horde!.Types.Length;
+
+        var early = new int[variants];
+        _horde.SpawnIntensity = 0.0f;
         for (int i = 0; i < 200; i++)
         {
             _horde.Pool.Clear();
@@ -525,7 +565,7 @@ public partial class EnemyTypeProbe : SceneTree
             early[_horde.Pool.Type[0]]++;
         }
 
-        var late = new int[5];
+        var late = new int[variants];
         _horde.SpawnIntensity = 1.0f;
         for (int i = 0; i < 400; i++)
         {
@@ -538,12 +578,36 @@ public partial class EnemyTypeProbe : SceneTree
         _horde.SpawnIntensity = 0.0f;
 
         bool earlyWalkersOnly = early[Walker] == 200;
+
+        // Everything the director can actually roll has to turn up by the
+        // deadline. Derived from the table rather than assumed to be "all but the
+        // last one": the boss has a spawn weight of zero because `RunDirector`
+        // places it by hand, and anything else added with a weight of zero would
+        // be the same kind of thing.
         bool lateHasEveryone = true;
+        var missing = new System.Collections.Generic.List<string>();
+
         for (int i = 0; i < late.Length; i++)
-            lateHasEveryone &= late[i] > 0;
+        {
+            if (_horde.Types[i].SpawnWeight <= 0.0f)
+                continue;
+
+            if (late[i] > 0)
+                continue;
+
+            lateHasEveryone = false;
+            missing.Add(_horde.Types[i].TypeName);
+        }
+
+        var names = new System.Collections.Generic.List<string>();
+        foreach (EnemyTypeResource type in _horde.Types)
+            names.Add(type.TypeName);
 
         GD.Print($"  intensity 0.0: {string.Join('/', early)}");
-        GD.Print($"  intensity 1.0: {string.Join('/', late)}  (walker/runner/brute/bloater/spitter)");
+        GD.Print($"  intensity 1.0: {string.Join('/', late)}  ({string.Join('/', names)})");
+
+        if (missing.Count > 0)
+            GD.PushError($"  never rolled at full intensity: {string.Join(", ", missing)}");
 
         return earlyWalkersOnly && lateHasEveryone;
     }

@@ -145,6 +145,54 @@ public partial class BuildEnemyTypes : SceneTree
                 UnlockIntensity = 2.0f,
                 ExperienceValue = 120.0f,
             },
+
+            // The first variant that is not a person.
+            //
+            // Six variants in and every one of them was upright, bilateral and
+            // roughly human-sized, so the horde read as one silhouette at six
+            // scales — which is most of "a few coloured blocks". This one runs on
+            // four limbs: 1.3 m at the shoulder and 2.2 m nose to tail, longer
+            // than it is tall, and the only thing in the crowd whose outline is
+            // wider than it is high.
+            //
+            // Fast and fragile, like the runner, because a low silhouette that
+            // also soaked damage would be a wall the player cannot see over. The
+            // threat it carries is that it is hard to *pick out*, not that it is
+            // hard to kill.
+            //
+            // Drawn from an authored model rather than from `MeshBuilder`. It is
+            // the first variant that is, and the reason `BakeBody` exists: a
+            // quadruped assembled from boxes and tubes is a week of fiddling with
+            // pivot fractions for a shape somebody can draw in an afternoon.
+            new()
+            {
+                TypeName = "stalker",
+                SpriteLayer = 6,
+                BakedBodyPath = "res://resources/bodies/stalker.res",
+                DesignHeightMeters = 1.3f,
+                MaxHealth = 8.0f,
+                MoveSpeed = 4.2f,
+                ContactDamagePerSecond = 7.0f,
+
+                // Under one, unlike everything else in the table. `SpriteScale`
+                // multiplies the billboard on the fallback path and the body on
+                // this one, and a creature designed at 1.3 m does not want the
+                // walker's 1.0 on top of it.
+                SpriteScale = 0.72f,
+
+                // Shoved easily. Four legs low to the ground is a shape that
+                // should skid, and it is the compensation for how hard it is to
+                // see coming.
+                KnockbackScale = 1.4f,
+
+                SpawnWeight = 0.7f,
+
+                // After the runner and before the brute. The horde's first
+                // lesson is that things get faster; the stalker is the second,
+                // that they stop looking like people.
+                UnlockIntensity = 0.3f,
+                ExperienceValue = 2.0f,
+            },
         };
 
         foreach (EnemyTypeResource type in types)

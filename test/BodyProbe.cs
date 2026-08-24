@@ -169,12 +169,41 @@ public partial class BodyProbe : SceneTree
                 continue;
             }
 
-            var vertices = (Vector3[])mesh.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Vertex];
-            var uvs = (Vector2[])mesh.SurfaceGetArrays(0)[(int)Mesh.ArrayType.TexUV];
+            Godot.Collections.Array arrays = mesh.SurfaceGetArrays(0);
+            var vertices = (Vector3[])arrays[(int)Mesh.ArrayType.Vertex];
+            var uvs = (Vector2[])arrays[(int)Mesh.ArrayType.TexUV];
+            var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
 
+            // Through the index buffer when there is one.
+            //
+            // **This walked the vertex array in triples, which is right for
+            // `MeshBuilder` output and meaningless for anything indexed.** Every
+            // procedural body is non-indexed, so the assumption held until the
+            // first authored variant arrived — and then the test summed cross
+            // products of unrelated vertices, produced a net area of 0.1875 on a
+            // mesh that is closed, and reported "a limb failed to build".
+            //
+            // The failure was in the right direction by luck. A false positive on
+            // a good mesh is noticed; the same bug would just as easily have
+            // summed to near zero on a mesh with a hole in it, and this stage
+            // would have passed everything from here on.
             var net = Vector3.Zero;
-            for (int i = 0; i + 2 < vertices.Length; i += 3)
-                net += (vertices[i + 1] - vertices[i]).Cross(vertices[i + 2] - vertices[i]);
+
+            if (indices.Length > 0)
+            {
+                for (int i = 0; i + 2 < indices.Length; i += 3)
+                {
+                    net += (vertices[indices[i + 1]] - vertices[indices[i]])
+                        .Cross(vertices[indices[i + 2]] - vertices[indices[i]]);
+                }
+            }
+            else
+            {
+                for (int i = 0; i + 2 < vertices.Length; i += 3)
+                    net += (vertices[i + 1] - vertices[i]).Cross(vertices[i + 2] - vertices[i]);
+            }
+
+            int triangles = (indices.Length > 0 ? indices.Length : vertices.Length) / 3;
 
             // Something has to actually swing. A body whose rig is all zeroes
             // renders perfectly and stands rigid while it slides across the
@@ -189,7 +218,7 @@ public partial class BodyProbe : SceneTree
             bool closed = net.Length() * 0.5f < 0.01f;
             bool rigged = moving > 0 && moving < uvs.Length;
 
-            GD.Print($"  {_horde.Types[variant].TypeName,-8} {vertices.Length / 3,4} triangles, " +
+            GD.Print($"  {_horde.Types[variant].TypeName,-8} {triangles,4} triangles, " +
                      $"net area {net.Length() * 0.5f:F4}, {moving}/{uvs.Length} vertices rigged to swing");
 
             if (!closed)
@@ -233,7 +262,22 @@ public partial class BodyProbe : SceneTree
             float designed = _horde.Types[variant].DesignHeightMeters;
             BodyMeshLibrary.Build spec =
                 BodyMeshLibrary.ForVariant(_horde.Types[variant].TypeName, designed);
-            float predicted = BodyMeshLibrary.StandingHeight(spec);
+
+            // What the mesh is expected to measure.
+            //
+            // For a procedural body that is the library's own answer, which is
+            // not the design height: leaning forward makes you shorter, and the
+            // runner's 26 degrees costs it 5%. Checking against the table instead
+            // would need a tolerance wide enough to admit a head at the wrong
+            // fraction.
+            //
+            // For a baked body it is the design height exactly. `BakeBody` scales
+            // the model until it measures that, `BodyRenderer` refuses a bake that
+            // disagrees with the table, and `BodyMeshLibrary` has never heard of
+            // the variant — `ForVariant` falls through to the walker's build and
+            // predicts a *biped's* standing height for a creature on four legs.
+            bool baked = !string.IsNullOrEmpty(_horde.Types[variant].BakedBodyPath);
+            float predicted = baked ? designed : BodyMeshLibrary.StandingHeight(spec);
 
             // Two links, checked separately. The mesh must be exactly as tall as
             // the library says it will be — that catches a head at the wrong
@@ -244,7 +288,9 @@ public partial class BodyProbe : SceneTree
             // A single blanket tolerance would have to be wide enough for the
             // runner's 26-degree lean, which shortens it by 5%, and a tolerance
             // that wide admits real errors.
-            bool asBuilt = Mathf.Abs(top - predicted) < 0.005f;
+            // A baked mesh is scaled to hit the height rather than composed to,
+            // so it lands within float noise of it rather than exactly on it.
+            bool asBuilt = Mathf.Abs(top - predicted) < (baked ? 0.02f : 0.005f);
             bool asDesigned = Mathf.Abs(predicted - designed) < designed * 0.08f;
 
             GD.Print($"  {_horde.Types[variant].TypeName,-8} stands {top:F2} m " +

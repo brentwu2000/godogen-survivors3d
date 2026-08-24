@@ -81,24 +81,100 @@ public partial class Horde : Node3D
     [Export] public float SpawnRingMin { get; set; } = 12.0f;
     [Export] public float SpawnRingMax { get; set; } = 40.0f;
 
-    /// Scaled by the biome in `_Ready`, read from `GameSession` rather than from
-    /// the level generator. Both nodes want the same answer and neither should
-    /// have to be ready before the other to get it.
+    /// How much room an arrival must have outside the camera, in metres.
+    ///
+    /// The camera stands eleven and a half metres behind the player, and an
+    /// enemy spawning nearer than that in the direction the player is walking
+    /// away from materialises *in the lens* — a two-metre body across the corner
+    /// of the screen, over the HUD, with nothing to say what it is or where it
+    /// came from. Three metres is enough that it arrives in shot rather than on
+    /// top of it.
+    public const float SpawnCameraMargin = 3.0f;
+
+    /// The exported ring, before any biome touched it.
+    ///
+    /// Kept because the old version multiplied the export in place, which is
+    /// correct exactly once and compounds if it is ever called twice — and a
+    /// probe that wants to ask "what would each biome do" has to call it once per
+    /// biome.
+    private float _baseRingMin;
+    private float _baseRingMax;
+
+    /// Whether the base ring has been taken yet.
+    ///
+    /// A flag rather than testing `_baseRingMin <= 0`, because zero is a value
+    /// the export can legally hold: a probe that sets `SpawnRingMin = 0` to
+    /// spawn on top of the player would have the sentinel stay true forever, so
+    /// the *second* `ApplyBiome` would capture the already-clamped 14.7 as the
+    /// new base and every biome after that would scale from the wrong number.
+    private bool _baseTaken;
+
+    /// The nearest an arrival may be, whatever the biome asked for. Static so
+    /// `BiomeProbe` can hold every place against it without standing up a scene
+    /// per place.
+    public static float SpawnFloor(float cameraStandoff) => cameraStandoff + SpawnCameraMargin;
+
+    /// How far behind the player the camera actually sits, measured rather than
+    /// typed.
+    ///
+    /// `BuildMain` puts it thirteen metres along a view tilted twenty-six
+    /// degrees, which is 11.7 m of ground distance. A copy of that number here
+    /// would be a second place to change the framing — silently wrong the first
+    /// time somebody moved the camera, and never wrong in a way anyone would
+    /// think to look for. Falls back to the designed value when there is no rig,
+    /// which is the case in the probes that build a bare scene.
+    public float CameraStandoff()
+    {
+        var camera = GetParent()?.GetNodeOrNull<Camera3D>("CameraRig/Camera");
+        if (camera == null)
+            return 11.7f;
+
+        Vector3 at = camera.Position;
+        return new Vector2(at.X, at.Z).Length();
+    }
+
+    /// Scaled by the biome, read from `GameSession` rather than from the level
+    /// generator. Both nodes want the same answer and neither should have to be
+    /// ready before the other to get it.
     ///
     /// The ring travels with the terrain because the two are one decision: open
     /// ground with a tight ring is an ambush rather than open ground, and closed
     /// ground with a wide one is a map where nothing ever reaches you.
-    private void ApplyBiome()
+    ///
+    /// **The floor is not negotiable and the biome does not get a vote.** The
+    /// base ring starts at twelve metres and the camera stands eleven and a half
+    /// behind the player, so *any* scale below one puts arrivals behind the lens.
+    /// Old Town has been able to do it at 0.78 since the day it shipped, and it
+    /// stayed invisible only because every screenshot taken since was of the rail
+    /// yard. Clamping here rather than raising each biome's number keeps the ring
+    /// a design decision and the framing a constraint.
+    public void ApplyBiome(BiomeResource biome)
     {
-        BiomeResource biome = BiomeBook.Load(GameSession.Biome);
-        SpawnRingMin *= biome.SpawnRingScale;
-        SpawnRingMax *= biome.SpawnRingScale;
+        // Captured on first use rather than in `_Ready`, so this is safe to call
+        // from anywhere and safe to call repeatedly. See `_baseTaken` for why
+        // the guard is a flag and not a comparison against zero.
+        if (!_baseTaken)
+        {
+            _baseTaken = true;
+            _baseRingMin = SpawnRingMin;
+            _baseRingMax = SpawnRingMax;
+        }
+
+        SpawnRingMin = Mathf.Max(_baseRingMin * biome.SpawnRingScale, SpawnFloor(CameraStandoff()));
+
+        // And the outside stays outside the inside. A biome that pulled the ring
+        // in far enough would otherwise invert the pair, and `Spawn` picks a
+        // radius between them.
+        SpawnRingMax = Mathf.Max(_baseRingMax * biome.SpawnRingScale, SpawnRingMin + 4.0f);
     }
+
+    private void ApplyBiome() => ApplyBiome(BiomeBook.Load(GameSession.Biome));
 
     /// Variant order. Drives three things at once — the .tres to load, the sprite
     /// stacked at that layer, and the byte stored per instance — so they cannot
     /// drift apart the way three separate lists would.
-    public static readonly string[] TypeNames = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
+    public static readonly string[] TypeNames =
+        { "walker", "runner", "brute", "bloater", "spitter", "boss", "stalker" };
 
     /// A kill, for anything that wants to count them. A plain C# event rather
     /// than a Godot signal: both ends are C#, and EmitSignal marshals a Variant

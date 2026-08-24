@@ -86,23 +86,40 @@ public sealed class HordeRenderer
         };
     }
 
-    /// Stacks sprites into the array the shader samples. Returns null and reports
-    /// why on any failure — a half-built array would draw the wrong variant for
-    /// every layer after the missing one, which looks like a data bug three
-    /// systems away from the actual cause.
+    /// Stacks sprites into the array the shader samples, substituting for any
+    /// that are missing.
+    ///
+    /// **A missing sprite used to return null, and `Horde` reads null as fatal:
+    /// it calls `SetPhysicsProcess(false)` on itself and the whole horde stops
+    /// existing.** So adding an enemy variant without also drawing a 2D sprite for
+    /// it switched the game off — and the sprite path is the *fallback*, drawn
+    /// only when the solid bodies are unavailable. A fallback that can take the
+    /// primary path down with it is backwards, and the failure arrives as an empty
+    /// arena rather than as anything about sprites.
+    ///
+    /// A gap is a magenta placeholder and a warning. Magenta because it is the
+    /// one colour nothing in this game uses, so a substituted layer announces
+    /// itself the moment anybody looks at the fallback rather than hiding until
+    /// the day it is needed.
+    ///
+    /// Still fatal when *nothing* loads: there is then no size to build the array
+    /// from and nothing to substitute against, and an array of placeholders is not
+    /// a fallback either.
     public static Texture2DArray? LoadArray(string[] paths)
     {
-        var images = new Godot.Collections.Array<Image>();
+        var loaded = new Image?[paths.Length];
         int width = 0, height = 0;
 
-        foreach (string path in paths)
+        for (int i = 0; i < paths.Length; i++)
         {
-            var texture = GD.Load<Texture2D>(path);
+            var texture = GD.Load<Texture2D>(paths[i]);
             Image? image = texture?.GetImage();
+
             if (image == null)
             {
-                GD.PushError($"HordeRenderer: cannot read {path}");
-                return null;
+                GD.PushWarning($"HordeRenderer: cannot read {paths[i]} — the billboard fallback "
+                             + "will draw a placeholder for this variant");
+                continue;
             }
 
             // A VRAM-compressed import yields a block format the array will not
@@ -112,6 +129,10 @@ public sealed class HordeRenderer
                 image.Decompress();
             image.Convert(Image.Format.Rgba8);
 
+            // The first one that loads sets the size every layer must match. Read
+            // in a first pass rather than as the loop goes, because the missing
+            // sprite is most likely to be the one just added at the end of the
+            // list and there is no reason it should also have to be first.
             if (width == 0)
             {
                 width = image.GetWidth();
@@ -120,13 +141,23 @@ public sealed class HordeRenderer
             else if (image.GetWidth() != width || image.GetHeight() != height)
             {
                 GD.PushError(
-                    $"HordeRenderer: {path} is {image.GetWidth()}x{image.GetHeight()}, " +
+                    $"HordeRenderer: {paths[i]} is {image.GetWidth()}x{image.GetHeight()}, " +
                     $"expected {width}x{height} — every layer of a Texture2DArray must match");
                 return null;
             }
 
-            images.Add(image);
+            loaded[i] = image;
         }
+
+        if (width == 0)
+        {
+            GD.PushError("HordeRenderer: not one sprite in the array could be read");
+            return null;
+        }
+
+        var images = new Godot.Collections.Array<Image>();
+        foreach (Image? image in loaded)
+            images.Add(image ?? Placeholder(width, height));
 
         var array = new Texture2DArray();
         Error err = array.CreateFromImages(images);
@@ -137,6 +168,14 @@ public sealed class HordeRenderer
         }
 
         return array;
+    }
+
+    /// A solid magenta layer, for a sprite that is not there.
+    private static Image Placeholder(int width, int height)
+    {
+        Image image = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+        image.Fill(new Color(1.0f, 0.0f, 1.0f, 1.0f));
+        return image;
     }
 
     /// Uploads the whole instance buffer in one assignment. Per-instance setter

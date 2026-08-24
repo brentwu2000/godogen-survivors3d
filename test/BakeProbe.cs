@@ -28,6 +28,7 @@ public partial class BakeProbe : SceneTree
     {
         Stage("an unsound resource is refused rather than half-drawn", RefusesUnsound);
         Stage("a sound resource rebuilds into a mesh", RebuildsSound);
+        Stage("a baked colour matches a procedural one", ColourMatchesProcedural);
         Stage("every baked body on disk is sound", BakesOnDiskAreSound);
 
         GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
@@ -118,6 +119,92 @@ public partial class BakeProbe : SceneTree
         Rig = new[] { Vector2.Zero, new Vector2(0.55f, 0.9f), Vector2.Zero },
         Rig2 = new[] { Vector2.Zero, new Vector2(0.5f, 0.035f), Vector2.Zero },
     };
+
+    /// The same hex has to come out the same colour down both paths.
+    ///
+    /// **The bug this exists for passed every other stage in this file.** A bake
+    /// can be watertight, correctly scaled, correctly classified, rigged on both
+    /// phases — and simply the wrong colour, because `body.gdshader` writes COLOR
+    /// into ALBEDO and ALBEDO is linear while a hex code is sRGB. The baker did
+    /// not convert; `MeshBuilder` did. A stalker written as a dark brown rendered
+    /// a washed near-white, and nothing anywhere said so.
+    ///
+    /// Asserting that `BakeBody.Tint` calls `SrgbToLinear` would be a tautology —
+    /// it would restate the implementation and pass whatever the implementation
+    /// did. What has content is that the two paths *agree*: a procedural body and
+    /// a baked body given the same colour are the same colour on screen. Those
+    /// are independent pieces of code, and they drifted apart once already.
+    private bool ColourMatchesProcedural()
+    {
+        bool ok = true;
+
+        // Spread across the curve on purpose. sRGB and linear meet at both ends,
+        // so a test that only tried black or white would pass with the conversion
+        // deleted; the gap is widest in the middle, which is where a palette
+        // lives.
+        string[] samples = { "6b5f52", "1a1a1a", "d8d4c8", "3f6b2a", "ffffff", "000000" };
+
+        // One step of an 8-bit channel, and a bit.
+        //
+        // `AddSurfaceFromArrays` quantises vertex colours to RGBA8, so a colour
+        // read back off a mesh is never the float that went in — every sample
+        // here lands within 1/255 of the baked value and *none* of them are
+        // equal. A tolerance tighter than a quantisation step would fail on a
+        // pipeline that is working perfectly, which is the kind of probe that
+        // gets deleted rather than fixed.
+        //
+        // It is still far tighter than the bug: skipping the conversion moves a
+        // mid grey by 0.28, seventy steps.
+        const float Tolerance = 1.5f / 255.0f;
+
+        float worst = 0.0f;
+
+        foreach (string hex in samples)
+        {
+            Color asked = Color.FromHtml(hex);
+
+            // Through the procedural path: what a body built by `MeshBuilder`
+            // actually ends up storing per vertex, read back off the mesh rather
+            // than recomputed. Recomputing it here would be the tautology again.
+            var builder = new MeshBuilder();
+            builder.Box(Vector3.Zero, Vector3.One, asked);
+            ArrayMesh procedural = builder.Build();
+
+            Color drawn = procedural.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Color]
+                                    .AsColorArray()[0];
+
+            Color baked = BakeBody.Tint(hex);
+
+            float gap = Mathf.Max(Mathf.Max(Mathf.Abs(drawn.R - baked.R),
+                                            Mathf.Abs(drawn.G - baked.G)),
+                                  Mathf.Abs(drawn.B - baked.B));
+
+            worst = Mathf.Max(worst, gap);
+
+            if (gap > Tolerance)
+            {
+                GD.PushError($"  {hex}: procedural {drawn.ToHtml(false)} against baked "
+                           + $"{baked.ToHtml(false)} — the two paths disagree by {gap:F3}");
+                ok = false;
+            }
+        }
+
+        // And the conversion has to be doing something, or a pair of paths that
+        // both skipped it would agree perfectly and pass.
+        Color mid = BakeBody.Tint("808080");
+        bool converted = mid.R < 0.30f;
+
+        if (!converted)
+        {
+            GD.PushError($"  a mid grey baked to {mid.R:F3}, which is sRGB — "
+                       + "both paths skipped the conversion together");
+            ok = false;
+        }
+
+        GD.Print($"  {samples.Length} colours, worst disagreement {worst:F4} against a "
+               + $"{Tolerance:F4} tolerance; mid grey baked to {mid.R:F3}");
+        return ok;
+    }
 
     /// Whatever has actually been baked, checked against what a body has to be.
     ///
@@ -232,12 +319,37 @@ public partial class BakeProbe : SceneTree
             ok = false;
         }
 
-        if (moving > 0 && hip > baked.StandingHeight * 0.65f)
+        // Something that moves reaches the floor.
+        //
+        // This replaced "the lowest pivot is in the lower half of the body",
+        // which is true of a biped and false of every quadruped ever born — a
+        // four-legged creature's hips sit at the top of it, just under the spine.
+        // That rule refused a stalker whose classification was exactly right, 312
+        // leg vertices against 312 arm vertices with every bone name matched, and
+        // it would have refused every animal added after it.
+        //
+        // What holds for both is that legs end at the ground. Arms mistaken for
+        // legs are the failure worth catching, and arms do not touch the floor.
+        float lowestMoving = float.MaxValue;
+        for (int i = 0; i < baked.Rig.Length; i++)
         {
-            GD.PushError($"  {path}: the lowest pivot is at {hip:F2} m of a "
-                       + $"{baked.StandingHeight:F2} m body, which is not a hip");
+            if (baked.Rig[i].X > 0.0f)
+                lowestMoving = Mathf.Min(lowestMoving, baked.Vertices[i].Y);
+        }
+
+        if (moving > 0 && lowestMoving > baked.StandingHeight * 0.15f)
+        {
+            GD.PushError($"  {path}: the lowest moving vertex is at {lowestMoving:F2} m of a "
+                       + $"{baked.StandingHeight:F2} m body — nothing that swings reaches the "
+                       + "ground, so these are not legs");
             ok = false;
         }
+
+        // Posture is reported, not ruled on. A hip above two thirds of the height
+        // is what a quadruped looks like; it is also what a scrambled
+        // classification looks like on something meant to stand upright, and only
+        // a person can tell those apart.
+        string posture = hip > baked.StandingHeight * 0.65f ? "quadruped" : "upright";
 
         ArrayMesh? mesh = BakedBody.Build(baked);
         if (mesh == null)
@@ -246,7 +358,7 @@ public partial class BakeProbe : SceneTree
             ok = false;
         }
 
-        GD.Print($"  {path}: {baked.Triangles} tris, {baked.StandingHeight:F2} m, "
+        GD.Print($"  {path}: {posture}, {baked.Triangles} tris, {baked.StandingHeight:F2} m, "
                + $"{moving} moving vertices, pivots {hip:F2}–{shoulder:F2} m");
 
         return ok;

@@ -39,13 +39,35 @@ using Godot;
 /// already walk with, on geometry somebody authored.
 public partial class BakeBody : SceneTree
 {
+    /// A hand-typed colour, in the space the shader wants.
+    ///
+    /// This is the one function in the file that decides whether a bake *looks*
+    /// right, as opposed to being structurally sound. `body.gdshader` writes
+    /// COLOR straight into ALBEDO and ALBEDO is linear; a hex code is not — it
+    /// is what a colour picker shows, which is sRGB. `MeshBuilder.Box` converts
+    /// once at build time for the procedural bodies, and a baked body that
+    /// skipped the same conversion arrived about twice as bright as asked for.
+    /// The first stalker rendered a washed near-white from a colour written as
+    /// dark brown, through a bake that passed every soundness check there is.
+    ///
+    /// The model's own colours are *not* converted, and the asymmetry is correct
+    /// rather than an oversight: glTF stores COLOR_0 and baseColorFactor linear
+    /// by specification, so they already are what the shader wants. Only the
+    /// hand-typed argument is sRGB.
+    ///
+    /// Public because `BakeProbe` holds it against `MeshBuilder` — the invariant
+    /// worth keeping is not "this calls SrgbToLinear", which is a tautology, but
+    /// "a baked body and a procedural body given the same hex come out the same
+    /// colour". Those are two independent code paths and they drifted once.
+    public static Color Tint(string html) => Color.FromHtml(html).SrgbToLinear();
+
     public override void _Initialize()
     {
         string[] args = OS.GetCmdlineUserArgs();
         if (args.Length < 3 || !float.TryParse(args[2], out float height))
         {
             GD.PushError("usage: BakeBody.cs -- <source.glb> <out.res> <height metres> "
-                       + "[swing] [armSwing] [bob]");
+                       + "[swing] [armSwing] [bob] [rrggbb]");
             Quit(1);
             return;
         }
@@ -56,11 +78,39 @@ public partial class BakeBody : SceneTree
         float armSwing = args.Length > 4 && float.TryParse(args[4], out float b) ? b : 0.30f;
         float bob = args.Length > 5 && float.TryParse(args[5], out float c) ? c : 0.035f;
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob) ? 0 : 1);
+        // An explicit colour beats whatever the model came with. Models arrive
+        // white far more often than not — a generator asked for "no textures"
+        // gives a single default material — and a horde variant that is the
+        // brightest thing on a dark map is a variant that reads as the player.
+        // Write the colour without a leading `#`. PowerShell treats an unquoted
+        // `#` as the start of a comment, so `-- ... #6b5f52` arrives as no
+        // argument at all, and the first stalker baked white while the command
+        // line said otherwise. `Color.FromHtml` is happy either way; only the
+        // shell cares. Both forms are accepted here — the point of the note is
+        // the shell, not the parser.
+        Color? tint = null;
+        if (args.Length > 6)
+        {
+            // Refused rather than ignored. A colour that cannot be read is a
+            // typo, and a bake that quietly keeps the model's white is the one
+            // failure mode that survives every check in this file: the mesh is
+            // sound, the rig is sound, and the thing is simply the wrong colour
+            // on screen.
+            if (!Color.HtmlIsValid(args[6]))
+            {
+                GD.PushError($"\"{args[6]}\" is not a colour. Write it as rrggbb.");
+                Quit(1);
+                return;
+            }
+
+            tint = Tint(args[6]);
+        }
+
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tint) ? 0 : 1);
     }
 
     private static bool Bake(string source, string destination, float height,
-                             float legSwing, float armSwing, float bob)
+                             float legSwing, float armSwing, float bob, Color? tint)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -77,6 +127,40 @@ public partial class BakeBody : SceneTree
         if (instance?.Mesh == null)
         {
             GD.PushError($"{source} has no mesh to bake");
+            root.Free();
+            return false;
+        }
+
+        // Refused rather than half-baked.
+        //
+        // `FindMesh` returns the first `MeshInstance3D` it walks into, and the
+        // baker merges every *surface* of that one node. A model exported as
+        // separate nodes — body here, coat there, horns as a third — bakes
+        // whichever the walk reached first and silently omits the rest. What
+        // comes out is a sound bake: watertight, correctly scaled, correctly
+        // rigged, and missing a coat. That is the same shape of failure as the
+        // colour that never arrived and the ninety-six triangles read off
+        // surface zero, and both of those were found by looking at a render
+        // rather than by anything erroring.
+        //
+        // Merging them is not hard — each node has its own transform and its
+        // own skin bind list, so it is the surface merge with two more lookups
+        // — but it is not needed by anything in the project yet, and a bake
+        // that is quietly wrong is worse than one that will not run. Refuse,
+        // name the nodes, and let whoever hits it decide.
+        var meshes = new System.Collections.Generic.List<MeshInstance3D>();
+        CollectMeshes(root, meshes);
+
+        if (meshes.Count > 1)
+        {
+            var names = new System.Collections.Generic.List<string>();
+            foreach (MeshInstance3D found in meshes)
+                names.Add(found.Name);
+
+            GD.PushError($"{source} has {meshes.Count} mesh nodes ({string.Join(", ", names)}) and "
+                       + "the baker reads one. Merge them into a single mesh on export, or teach "
+                       + "Convert to walk the list — baking one of them would look correct and be "
+                       + "missing the others.");
             root.Free();
             return false;
         }
@@ -101,7 +185,7 @@ public partial class BakeBody : SceneTree
         if (root is Node3D root3D)
             toRoot = Relative(instance, root3D);
 
-        if (!Convert(instance, skeleton, baked, height, legSwing, armSwing, bob, toRoot))
+        if (!Convert(instance, skeleton, baked, height, legSwing, armSwing, bob, toRoot, tint))
         {
             root.Free();
             return false;
@@ -133,37 +217,124 @@ public partial class BakeBody : SceneTree
 
     private static bool Convert(MeshInstance3D instance, Skeleton3D skeleton, BakedBodyResource baked,
                                 float height, float legSwing, float armSwing, float bob,
-                                Transform3D toRoot)
+                                Transform3D toRoot, Color? tint)
     {
-        Godot.Collections.Array arrays = instance.Mesh.SurfaceGetArrays(0);
+        // Every surface, merged.
+        //
+        // **This read surface 0 and stopped, which silently threw away a third of
+        // the first model that had more than one.** A glTF splits by material, so
+        // a creature with a body material and a claw material arrives as two
+        // surfaces and looks complete in every viewer — the bake was 328 triangles
+        // of a 424-triangle model and the missing 96 were the parts that had a
+        // different colour, which is exactly the parts somebody cared about.
+        //
+        // Merging is right rather than refusing: a baked body is one vertex-
+        // coloured surface by construction, and each source surface contributes
+        // its own material's albedo to the vertices that came from it.
+        int surfaces = instance.Mesh.GetSurfaceCount();
 
-        var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
-        var normals = arrays[(int)Mesh.ArrayType.Normal].AsVector3Array();
-        var colours = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
-        var bones = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
-        var weights = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
-        var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+        var allVertices = new System.Collections.Generic.List<Vector3>();
+        var allNormals = new System.Collections.Generic.List<Vector3>();
+        var allColours = new System.Collections.Generic.List<Color>();
+        var allIndices = new System.Collections.Generic.List<int>();
+        var allLimbs = new System.Collections.Generic.List<Limb>();
+        var allPhases = new System.Collections.Generic.List<float>();
+        var perBone = new System.Collections.Generic.Dictionary<string, int>();
+
+        string[] jointNames = JointNames(instance, skeleton);
+
+        for (int surface = 0; surface < surfaces; surface++)
+        {
+            Godot.Collections.Array arrays = instance.Mesh.SurfaceGetArrays(surface);
+
+            var v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+            var n = arrays[(int)Mesh.ArrayType.Normal].AsVector3Array();
+            var c = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
+            var b = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
+            var w = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
+            var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+
+            if (v.Length == 0)
+                continue;
+
+            if (b.Length == 0 || w.Length == 0)
+            {
+                GD.PushError($"  surface {surface} has no joints or weights — it is not skinned, "
+                           + "so there is no way to tell a leg from a chest");
+                return false;
+            }
+
+            // Four influences per vertex is the glTF norm and what Godot hands
+            // back. Read per surface rather than once, because nothing promises
+            // two surfaces of one mesh were authored the same way.
+            int influences = b.Length / v.Length;
+            if (influences <= 0)
+            {
+                GD.PushError($"  surface {surface}: {b.Length} bone indices for {v.Length} vertices");
+                return false;
+            }
+
+            Color surfaceAlbedo = SurfaceAlbedo(instance, surface) ?? Colors.White;
+            int offset = allVertices.Count;
+
+            for (int i = 0; i < v.Length; i++)
+            {
+                allVertices.Add(v[i]);
+                allNormals.Add(i < n.Length ? n[i] : Vector3.Up);
+                allColours.Add(i < c.Length ? c[i] : surfaceAlbedo);
+
+                int dominant = Dominant(b, w, i, influences);
+                string bone = dominant >= 0 && dominant < jointNames.Length
+                    ? jointNames[dominant]
+                    : string.Empty;
+
+                (Limb limb, float phase) = Classify(bone);
+                allLimbs.Add(limb);
+                allPhases.Add(phase);
+
+                perBone.TryGetValue(bone, out int seen);
+                perBone[bone] = seen + 1;
+            }
+
+            // Indices, and the case that has no index buffer.
+            //
+            // The merge writes one global index array, so the moment *any*
+            // surface is indexed every surface has to be. A non-indexed one
+            // contributed its vertices and nothing pointing at them: the
+            // geometry was in the buffer, correctly placed and correctly
+            // coloured, and no triangle referenced it. It simply was not there.
+            //
+            // glTF exporters mix the two freely — a body mesh indexed and a
+            // strap or a horn left flat is an ordinary export — so this is not
+            // a hypothetical. Sequential indices are what "non-indexed" means.
+            if (idx.Length > 0)
+            {
+                foreach (int index in idx)
+                    allIndices.Add(index + offset);
+            }
+            else
+            {
+                for (int i = 0; i < v.Length; i++)
+                    allIndices.Add(offset + i);
+            }
+        }
+
+        Vector3[] vertices = allVertices.ToArray();
+        Vector3[] normals = allNormals.ToArray();
+        Color[] colours = allColours.ToArray();
+        int[] indices = allIndices.ToArray();
+        Limb[] limbs = allLimbs.ToArray();
+        float[] phases = allPhases.ToArray();
 
         if (vertices.Length == 0)
         {
-            GD.PushError("  surface 0 has no vertices");
+            GD.PushError("  no surface had any vertices");
             return false;
         }
 
-        if (bones.Length == 0 || weights.Length == 0)
-        {
-            GD.PushError("  the mesh has no joints or weights — it is not skinned, so there is "
-                       + "no way to tell a leg from a chest");
-            return false;
-        }
-
-        // Four influences per vertex is the glTF norm and what Godot hands back.
-        int perVertex = bones.Length / vertices.Length;
-        if (perVertex <= 0)
-        {
-            GD.PushError($"  {bones.Length} bone indices for {vertices.Length} vertices");
-            return false;
-        }
+        GD.Print($"  {surfaces} surface(s) merged into {vertices.Length} vertices, "
+               + $"{indices.Length / 3} triangles");
+        GD.Print($"  colour: {(tint.HasValue ? $"forced to {tint.Value.LinearToSrgb().ToHtml(false)}" : "taken from the model")}");
 
         // Scaled so the tallest vertex lands at the requested height, and dropped
         // so the lowest sits at zero. Both matter: the enemy table is balanced
@@ -189,37 +360,6 @@ public partial class BakeBody : SceneTree
         float span = Mathf.Max(0.0001f, high - low);
         float scale = height / span;
 
-        // Every vertex classified before any of them are written, because the
-        // pivots are measured from the classification.
-        var limbs = new Limb[vertices.Length];
-        var phases = new float[vertices.Length];
-
-        // The joint index a vertex carries is an index into the *skin's* bind
-        // list, not into the skeleton's bones.
-        //
-        // They are often the same and there is no reason they have to be. Reading
-        // bone names straight off the vertex index scrambled the classification on
-        // the first model tried: it put the hip at 1.89 m and the shoulder at
-        // 1.92 m on a two-metre body, which is a rig whose arms and legs turn
-        // about a line above its own head. Nothing errors, and the body renders
-        // perfectly and folds in half when it walks.
-        string[] jointNames = JointNames(instance, skeleton);
-
-        var perBone = new System.Collections.Generic.Dictionary<string, int>();
-
-        for (int i = 0; i < vertices.Length; i++)
-        {
-            int dominant = Dominant(bones, weights, i, perVertex);
-            string bone = dominant >= 0 && dominant < jointNames.Length
-                ? jointNames[dominant]
-                : string.Empty;
-
-            (limbs[i], phases[i]) = Classify(bone);
-
-            perBone.TryGetValue(bone, out int seen);
-            perBone[bone] = seen + 1;
-        }
-
         // Where the limbs turn about, measured off the *vertices* rather than off
         // the skeleton's rest pose.
         //
@@ -234,10 +374,20 @@ public partial class BakeBody : SceneTree
         float hipY = TopOf(vertices, limbs, Limb.Leg, low, scale, height * 0.46f);
         float shoulderY = TopOf(vertices, limbs, Limb.Arm, low, scale, height * 0.80f);
 
+        // What the body is coloured, in order of preference: an explicit
+        // argument, the mesh's own vertex colours, then the material's albedo.
+        //
+        // The albedo matters because a model exported without textures still has
+        // a material, and reading it is the difference between a creature the
+        // artist chose the colour of and a white one. White is the last resort and
+        // is deliberately loud about it — nothing else in this game is white, so a
+        // white variant on screen says the colour was lost rather than chosen.
+        Color fallback = Albedo(instance) ?? Colors.White;
+
         var rig = new Vector2[vertices.Length];
         var rig2 = new Vector2[vertices.Length];
         var placed = new Vector3[vertices.Length];
-        var tint = new Color[vertices.Length];
+        var colour = new Color[vertices.Length];
 
         int legs = 0, arms = 0;
 
@@ -247,7 +397,7 @@ public partial class BakeBody : SceneTree
                                     (vertices[i].Y - low) * scale,
                                     vertices[i].Z * scale);
 
-            tint[i] = i < colours.Length ? colours[i] : Colors.White;
+            colour[i] = tint ?? (i < colours.Length ? colours[i] : fallback);
 
             switch (limbs[i])
             {
@@ -289,7 +439,7 @@ public partial class BakeBody : SceneTree
 
         baked.Vertices = placed;
         baked.Normals = normals.Length == vertices.Length ? normals : RecomputeNormals(placed, indices);
-        baked.Colours = tint;
+        baked.Colours = colour;
         baked.Rig = rig;
         baked.Rig2 = rig2;
         baked.Indices = indices;
@@ -359,11 +509,42 @@ public partial class BakeBody : SceneTree
             return false;
         }
 
+        // Legs reach the ground. This is the test that actually catches a
+        // misclassification, and unlike the one it replaced it does not care what
+        // posture the creature has.
+        //
+        // The first version asked whether the hip was in the lower half of the
+        // body, which is true of a biped and false of every quadruped ever born:
+        // a four-legged creature's hips are at the *top* of it, just under the
+        // spine. It refused a perfectly good stalker whose classification was
+        // exactly right — 312 leg vertices, 312 arm vertices, the bone names all
+        // matched. A rule that only holds for one body plan is not a rule.
+        //
+        // What is true of both is that a leg ends at the floor. Arms mistaken for
+        // legs are the failure being guarded against, and arms do not.
+        float lowestLeg = float.MaxValue;
+        for (int i = 0; i < placed.Length; i++)
+        {
+            if (limbs[i] == Limb.Leg)
+                lowestLeg = Mathf.Min(lowestLeg, placed[i].Y);
+        }
+
+        if (lowestLeg > height * 0.15f)
+        {
+            GD.PushError($"  the lowest leg vertex is at {lowestLeg:F2} m of a {height:F2} m body \u2014 "
+                       + "these are not legs. Check the bone readout above");
+            return false;
+        }
+
+        // And a note on posture rather than a rule about it. A hip above two
+        // thirds of the height is what a quadruped looks like and is worth seeing
+        // stated, because if the model was meant to stand upright it is also what
+        // a scrambled classification looks like.
         if (hipY > height * 0.65f)
         {
-            GD.PushError($"  the hip is at {hipY:F2} m of a {height:F2} m body, which is not a hip. "
-                       + "Leg vertices are reaching too far up: check the bone readout above");
-            return false;
+            GD.Print($"  posture: the hip sits at {hipY / height * 100.0f:F0}% of the height, "
+                   + "which is a quadruped. If this was meant to stand upright, the "
+                   + "classification is wrong.");
         }
 
         return true;
@@ -569,6 +750,36 @@ public partial class BakeBody : SceneTree
         return transform;
     }
 
+    /// The albedo of the mesh's material, if it has one that carries a colour.
+    ///
+    /// Checked on the instance override first and the surface second, because a
+    /// glTF import puts it on the surface and anything hand-assembled tends to
+    /// put it on the node.
+    private static Color? Albedo(MeshInstance3D instance) => SurfaceAlbedo(instance, 0);
+
+    /// The albedo of one surface's material.
+    ///
+    /// Per surface rather than per mesh, because a glTF splits by material and
+    /// the whole reason a model has two surfaces is that somebody wanted two
+    /// colours. Baking them both to the mesh's first albedo would merge the
+    /// geometry correctly and throw away the distinction that caused the split.
+    private static Color? SurfaceAlbedo(MeshInstance3D instance, int surface)
+    {
+        if (instance.GetSurfaceOverrideMaterial(surface) is BaseMaterial3D over)
+            return over.AlbedoColor;
+
+        if (instance.MaterialOverride is BaseMaterial3D node)
+            return node.AlbedoColor;
+
+        if (instance.Mesh != null && surface < instance.Mesh.GetSurfaceCount()
+            && instance.Mesh.SurfaceGetMaterial(surface) is BaseMaterial3D material)
+        {
+            return material.AlbedoColor;
+        }
+
+        return null;
+    }
+
     private static MeshInstance3D? FindMesh(Node node)
     {
         if (node is MeshInstance3D { Mesh: not null } instance)
@@ -582,6 +793,16 @@ public partial class BakeBody : SceneTree
         }
 
         return null;
+    }
+
+    /// Every mesh node in the model, so the check above can name them.
+    private static void CollectMeshes(Node node, System.Collections.Generic.List<MeshInstance3D> into)
+    {
+        if (node is MeshInstance3D { Mesh: not null } mesh)
+            into.Add(mesh);
+
+        foreach (Node child in node.GetChildren())
+            CollectMeshes(child, into);
     }
 
     private static Skeleton3D? FindSkeleton(Node node)
