@@ -27,6 +27,22 @@ public sealed class ProjectilePool
     /// that does not, which is almost everything.
     public readonly float[] Blast;
 
+    /// What the shot looks like in flight.
+    ///
+    /// **Every projectile in the game was the same sprite at the same size.** An
+    /// arrow, a rifle round and an explosive bolt were one white streak, so the
+    /// half of "which weapon am I holding" that happens between the muzzle and
+    /// the target said nothing at all — the muzzle flash, the report and the kick
+    /// were made to differ and then the thing actually crossing the screen was
+    /// identical.
+    ///
+    /// Per projectile rather than per weapon because a projectile outlives the
+    /// shot: swapping weapons mid-flight would otherwise recolour arrows already
+    /// in the air.
+    public readonly Color[] Tint;
+
+    public readonly float[] Scale;
+
     public int Count { get; private set; }
 
     public ProjectilePool(int capacity)
@@ -40,15 +56,23 @@ public sealed class ProjectilePool
         Pierce = new int[capacity];
         Bounces = new int[capacity];
         Blast = new float[capacity];
+        Tint = new Color[capacity];
+        Scale = new float[capacity];
     }
 
+    /// `tint` defaults to white and `scale` to one, which is what every shot
+    /// looked like before there was a choice — so a caller that does not care
+    /// keeps exactly the appearance it had.
     public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life,
-                         int pierce, int bounces = 0, float blast = 0.0f)
+                         int pierce, int bounces = 0, float blast = 0.0f,
+                         Color tint = default, float scale = 1.0f)
     {
         if (Count >= Capacity)
             return false;
 
         int i = Count++;
+        Tint[i] = tint.A <= 0.0f ? Colors.White : tint;
+        Scale[i] = scale;
         Bounces[i] = bounces;
         Position[i] = position;
         Velocity[i] = velocity;
@@ -73,6 +97,8 @@ public sealed class ProjectilePool
         Life[index] = Life[last];
         Pierce[index] = Pierce[last];
         Bounces[index] = Bounces[last];
+        Tint[index] = Tint[last];
+        Scale[index] = Scale[last];
         Blast[index] = Blast[last];
     }
 

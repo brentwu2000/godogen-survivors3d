@@ -235,9 +235,14 @@ public partial class WeaponHandler : Node3D
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
         if (texture != null && shader != null)
         {
+            // `useColours` costs four floats an instance and buys the only
+            // channel that can tell one weapon's shot from another's. Without it
+            // every projectile in the game is the same white streak, which undoes
+            // between the muzzle and the target everything the flash, the report
+            // and the recoil just established.
             _projectileRenderer = new HordeRenderer(
                 texture, shader, ProjectileHeight, ProjectileCapacity, 60.0f,
-                groundAnchored: false, bobAmplitude: 0.0f);
+                groundAnchored: false, bobAmplitude: 0.0f, useColours: true);
 
             // TopLevel detaches it from the player's transform without moving it
             // in the tree: projectile positions are already world-space, and a
@@ -523,7 +528,9 @@ public partial class WeaponHandler : Node3D
                 // impossible to aim.
                 weapon.Trait == WeaponTrait.Blast ? 1 : weapon.Penetration + Mods.Pierce,
                 weapon.Trait == WeaponTrait.Ricochet ? weapon.TraitCount : 0,
-                weapon.Trait == WeaponTrait.Blast ? weapon.TraitAmount : 0.0f);
+                weapon.Trait == WeaponTrait.Blast ? weapon.TraitAmount : 0.0f,
+                Look(weapon).Tint,
+                Look(weapon).Scale);
             return;
         }
 
@@ -555,7 +562,7 @@ public partial class WeaponHandler : Node3D
         // A hitscan shot resolves instantly and would otherwise be invisible —
         // the player could not tell a firing weapon from a jammed one. Zero
         // damage marks it cosmetic, and the projectile step skips its collision.
-        SpawnTracer(origin, shot, range);
+        SpawnTracer(origin, shot, range, weapon);
 
         // Forward here, because QueryRay ordered the list nearest-first and
         // penetration has to consume it in that order. Re-query after each kill
@@ -577,16 +584,54 @@ public partial class WeaponHandler : Node3D
 
     /// Purely visual streak along a hitscan shot. Damage of zero is the marker
     /// that keeps it out of collision.
-    private void SpawnTracer(Vector3 origin, Vector2 direction, float range)
+    private void SpawnTracer(Vector3 origin, Vector2 direction, float range, WeaponResource weapon)
     {
         const float tracerSpeed = 70.0f;
+        (Color tint, float scale) = Look(weapon);
+
         Projectiles.TrySpawn(
             new Vector3(origin.X, 0.0f, origin.Z),
             direction * tracerSpeed,
             0.0f,
             0.0f,
             range / tracerSpeed,
-            0);
+            0,
+            tint: tint,
+            scale: scale);
+    }
+
+    /// What this weapon's shot looks like crossing the arena.
+    ///
+    /// Read off the weapon's own numbers and its trait, so a weapon added to
+    /// `resources/weapons/` gets a shot that looks like itself without being
+    /// listed here — the same rule the muzzle flash and the report follow.
+    ///
+    /// Colour carries *what it is* and size carries *how much of it there is*.
+    /// A shotgun throws eight small grey pellets and a marksman rifle sends one
+    /// long pale round, and at the distance most shooting happens the difference
+    /// in count and size is legible before the colour is.
+    private static (Color Tint, float Scale) Look(WeaponResource weapon)
+    {
+        float bite = Mathf.Clamp(weapon.BaseDamage / 34.0f, 0.3f, 1.0f);
+
+        return weapon.Trait switch
+        {
+            // Wood and fletching. The only shot in the game that should look
+            // hand-made.
+            WeaponTrait.Ricochet => (new Color(0.78f, 0.62f, 0.36f), 0.9f),
+
+            // A charge with something in it, and big enough to watch travel.
+            WeaponTrait.Blast => (new Color(1.0f, 0.58f, 0.24f), 1.5f),
+
+            // Pellets. Small and dull: a shotgun's shot is the *spread*, and
+            // eight bright streaks would read as a beam weapon.
+            WeaponTrait.Spread => (new Color(0.72f, 0.70f, 0.64f), 0.55f),
+
+            // One long pale round. Length is the tell at thirty metres.
+            WeaponTrait.Charge => (new Color(0.94f, 0.96f, 1.0f), 1.35f),
+
+            _ => (new Color(1.0f, 0.90f, 0.62f), 0.7f + 0.5f * bite),
+        };
     }
 
     private void StepProjectiles(float delta)

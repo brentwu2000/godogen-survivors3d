@@ -33,7 +33,20 @@ public partial class WeaponFeelProbe : SceneTree
     private bool _failed;
 
     /// One firing signature.
-    private readonly record struct Print(string Name, int Puffs, float Size, float Kick);
+    ///
+    /// `ShotTint` and `ShotScale` are what crossed the screen, kept apart.
+    ///
+    /// They were one packed number first, `R*100 + G*10 + B + Scale*1000`, and it
+    /// was a bad fingerprint in both directions: the bow's brown arrow at 984.6
+    /// and the scavenged rifle's pale round at 986.1 came out 1.5 apart, which is
+    /// inside any tolerance worth setting, for two shots that look nothing alike.
+    /// A hash that can put unlike things together can also put like things apart,
+    /// and neither failure announces itself.
+    ///
+    /// `ShotScale` of zero means nothing crossed the screen at all — every melee
+    /// weapon, and itself a signature.
+    private readonly record struct Print(string Name, int Puffs, float Size, float Kick,
+                                         Color ShotTint, float ShotScale);
 
     private readonly System.Collections.Generic.List<Print> _prints = new();
     private string[] _paths = System.Array.Empty<string>();
@@ -139,16 +152,28 @@ public partial class WeaponFeelProbe : SceneTree
             _weapons!.Equip(weapon);
             _weapons.HoldFire = false;
 
-            // One target, close enough for the shortest reach in the set. A knife
-            // reaches 1.6 m, so anything further away means the melee weapons
-            // never fire and their signature is silence.
+            // How far the target stands, by what is being fired at it.
+            //
+            // A knife reaches 1.6 m, so a melee weapon needs the enemy almost
+            // touching or it never swings and its signature is silence. But a
+            // projectile crossing 1.2 m exists for about one frame, and the bolt
+            // launcher reported a shot appearance of 0.00 — grouped with the
+            // melee weapons, which emit nothing in flight because they have
+            // nothing to emit. Six metres is far enough to sample and near enough
+            // that every ranged weapon in the set still reaches.
+            float away = weapon.Category is WeaponCategory.MeleeShort or WeaponCategory.MeleeLong
+                ? 1.2f
+                : 6.0f;
+
             _horde!.Pool.Clear();
             _horde.Spawn(_player!.GlobalPosition
                          + new Vector3(CameraRig.Forward(_rig!.Yaw).X, 0.0f,
-                                       CameraRig.Forward(_rig.Yaw).Y) * 1.2f, 0);
+                                       CameraRig.Forward(_rig.Yaw).Y) * away, 0);
 
             _effects!.Effects.ForgetTotals();
             _peakShake = 0.0f;
+            _shotTint = default;
+            _shotScale = 0.0f;
             return null;
         }
 
@@ -167,9 +192,15 @@ public partial class WeaponFeelProbe : SceneTree
 
         float kick = _peakShake;
 
-        _prints.Add(new Print(weaponName, pool.TotalSpawned, pool.TotalStartSize, kick));
+        _prints.Add(new Print(weaponName, pool.TotalSpawned, pool.TotalStartSize, kick,
+                              _shotTint, _shotScale));
+
+        string shot = _shotScale <= 0.0f
+            ? "nothing in flight"
+            : $"{_shotScale:F2}x ({_shotTint.R:F2},{_shotTint.G:F2},{_shotTint.B:F2})";
+
         GD.Print($"  {weaponName,-16} {pool.TotalSpawned,3} puffs, "
-               + $"{pool.TotalStartSize,6:F2} total size, kick {kick:F3}");
+               + $"{pool.TotalStartSize,6:F2} size, kick {kick:F3}, shot {shot}");
 
         if (pool.TotalSpawned == 0)
         {
@@ -181,6 +212,8 @@ public partial class WeaponFeelProbe : SceneTree
     }
 
     private float _peakShake;
+    private Color _shotTint;
+    private float _shotScale;
 
     /// The peak is sampled at frame rate, not on the physics tick.
     ///
@@ -193,6 +226,15 @@ public partial class WeaponFeelProbe : SceneTree
     {
         if (_rig != null)
             _peakShake = Mathf.Max(_peakShake, _rig.RecoilLevel);
+
+        // Sampled here too: a tracer lives for a fraction of a second and the
+        // pool is empty again by the end of the window.
+        ProjectilePool? shots = _weapons?.Projectiles;
+        if (shots is { Count: > 0 } && _shotScale == 0.0f)
+        {
+            _shotTint = shots.Tint[0];
+            _shotScale = shots.Scale[0];
+        }
 
         return false;
     }
@@ -217,11 +259,14 @@ public partial class WeaponFeelProbe : SceneTree
                 bool samePuffs = a.Puffs == b.Puffs;
                 bool sameSize = Mathf.Abs(a.Size - b.Size) < 0.02f;
                 bool sameKick = Mathf.Abs(a.Kick - b.Kick) < 0.002f;
+                bool sameShot = Mathf.Abs(a.ShotScale - b.ShotScale) < 0.02f
+                             && Apart(a.ShotTint, b.ShotTint) < 0.05f;
 
-                if (samePuffs && sameSize && sameKick)
+                if (samePuffs && sameSize && sameKick && sameShot)
                 {
                     GD.PushError($"  {a.Name} and {b.Name} emit the same thing: "
-                               + $"{a.Puffs} puffs, {a.Size:F2} size, {a.Kick:F3} kick");
+                               + $"{a.Puffs} puffs, {a.Size:F2} size, {a.Kick:F3} kick, "
+                               + $"a {a.ShotScale:F2}x shot of the same colour");
                     ok = false;
                 }
             }
@@ -262,6 +307,17 @@ public partial class WeaponFeelProbe : SceneTree
             ok = false;
         }
 
+        // A bow's arrow does not look like a rifle round. Checked as an
+        // inequality on the packed look rather than on the colour itself, because
+        // what matters is that they differ at all — which of them is browner is a
+        // decision, not a rule.
+        if (Apart(bow.ShotTint, rifle.ShotTint) < 0.15f)
+        {
+            GD.PushError($"  the bow's arrow and the rifle's round are the same colour in flight "
+                       + $"({bow.ShotTint} against {rifle.ShotTint})");
+            ok = false;
+        }
+
         // A swing is a smear, not a flash. Checked by size rather than by count:
         // the melee effect is one large puff and the rifle's is one small one, so
         // counting alone cannot tell them apart.
@@ -277,6 +333,14 @@ public partial class WeaponFeelProbe : SceneTree
 
         return ok;
     }
+
+    /// How far apart two colours are, summed over the channels.
+    ///
+    /// Not a perceptual distance and not trying to be. The question is whether
+    /// two shots were given different colours on purpose, and a sum of absolute
+    /// differences answers it without pretending to know how they look.
+    private static float Apart(Color a, Color b) =>
+        Mathf.Abs(a.R - b.R) + Mathf.Abs(a.G - b.G) + Mathf.Abs(a.B - b.B);
 
     private Print Find(string name)
     {

@@ -175,7 +175,7 @@ public sealed class HordeRenderer
 
             Vector3 p = pool.Position[i];
             Write(i, new Vector3(p.X, Terrain.Height(p.X, p.Z) + p.Y + height * 0.5f, p.Z),
-                  1.0f, 0.0f, 0.0f, spin, 0);
+                  pool.Scale[i], 0.0f, 0.0f, spin, 0, flash: 0.0f, tint: pool.Tint[i]);
         }
 
         Upload(pool.Count);
