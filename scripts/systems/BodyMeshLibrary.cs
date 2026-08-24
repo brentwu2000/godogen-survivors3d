@@ -22,6 +22,37 @@ public static class BodyMeshLibrary
 {
     /// Everything that distinguishes one body from another.
     ///
+    /// What the body is holding, as a silhouette rather than as a weapon.
+    ///
+    /// **The player has been fighting bare-handed on screen since the body
+    /// existed.** There was no weapon geometry anywhere in this file — not a
+    /// placeholder, not a stub. C6 made the nine weapons sound and feel
+    /// different, which answered the complaint they were raised against, and did
+    /// nothing at all for the eye: four categories, one identical outline.
+    ///
+    /// Three shapes, not nine. A held object at this size is fifteen pixels of
+    /// silhouette hanging off an arm, and the questions it can answer are "long
+    /// or short" and "does it have a blade". Modelling a bolt launcher
+    /// distinctly from a marksman rifle would be work spent below the resolution
+    /// anyone is looking at.
+    public enum Carry
+    {
+        /// Nothing. Every horde variant, and the player before a weapon is
+        /// resolved.
+        None,
+
+        /// Held across the body in both hands, muzzle forward. Firearms.
+        Longarm,
+
+        /// A stave with a limb across it, carried at an angle. Bows and
+        /// crossbows — a different outline from a rifle at the same length,
+        /// which is the whole reason it is its own shape.
+        Bow,
+
+        /// Short, in one hand, at the hip. Knives and blades.
+        Blade,
+    }
+
     /// A record of numbers rather than a subclass per variant. The variants
     /// differ in proportion and colour and nothing else — a `WalkerBody` type
     /// would be six lines of constructor around one call.
@@ -62,7 +93,11 @@ public static class BodyMeshLibrary
 
         /// A belly instead of a chest. The bloater is the only thing shaped like
         /// a hazard rather than a person, and the silhouette is the warning.
-        bool Belly);
+        bool Belly,
+
+        /// What it is carrying. Defaulted, so every existing construction site —
+        /// seven variants and the player — is unchanged by this field arriving.
+        Carry Held = Carry.None);
 
     /// The variants, by the same names `Horde.TypeNames` uses.
     ///
@@ -119,10 +154,30 @@ public static class BodyMeshLibrary
     /// The player is the one body that must never be mistaken for one of them for
     /// even a frame, and in a crowd the only channel with any bandwidth left is
     /// hue. Blue against a horde of greens, greys and reds.
-    public static Build ForPlayer(float height) =>
+    public static Build ForPlayer(float height) => ForPlayer(height, Carry.None);
+
+    public static Build ForPlayer(float height, Carry held) =>
         new(height, 0.48f, 0.065f, 0.24f, 4.0f, 0.60f, 0.33f, 0.040f,
             new Color(0.22f, 0.34f, 0.52f), new Color(0.26f, 0.30f, 0.38f),
-            new Color(0.72f, 0.60f, 0.48f), false);
+            new Color(0.72f, 0.60f, 0.48f), false, held);
+
+    /// Which silhouette a weapon category carries.
+    ///
+    /// Kept here rather than on `WeaponResource` because it is a fact about how
+    /// a body is *drawn*, and the weapon table is what the game balances
+    /// against. A rendering concern in the balance table is a rendering concern
+    /// somebody has to think about while tuning damage.
+    public static Carry CarryFor(WeaponCategory category) => category switch
+    {
+        WeaponCategory.MeleeShort => Carry.Blade,
+
+        // A long melee weapon is a scythe or a pole, and reads much closer to a
+        // rifle held across the body than to a knife at the hip.
+        WeaponCategory.MeleeLong => Carry.Longarm,
+
+        WeaponCategory.BowCrossbow => Carry.Bow,
+        _ => Carry.Longarm,
+    };
 
     /// Fractions of height. Named rather than inlined because they are used twice
     /// each and a body assembled from two slightly different ideas of where the
@@ -276,7 +331,15 @@ public static class BodyMeshLibrary
             Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, -armRadius * 0.03f);
             float phase = side * 0.5f + 0.5f;
 
-            mesh.SetRig(spec.ArmSwing, shoulder.Y, phase, spec.Bob);
+            // The carrying arm barely swings, and that is anatomy rather than
+            // taste: a person holding a rifle across their body does not let
+            // that arm travel. Left at full swing the weapon scythes back and
+            // forth across the torso every stride, which reads as the weapon
+            // being animated rather than held.
+            bool carrying = side == 1 && spec.Held != Carry.None;
+            float swing = carrying ? spec.ArmSwing * 0.25f : spec.ArmSwing;
+
+            mesh.SetRig(swing, shoulder.Y, phase, spec.Bob);
             mesh.Tube(shoulder, elbow, armRadius, spec.Limb);
 
             // One shoulder rotation keeps the elbow sealed and lets a hanging
@@ -286,10 +349,120 @@ public static class BodyMeshLibrary
             mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.75f, -armRadius * 0.10f),
                      new Vector3(armRadius * 1.65f, armRadius * 1.75f, armRadius * 1.25f),
                      spec.Head);
+
+            // The weapon rides the same rig as the hand holding it. Rigged
+            // rather than parented, because there is nothing to parent to: a
+            // `MultiMesh` has no skeleton, so "attached to the hand" means
+            // "turns about the same pivot, on the same phase, by the same
+            // amount" and nothing else.
+            if (carrying)
+                Weapon(mesh, spec, shoulder, wrist, armRadius);
         }
 
         mesh.ClearRig();
         return mesh.Build();
+    }
+
+    /// What the right hand is holding.
+    ///
+    /// Drawn under the arm's rig, so it swings with the hand. Rigged rather than
+    /// parented because there is nothing to parent to: a `MultiMesh` has no
+    /// skeleton, so "attached to the hand" means "turns about the same pivot, on
+    /// the same phase, by the same amount" and nothing else.
+    ///
+    /// **Placed from the shoulder, not from the wrist**, and that was the whole
+    /// of the first version's problem. Hung off the wrist, every weapon sits at
+    /// hip height with the thigh in front of it: the rifle read as something
+    /// dropped by the player's foot, and the bow was a thin line almost entirely
+    /// behind a leg. A carried weapon is held *up*, across the body, and the
+    /// height it is held at is the thing that says it is being carried rather
+    /// than trailed.
+    ///
+    /// Everything here is deliberately chunky. The whole object is a dozen or so
+    /// pixels across at the distance this body is usually seen, and detail below
+    /// that is geometry nobody will ever resolve.
+    private static void Weapon(MeshBuilder mesh, Build spec, Vector3 shoulder, Vector3 wrist,
+                               float armRadius)
+    {
+        Color metal = Darken(spec.Limb, 0.5f);
+        Color wood = new(0.30f, 0.20f, 0.13f);
+        Color edge = new(0.60f, 0.62f, 0.66f);
+
+        // Inward, because the shoulder is at the outside of the body and a
+        // weapon held out beyond it reads as being pushed away rather than
+        // carried. `side` is always the right arm here, so inward is -X.
+        float inward = -1.0f;
+
+        switch (spec.Held)
+        {
+            case Carry.Longarm:
+            {
+                // Across the chest, butt high by the shoulder and muzzle low
+                // across the front — a patrol carry. The diagonal is the read:
+                // horizontal is a plank and vertical is a staff, and only the
+                // diagonal is unmistakably a long gun.
+                Vector3 butt = shoulder + new Vector3(inward * 0.02f, -0.10f, 0.14f);
+                Vector3 muzzle = shoulder + new Vector3(inward * 0.30f, -0.52f, -0.44f);
+
+                mesh.Tube(butt, muzzle, armRadius * 0.40f, metal, 5);
+
+                // Stock, magazine and foregrip. Three lumps on a line is what
+                // separates a firearm from a pipe.
+                mesh.Box(butt + new Vector3(inward * 0.01f, 0.01f, 0.03f),
+                         new Vector3(armRadius * 1.1f, armRadius * 1.6f, 0.20f), wood);
+
+                Vector3 mid = butt.Lerp(muzzle, 0.45f);
+                mesh.Box(mid + new Vector3(0.0f, -armRadius * 1.3f, 0.0f),
+                         new Vector3(armRadius * 0.8f, armRadius * 2.2f, armRadius * 1.2f), metal);
+
+                mesh.Box(butt.Lerp(muzzle, 0.75f),
+                         new Vector3(armRadius * 1.1f, armRadius * 1.0f, 0.14f), wood);
+                break;
+            }
+
+            case Carry.Bow:
+            {
+                // Held upright and clear of the leg. Vertical where the rifle is
+                // diagonal, which is the entire reason it is its own shape rather
+                // than a longarm in a different colour.
+                Vector3 hand = shoulder + new Vector3(inward * 0.06f, -0.34f, -0.16f);
+                Vector3 top = hand + new Vector3(0.0f, 0.44f, -0.06f);
+                Vector3 bottom = hand + new Vector3(0.0f, -0.44f, -0.04f);
+
+                mesh.Tube(bottom, top, armRadius * 0.36f, wood, 5);
+
+                // The recurve: short pieces kicked forward at both tips. A
+                // straight stave is a stick.
+                mesh.Box(top + new Vector3(0.0f, -0.02f, -0.08f),
+                         new Vector3(armRadius * 0.75f, 0.16f, 0.12f), wood);
+                mesh.Box(bottom + new Vector3(0.0f, 0.02f, -0.07f),
+                         new Vector3(armRadius * 0.75f, 0.14f, 0.11f), wood);
+
+                // The string, straight between the tips and behind the stave,
+                // and the riser the hand is on.
+                mesh.Box(hand + new Vector3(0.0f, 0.0f, 0.06f),
+                         new Vector3(armRadius * 0.28f, 0.86f, armRadius * 0.28f), edge);
+                mesh.Box(hand, new Vector3(armRadius * 1.1f, 0.20f, armRadius * 1.3f), metal);
+                break;
+            }
+
+            case Carry.Blade:
+            {
+                // Down at the hand and angled out from the thigh, which is the
+                // one thing that keeps it visible at all. Short on purpose: the
+                // difference from a longarm has to be obvious at a glance, and
+                // the only channel for that is length.
+                Vector3 hand = wrist + new Vector3(inward * 0.04f, -armRadius * 0.6f, -0.06f);
+                Vector3 tip = hand + new Vector3(inward * 0.06f, -0.10f, -0.34f);
+
+                mesh.Box(hand + new Vector3(0.0f, 0.04f, 0.03f),
+                         new Vector3(armRadius * 0.9f, armRadius * 1.9f, armRadius * 0.9f), wood);
+                mesh.Box(hand + new Vector3(0.0f, -0.02f, -0.02f),
+                         new Vector3(armRadius * 1.9f, armRadius * 0.55f, armRadius * 0.8f), metal);
+                mesh.Tube(hand + new Vector3(0.0f, -0.03f, -0.05f), tip, armRadius * 0.34f, edge, 4);
+                break;
+            }
+        }
     }
 
     /// Tips a point forward about the hip.

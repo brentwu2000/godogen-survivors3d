@@ -441,25 +441,49 @@ Two fixes, because either alone leaves the other as a single point of failure:
 claims in its own header to run headless, and taking a name off a skip list is exactly how a sweep
 starts hanging — worth revisiting deliberately rather than in passing.
 
-### F2 — The player is not holding anything
+### ✅ F2 — The player is holding something
 
-`BodyMeshLibrary` has no weapon geometry. Not a placeholder, not a stub — there is no reference to a
-weapon anywhere in the file, and the survivor has been fighting bare-handed on screen since the body
-existed.
+`BodyMeshLibrary` had no weapon geometry at all. Not a placeholder, not a stub — no reference to a
+weapon anywhere in the file, and the survivor had been fighting bare-handed on screen since the body
+existed. C6 made the nine weapons sound and feel different, which answered the complaint they were
+raised against, and did nothing for the eye.
 
-C6 made the weapons *feel* different — pitch and level from the weapon's own numbers, a separate
-recoil channel, tracers tinted per weapon — and it answered the original complaint ("武器種類無感")
-in the ear and in the hands. It did nothing for the eye. Nine weapons across four categories, and the
-silhouette holding them is identical.
+**Three silhouettes, not nine.** A held object is a dozen or so pixels at the distance this body is
+seen, and the only questions it can answer are "long or short" and "does it have a blade". Modelling
+a bolt launcher distinctly from a marksman rifle is work spent below the resolution anyone is looking
+at. `Longarm` is held diagonally across the chest, butt high by the shoulder; `Bow` is a recurve
+stave held upright and clear of the leg; `Blade` is short, at the hand, angled out from the thigh.
+The mapping lives in `BodyMeshLibrary` rather than on `WeaponResource`, because it is a fact about
+how a body is drawn and a rendering concern in the balance table is one more thing to think about
+while tuning damage.
 
-The rig is the constraint and it is a real one: `SetRig` turns a vertex about a fixed Y, so a held
-object is a piece of geometry parented to the arm's swing rather than a separate node. It has to be
-built into the body mesh, which means the weapon is part of the build spec, which means
-`BodyMeshLibrary.Build` needs to know what is being carried.
+**Rigged, not parented — there is nothing to parent to.** A `MultiMesh` has no skeleton, so "in the
+hand" means "turns about the same pivot, on the same phase, by the same amount". The carrying arm
+also drops to a quarter of its swing, which is anatomy rather than taste: at full swing the weapon
+scythes across the torso every stride and reads as animated rather than held.
 
-Two shapes are probably enough to start: something long held across the body, and something short
-held at the side. A player who can tell a rifle from a knife at a glance has more information than
-the sound alone gives them.
+**Changing weapon rebuilds the body**, because the weapon is geometry inside the body mesh. That is
+cheap at the rate it happens — a keypress a handful of times a run, fifteen hundred triangles, an
+order of magnitude less than one frame of the horde — and it keys off the *category*, so a rifle
+traded for another rifle costs nothing.
+
+Three things this got wrong first, all found by looking:
+
+**Hung off the wrist, every weapon sits at hip height with the thigh in front of it.** The rifle read
+as something dropped by the player's foot and the bow was a thin line behind a leg. Placed from the
+shoulder instead: a carried weapon is held *up*, and the height is what says carried rather than
+trailed.
+
+**`front` is the worst view to judge it in.** The rifle points forward, and straight-on that
+foreshortens to nothing — the first lineup looked like a failure and was a camera angle. The game's
+own three-quarter view is the only one worth checking.
+
+**The player vanished.** The first body is added with `CallDeferred`, so on the frames before that
+lands its node has no parent — and taking the parent as null and carrying on adds the replacement to
+nothing. No error, no warning, an empty patch of floor where the survivor should be. The guard also
+has to sit *before* `_held` is written: recording the change and then bailing means the comparison
+never fires again and the body stays empty-handed permanently, which is the bug the whole function
+exists to fix.
 
 ### F3 — Four skills, one visual language
 

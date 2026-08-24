@@ -62,6 +62,7 @@ public partial class BodyShot : SceneTree
     private bool _front;
     private string _extra = string.Empty;
     private string _baked = string.Empty;
+    private bool _carry;
     private int _frame;
 
     public override void _Initialize()
@@ -94,6 +95,9 @@ public partial class BodyShot : SceneTree
             // pipeline is most likely to produce.
             if (argument.StartsWith("baked:"))
                 _baked = argument[6..];
+
+            if (argument == "carry")
+                _carry = true;
         }
 
         var shader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
@@ -140,13 +144,36 @@ public partial class BodyShot : SceneTree
         string[] names = { "walker", "runner", "brute", "bloater", "spitter", "boss" };
         float[] heights = HeightsFor(names);
 
-        float span = names.Length * Spacing;
+        // `carry` shows the player holding each of the three silhouettes instead
+        // of the horde. The question that lineup answers is whether a rifle, a
+        // bow and a knife can be told apart on a body at this size — which is
+        // the only question worth asking about them, and one no probe can.
+        var carried = new System.Collections.Generic.List<BodyMeshLibrary.Carry>
+        {
+            BodyMeshLibrary.Carry.None,
+        };
+
+        if (_carry)
+        {
+            carried.Add(BodyMeshLibrary.Carry.Longarm);
+            carried.Add(BodyMeshLibrary.Carry.Bow);
+            carried.Add(BodyMeshLibrary.Carry.Blade);
+        }
+
+        int slots = _carry ? carried.Count : 1 + names.Length;
+        float span = slots * Spacing;
         float x = -span * 0.5f;
 
         // The player first, on the left, because the question the lineup exists
         // to answer is whether it can be told from the horde at a glance.
-        Add(shader, BodyMeshLibrary.ForPlayer(1.75f), root, x);
-        x += Spacing;
+        foreach (BodyMeshLibrary.Carry held in carried)
+        {
+            Add(shader, BodyMeshLibrary.ForPlayer(1.75f, held), root, x);
+            x += Spacing;
+        }
+
+        if (_carry)
+            names = System.Array.Empty<string>();
 
         for (int i = 0; i < names.Length; i++)
         {

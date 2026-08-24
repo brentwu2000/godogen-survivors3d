@@ -91,6 +91,74 @@ public partial class Player : CharacterBody3D
     private CameraRig? _rig;
     private SoloBody? _body;
     private WeaponHandler? _weapons;
+
+    /// The silhouette the body was last built with, and the shader to rebuild
+    /// it with.
+    ///
+    /// The player carried nothing on screen until now, and the reason it is a
+    /// rebuild rather than a toggle is the rig: a `MultiMesh` has no skeleton,
+    /// so a held object is geometry *inside* the body mesh turning on the arm's
+    /// pivot. Changing what is held changes the mesh.
+    ///
+    /// That is cheap at the rate it happens. Swapping weapons is a keypress the
+    /// player makes a handful of times a run, and the body is about fifteen
+    /// hundred triangles — an order of magnitude less than one frame of the
+    /// horde. Rebuilding on the *category* rather than on the weapon means a
+    /// rifle traded for another rifle costs nothing at all.
+    private BodyMeshLibrary.Carry _held = BodyMeshLibrary.Carry.None;
+    private Shader? _bodyShader;
+
+    /// Rebuilds the body if what it is holding has changed.
+    ///
+    /// Called every frame and almost always does nothing, which is the point:
+    /// there is no event for "the weapon changed" that covers every path into
+    /// it — a swap, a shop purchase carried into a run, a pickup, and the first
+    /// frame before any weapon has resolved at all. Comparing the answer is
+    /// cheaper than finding every place that could change it, and it cannot go
+    /// stale the way a subscription can.
+    private void CarryChanged()
+    {
+        if (_body == null || _bodyShader == null)
+            return;
+
+        BodyMeshLibrary.Carry want = _weapons?.Weapon is WeaponResource held
+            ? BodyMeshLibrary.CarryFor(held.Category)
+            : BodyMeshLibrary.Carry.None;
+
+        if (want == _held)
+            return;
+
+        // Not yet in the tree, so there is nothing to swap into.
+        //
+        // The first body is added with `CallDeferred` — the parent is still
+        // setting up its children when `_Ready` runs and a direct `AddChild` is
+        // refused — so for the first frames its node has no parent. Taking the
+        // parent as null and carrying on adds the replacement to nothing, and
+        // the player is simply not drawn: no error, no warning, an empty patch
+        // of floor where the survivor should be.
+        //
+        // **Before `_held` is written, not after.** Recording the change and
+        // then bailing means the comparison above never fires again, so the body
+        // stays whatever it was built as — empty-handed, permanently, which is
+        // the bug this whole function exists to fix. Returning here retries next
+        // frame, by which point the deferred insertion has happened.
+        Node? parent = _body.Node.GetParent();
+        if (parent == null)
+            return;
+
+        _held = want;
+
+        // The old body's node leaves the tree before the new one enters it.
+        // Two SoloBodies drawing the same player is one player wearing two
+        // weapons, and the second is only invisible because they overlap.
+        parent.RemoveChild(_body.Node);
+        _body.Node.QueueFree();
+
+        _body = new SoloBody(_bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight, _held),
+                             _horde?.ArenaExtent ?? 60.0f);
+
+        parent.AddChild(_body.Node);
+    }
     private Horde? _horde;
 
     /// Lets the HUD install the touch source once the sticks exist. Without a
@@ -123,7 +191,8 @@ public partial class Player : CharacterBody3D
             }
             else
             {
-                _body = new SoloBody(bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight),
+                _bodyShader = bodyShader;
+                _body = new SoloBody(bodyShader, BodyMeshLibrary.ForPlayer(BodyHeight, _held),
                                      _horde?.ArenaExtent ?? 60.0f);
 
                 // Added to the parent, not to the player. The transform inside a
@@ -634,6 +703,13 @@ public partial class Player : CharacterBody3D
     {
         if (_body == null)
             return;
+
+        // Before the update, so a rebuilt body is placed on the same frame it
+        // was made. After it, the new body sits at the origin for one frame —
+        // which at sixty frames a second is a single flicker of a player
+        // standing in the middle of the map, and is exactly the kind of thing
+        // that gets seen once and never reproduced.
+        CarryChanged();
 
         var flatVelocity = new Vector2(Velocity.X, Velocity.Z);
         float yaw = Mathf.Atan2(-Facing.X, -Facing.Y);
