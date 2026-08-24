@@ -28,6 +28,23 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "walker",
+
+                // Drawn from an authored model rather than from `MeshBuilder`.
+                //
+                // The procedural walker was correct in every proportion and
+                // still read as stacked primitives, because that is what it was.
+                // The baker exists so a modelled body can enter a `MultiMesh`,
+                // the stalker proved it, and this is the first of the humanoids
+                // to follow — 448 triangles, three surfaces, rigged with the bone
+                // names `BakeBody.Classify` matches.
+                //
+                // Its proportions are the ones this table and
+                // `BodyMeshLibrary.ForVariant` already agreed on: hip at 46% of
+                // height, shoulder at 80%, hands just below the hip. The model
+                // was rebuilt once because the first attempt had arms to the
+                // knees, which is what happens when a modelling brief carries a
+                // reference picture and no numbers.
+                BakedBodyPath = "res://resources/bodies/walker.res",
                 SpriteLayer = 0,
                 DesignHeightMeters = 2.0f,
                 MaxHealth = 10.0f,

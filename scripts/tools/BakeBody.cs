@@ -67,7 +67,7 @@ public partial class BakeBody : SceneTree
         if (args.Length < 3 || !float.TryParse(args[2], out float height))
         {
             GD.PushError("usage: BakeBody.cs -- <source.glb> <out.res> <height metres> "
-                       + "[swing] [armSwing] [bob] [rrggbb]");
+                       + "[swing] [armSwing] [bob] [rrggbb,rrggbb,...]");
             Quit(1);
             return;
         }
@@ -88,7 +88,7 @@ public partial class BakeBody : SceneTree
         // line said otherwise. `Color.FromHtml` is happy either way; only the
         // shell cares. Both forms are accepted here — the point of the note is
         // the shell, not the parser.
-        Color? tint = null;
+        Color[]? tints = null;
         if (args.Length > 6)
         {
             // Refused rather than ignored. A colour that cannot be read is a
@@ -96,21 +96,54 @@ public partial class BakeBody : SceneTree
             // failure mode that survives every check in this file: the mesh is
             // sound, the rig is sound, and the thing is simply the wrong colour
             // on screen.
-            if (!Color.HtmlIsValid(args[6]))
+            // One colour per surface, in surface order.
+            //
+            // **The model's own material colours are not trustworthy and three
+            // models in a row have proved it.** The walker came out of the
+            // generator with three materials, exactly as asked, and Godot
+            // reported them as a2aa9e / b1ada6 / cec8bc — the *sRGB* of the
+            // linear values requested, which is roughly six times too bright.
+            // The stalker before it arrived white twice for two different
+            // reasons.
+            //
+            // Every trip between a modelling tool, a glTF, an importer and this
+            // baker is a chance for one gamma conversion too many or too few,
+            // and the failure is silent: a body that is the wrong brightness
+            // looks exactly like a body somebody chose that brightness for.
+            //
+            // So the palette lives here, beside the palette the procedural
+            // bodies use, and the model supplies geometry. Fewer colours than
+            // surfaces repeats the last one, which is the common case of "one
+            // colour for the whole creature".
+            string[] written = args[6].Split(',');
+            var chosen = new Color[written.Length];
+
+            for (int i = 0; i < written.Length; i++)
             {
-                GD.PushError($"\"{args[6]}\" is not a colour. Write it as rrggbb.");
-                Quit(1);
-                return;
+                string one = written[i].Trim();
+
+                // Refused rather than ignored. A typo that silently keeps the
+                // model's own colour is the one failure mode that survives every
+                // other check in this file.
+                if (!Color.HtmlIsValid(one))
+                {
+                    GD.PushError($"\"{one}\" is not a colour. Write it as rrggbb, "
+                               + "or rrggbb,rrggbb,rrggbb for one per surface.");
+                    Quit(1);
+                    return;
+                }
+
+                chosen[i] = Tint(one);
             }
 
-            tint = Tint(args[6]);
+            tints = chosen;
         }
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tint) ? 0 : 1);
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints) ? 0 : 1);
     }
 
     private static bool Bake(string source, string destination, float height,
-                             float legSwing, float armSwing, float bob, Color? tint)
+                             float legSwing, float armSwing, float bob, Color[]? tints)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -185,7 +218,7 @@ public partial class BakeBody : SceneTree
         if (root is Node3D root3D)
             toRoot = Relative(instance, root3D);
 
-        if (!Convert(instance, skeleton, baked, height, legSwing, armSwing, bob, toRoot, tint))
+        if (!Convert(instance, skeleton, baked, height, legSwing, armSwing, bob, toRoot, tints))
         {
             root.Free();
             return false;
@@ -217,7 +250,7 @@ public partial class BakeBody : SceneTree
 
     private static bool Convert(MeshInstance3D instance, Skeleton3D skeleton, BakedBodyResource baked,
                                 float height, float legSwing, float armSwing, float bob,
-                                Transform3D toRoot, Color? tint)
+                                Transform3D toRoot, Color[]? tints)
     {
         // Every surface, merged.
         //
@@ -274,8 +307,32 @@ public partial class BakeBody : SceneTree
                 return false;
             }
 
-            Color surfaceAlbedo = SurfaceAlbedo(instance, surface) ?? Colors.White;
+            // Reported, because losing it is silent and has happened three
+            // times.
+            //
+            // A surface whose material cannot be found bakes white, and white is
+            // exactly what an untinted model looks like anyway — so "the colour
+            // was lost" and "the artist chose white" are the same picture. The
+            // whole reason a model has three surfaces is that somebody wanted
+            // three colours, and the bake should say out loud which three it
+            // found.
+            Color? found = SurfaceAlbedo(instance, surface);
+
+            // The chosen palette wins over whatever the model shipped with. See
+            // the note where `tints` is parsed — fewer colours than surfaces
+            // repeats the last one.
+            Color? forced = tints is { Length: > 0 }
+                ? tints[Mathf.Min(surface, tints.Length - 1)]
+                : null;
+
+            Color surfaceAlbedo = forced ?? found ?? Colors.White;
             int offset = allVertices.Count;
+
+            GD.Print($"    surface {surface}: "
+                   + (found.HasValue ? $"model says {found.Value.ToHtml(false)}" : "no material")
+                   + (forced.HasValue
+                        ? $", forced to {forced.Value.LinearToSrgb().ToHtml(false)}"
+                        : string.Empty));
 
             for (int i = 0; i < v.Length; i++)
             {
@@ -334,7 +391,7 @@ public partial class BakeBody : SceneTree
 
         GD.Print($"  {surfaces} surface(s) merged into {vertices.Length} vertices, "
                + $"{indices.Length / 3} triangles");
-        GD.Print($"  colour: {(tint.HasValue ? $"forced to {tint.Value.LinearToSrgb().ToHtml(false)}" : "taken from the model")}");
+        GD.Print($"  colour: {(tints is { Length: > 0 } ? $"{tints.Length} forced" : "taken from the model")}");
 
         // Scaled so the tallest vertex lands at the requested height, and dropped
         // so the lowest sits at zero. Both matter: the enemy table is balanced
@@ -397,7 +454,10 @@ public partial class BakeBody : SceneTree
                                     (vertices[i].Y - low) * scale,
                                     vertices[i].Z * scale);
 
-            colour[i] = tint ?? (i < colours.Length ? colours[i] : fallback);
+            // `colours` is what the surface loop already resolved — the forced
+            // palette when one was given, the model's own albedo otherwise — so
+            // there is nothing left to choose here.
+            colour[i] = i < colours.Length ? colours[i] : fallback;
 
             switch (limbs[i])
             {
