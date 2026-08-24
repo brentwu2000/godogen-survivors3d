@@ -40,6 +40,104 @@ Read this before starting work. Update it as phases land.
 
 **The rebuild is complete.** Every phase in both halves has landed.
 
+## Half D — characters and monsters that carry a threat
+
+**Direction, decided by the owner on 2026-08-25:** post-apocalyptic base with supernatural
+elements. Survivors stay human and grim; the horde goes mutant — extra limbs, glow, mass, wrongness
+— and bosses may be exaggerated. Halo-and-tassel motifs are allowed *on a mutated body*, not on a
+person.
+
+The complaint being answered is "a few coloured blocks". The blocks are now jointed and faced (C4,
+C5), which is a floor rather than an answer: what is missing is that nothing in the horde is
+*frightening*, and there is exactly one player character.
+
+### The one architectural fact everything else follows from
+
+Two hundred enemies are drawn by one `MultiMesh`, and **a `MultiMesh` loses an imported mesh on
+pack/save** (godot.md:46) — it comes back with the right instance count and no mesh at all, drawing
+nothing and reporting nothing. A skinned mesh cannot go in one under any circumstances.
+
+So there are two classes of body and they are not interchangeable:
+
+| | drawn as | budget | animated by |
+| :--- | :--- | :--- | :--- |
+| the horde | one `MultiMesh` per variant | ~600 tris each | the vertex rig in `body.gdshader` |
+| player, elites, bosses | their own node | a few thousand tris | a real `Skeleton3D` and clips |
+
+`test/ModelReport.cs` answers which class a given `.glb` falls into. Run it on anything before
+planning around it.
+
+### D1 — The baker  ·  *the unlock, do this first*
+
+An authored model cannot enter the horde today because nothing produces the vertex rig the shader
+reads. `MeshBuilder` writes it by hand: **UV = (swing, pivotY)**, **UV2 = (phase, bob)**, albedo in
+the vertex colour. A `.glb` carries `JOINTS_0` and `WEIGHTS_0` instead, which is the same information
+in a form the shader cannot read.
+
+The baker converts one into the other. Per vertex: take the heaviest-weighted joint, map its bone
+name to a rig channel, and write the four numbers.
+
+    Thigh/Shin/Foot   → leg,   pivot = hip Y,      phase 0 or 0.5 by side
+    UpperArm/Fore/Hand→ arm,   pivot = shoulder Y, phase 0.5 or 0 by side
+    everything else   → torso, swing 0, bob only
+
+**Bake to data, not to a mesh.** The output is a `Resource` holding arrays, and the runtime builds
+the `ArrayMesh` from it exactly as `BodyMeshLibrary` does today. A saved `Mesh` would walk straight
+back into the pack/save trap; a saved *array of floats* is the same kind of thing `EnemyTypeResource`
+already is and has no such problem.
+
+**Budget the triangles at generation time, not afterwards.** 8,600 triangles is fine for one boss and
+is 1.7 million for a horde of two hundred, against the 72,000 the current bodies cost. Ask the
+generator for 400–600 triangles for anything that will be a horde variant. Decimating afterwards is
+possible and is a second tool nobody needs yet.
+
+Probe: `BakeProbe` — a baked body must be closed and outward-facing (the same net-cross-product test
+`BodyProbe` uses), must stand at its declared height, must have a non-zero swing on at least one leg
+vertex and zero on the torso, and the two sides must be half a turn apart. A bake whose rig is all
+zeroes produces a body that renders perfectly and never moves, which is the failure this file has
+seen three times in other forms.
+
+### D2 — A horde worth being afraid of  ·  *needs D1*
+
+Six variants exist and read as one silhouette family: upright, bilateral, human-sized. Threat comes
+from breaking that, not from adding more of it.
+
+Candidates, each of which has to be legible as a *silhouette in fog at twenty metres*:
+
+- something with four legs and no upright posture, so the crowd is not all one height
+- something much wider than it is tall, that blocks rather than chases
+- something that glows, so the dark stops being uniformly empty
+- something that arrives in a knot rather than as individuals
+
+The existing table already carries what a variant costs: `EnemyTypeResource` has speed, health,
+contact damage, behaviour and design height. A new variant is a `.tres`, a baked body, and a row in
+`Horde.TypeNames` — the systems do not need to change.
+
+### D3 — More than one survivor  ·  *independent of D1*
+
+One player character, one silhouette, one set of numbers. Multiple characters with different
+abilities is a progression axis the game does not have, and it is the cheapest of the three to build
+because `Player`, `WeaponHandler` and `RunModifiers` already separate what a character *is* from what
+it *carries*.
+
+A character is a `.tres`: body build, base health, base speed, and one ability that is not a weapon.
+The shop already sells weapons and gear; characters unlock the same way.
+
+Probe: whatever is added, the assertion is that two characters produce measurably different runs —
+`BalanceSweep` with a character arm, the same way it grew a zone arm and then a tier arm.
+
+### Asset pipeline
+
+Codex builds models from an image or a description; `codex exec -s workspace-write` is how it is
+driven, and it cannot run Godot or restore NuGet in its sandbox, so **it writes and this session
+verifies**. That split has held for two rounds of character work.
+
+Everything imported goes through `ModelReport` first and `BodyShot -- model:res://...` second. The
+first says whether it can be used; the second says whether it belongs, and every judgement made about
+an asset viewed on its own has been wrong so far.
+
+---
+
 ### After the rebuild
 
 | Done | What | Commit |

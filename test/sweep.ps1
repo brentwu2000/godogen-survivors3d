@@ -24,7 +24,7 @@ Set-Location $root
 $skip = @(
     'Display', 'TouchProbe', 'ScaleProbe', 'Screenshot', 'BaseShot',
     'DebriefShot', 'BillboardCompare', 'Presentation', 'BodyShot',
-    'AutoPlay', 'BalanceSweep', 'HordePerf', 'BotDrive', 'Fresh'
+    'AutoPlay', 'BalanceSweep', 'HordePerf', 'BotDrive', 'Fresh', 'ModelReport'
 )
 
 $names = Get-ChildItem "$root\test\*.cs" |

@@ -28,9 +28,25 @@ public sealed class SoloBody
     /// gait without inferring it from a transform.
     public float Stride { get; private set; }
 
-    public SoloBody(Shader shader, BodyMeshLibrary.Build spec, float arenaExtent)
+    /// A body built from a baked model rather than from a procedural spec.
+    ///
+    /// The mesh arrives already carrying the rig in its UV channels, so nothing
+    /// downstream can tell the difference — which is the whole point of the bake.
+    /// `height` is what the caller must supply because the bounds a `MultiMesh`
+    /// needs cannot be read off a mesh whose instance transform is world space.
+    public SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent)
+        : this(shader, mesh, height, arenaExtent, fromSpec: false)
     {
-        ArrayMesh mesh = BodyMeshLibrary.Build3D(spec);
+    }
+
+    public SoloBody(Shader shader, BodyMeshLibrary.Build spec, float arenaExtent)
+        : this(shader, BodyMeshLibrary.Build3D(spec),
+               BodyMeshLibrary.StandingHeight(spec), arenaExtent, fromSpec: true)
+    {
+    }
+
+    private SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent, bool fromSpec)
+    {
         mesh.SurfaceSetMaterial(0, new ShaderMaterial { Shader = shader });
 
         _multiMesh = new MultiMesh
@@ -55,8 +71,7 @@ public sealed class SoloBody
             // the frustum, which under a camera that turns is most of the time.
             CustomAabb = new Aabb(
                 new Vector3(-arenaExtent, -1.0f, -arenaExtent),
-                new Vector3(arenaExtent * 2.0f, BodyMeshLibrary.StandingHeight(spec) + 2.0f,
-                            arenaExtent * 2.0f)),
+                new Vector3(arenaExtent * 2.0f, height + 2.0f, arenaExtent * 2.0f)),
         };
     }
 

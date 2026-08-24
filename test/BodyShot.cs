@@ -60,6 +60,8 @@ public partial class BodyShot : SceneTree
     private float _stride;
     private bool _still;
     private bool _front;
+    private string _extra = string.Empty;
+    private string _baked = string.Empty;
     private int _frame;
 
     public override void _Initialize()
@@ -71,6 +73,27 @@ public partial class BodyShot : SceneTree
         {
             _still |= argument == "still";
             _front |= argument == "front";
+
+            // `model:res://...` stands an imported model at the end of the row.
+            //
+            // The question an imported character actually raises is not whether it
+            // loads — `ModelReport` answers that — but whether it belongs in the
+            // same shot as the bodies already in the game. Scale, proportion and
+            // palette only mean anything side by side, and every judgement made
+            // about an asset viewed on its own has been wrong.
+            if (argument.StartsWith("model:"))
+                _extra = argument[6..];
+
+            // `baked:res://...` stands a baked body in the row, walking on the
+            // same stride as everything else.
+            //
+            // This is the only way to see whether a bake worked. `BakeProbe` can
+            // say the arrays agree, the pivots are in the right places and the
+            // phases are opposed; it cannot say the body walks, and a rig that is
+            // numerically sound and visually wrong is the failure this whole
+            // pipeline is most likely to produce.
+            if (argument.StartsWith("baked:"))
+                _baked = argument[6..];
         }
 
         var shader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
@@ -131,6 +154,28 @@ public partial class BodyShot : SceneTree
             x += Spacing;
         }
 
+        if (!string.IsNullOrEmpty(_baked))
+        {
+            var resource = GD.Load<BakedBodyResource>(_baked);
+            ArrayMesh? mesh = BakedBody.Build(resource);
+
+            if (mesh == null)
+            {
+                GD.PushError($"could not build a body from {_baked}");
+            }
+            else
+            {
+                var body = new SoloBody(shader, mesh, resource!.StandingHeight, 40.0f);
+                root.AddChild(body.Node);
+                _bodies.Add(body);
+                _placements.Add(new Vector3(x, 0.0f, 0.0f));
+                _specs.Add(BodyMeshLibrary.ForPlayer(resource.StandingHeight));
+
+                x += Spacing;
+                span += Spacing;
+            }
+        }
+
         // Everything is placed; now find a camera that contains it.
         float tallest = 0.0f;
         foreach (BodyMeshLibrary.Build spec in _specs)
@@ -150,6 +195,24 @@ public partial class BodyShot : SceneTree
         // that is the only reason to keep a downward angle in a lineup at all.
         float tilt = Mathf.DegToRad(CameraTiltDegrees);
         var aim = new Vector3(0.0f, tallest * 0.5f, 0.0f);
+
+        // The imported model, last in the row, at whatever size it was authored.
+        // Not rescaled to the game's height on purpose: the gap is the finding.
+        if (!string.IsNullOrEmpty(_extra))
+        {
+            var packed = GD.Load<PackedScene>(_extra);
+            if (packed == null)
+            {
+                GD.PushError($"could not load {_extra}");
+            }
+            else
+            {
+                var model = packed.Instantiate<Node3D>();
+                model.Position = new Vector3(x, 0.0f, 0.0f);
+                root.AddChild(model);
+                span += Spacing;
+            }
+        }
 
         root.AddChild(new Camera3D
         {
