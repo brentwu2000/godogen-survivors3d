@@ -49,6 +49,9 @@ public partial class BalanceSweep : SceneTree
     /// The tier that has to reach this, for the run clock to mean anything.
     private const float SurvivalTarget = 180.0f;
 
+    /// The linger tier that is a decision rather than a duration.
+    private const float AutoLinger = -1.0f;
+
     private readonly struct Row
     {
         /// Whether this run attempted a danger zone.
@@ -182,7 +185,15 @@ public partial class BalanceSweep : SceneTree
                 var parsed = new System.Collections.Generic.List<float>();
                 foreach (string part in parts)
                 {
-                    if (float.TryParse(part, out float value))
+                    // `auto` is a tier like any other, carried as a negative so
+                    // it can share the array. It is the only one that measures a
+                    // decision rather than a duration: the bot stays while the
+                    // run is going well and leaves when it stops, which is the
+                    // only way a weapon that sells safety can show what it is
+                    // worth. See `AutoPlay.StillWorthStaying`.
+                    if (part == "auto")
+                        parsed.Add(AutoLinger);
+                    else if (float.TryParse(part, out float value))
                         parsed.Add(value);
                 }
 
@@ -228,7 +239,7 @@ public partial class BalanceSweep : SceneTree
         {
             "--headless", "--fixed-fps", "60", "--path", ProjectSettings.GlobalizePath("res://"),
             "--script", "test/AutoPlay.cs", "--",
-            $"linger:{linger:F0}", $"seed:{seed}",
+            linger < 0.0f ? "linger:auto" : $"linger:{linger:F0}", $"seed:{seed}",
         };
 
         if (weapon.Length > 0)
@@ -341,7 +352,7 @@ public partial class BalanceSweep : SceneTree
                 }
             }
 
-            GD.Print($"{linger,5:F0}s   {survived}/{tier.Count,-8}   " +
+            GD.Print($"{(linger < 0.0f ? "auto" : $"{linger:F0}s"),5}   {survived}/{tier.Count,-8}   " +
                      $"{Median(banked),13}   {Median(deaths),12}   {worstPeak,10}   {Median(lowest),16}");
         }
 
@@ -352,7 +363,8 @@ public partial class BalanceSweep : SceneTree
         GD.Print("");
         foreach (Row row in rows)
         {
-            GD.Print($"  linger {row.Linger,3:F0}s seed {row.Seed,-12} {(row.Zone ? "zone" : "past")} " +
+            GD.Print($"  linger {(row.Linger < 0.0f ? "auto" : $"{row.Linger:F0}s"),4} " +
+                     $"seed {row.Seed,-12} {(row.Zone ? "zone" : "past")} " +
                      $"{row.Outcome,-9} {row.Seconds,6:F1}s  banked {row.Banked,5}  " +
                      $"peak {row.Peak,4}  lowest HP {row.LowestHp,3}");
         }
@@ -365,10 +377,16 @@ public partial class BalanceSweep : SceneTree
         // exit code 1 on a table with nothing wrong in it, which is the shape of
         // alarm that teaches whoever reads it next to ignore the verdict line.
         float longest = 0.0f;
+        bool auto = false;
         foreach (float linger in lingers)
+        {
             longest = Mathf.Max(longest, linger);
+            auto |= linger < 0.0f;
+        }
 
-        bool asked = longest >= SurvivalTarget;
+        // `auto` has no ceiling of its own short of the clock, so it can reach the
+        // target and the question is genuinely being put.
+        bool asked = auto || longest >= SurvivalTarget;
 
         GD.Print("");
 

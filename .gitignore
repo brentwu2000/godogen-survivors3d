@@ -25,3 +25,9 @@ screenshots/*
 # three .glb files it writes to assets/models/ are tracked, because those are the
 # actual assets and rebuilding them needs Node.
 art-src/models/node_modules/
+
+# Blender's rolling autosave. `.blend` is the source and is tracked; `.blend1` is
+# the copy Blender leaves of the *previous* save every time it writes one, so it
+# is four megabytes of the last version, regenerated on every save and never
+# wanted by anyone.
+*.blend1

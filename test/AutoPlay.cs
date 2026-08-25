@@ -88,6 +88,36 @@ public partial class AutoPlay : SceneTree
     private bool _announcedPad;
     private bool _wasLingering;
 
+    /// Whether the linger ends on a clock or on how the run is going.
+    ///
+    /// **The fixed linger is why the balance table cannot price a defensive
+    /// weapon.** A run that is calmer is a run a player stays in, and staying is
+    /// what turns calm into credits — but the bot leaves at whatever second the
+    /// flag says, healthy or not, so the entire value of keeping the field small
+    /// is held constant by the measurement. H4c watched the Service Rifle finish
+    /// on 93 health against the starting rifle's 70 and bank less than it, which
+    /// is not a result about the rifle.
+    private bool _lingerAuto;
+
+    /// Leave when health falls to this share of its maximum.
+    ///
+    /// 0.6 rather than something desperate. The question is when a player decides
+    /// a run has stopped going well, and that decision is made with a margin left
+    /// — a bot that leaves at 10% is measuring how close to death it can be
+    /// steered, which is a different experiment and one nobody plays.
+    private float _bailFraction = 0.6f;
+
+    /// Latched. Health comes back — regen, a medkit, the crowd thinning — and a
+    /// bot that un-decided every time it did would oscillate between orbiting and
+    /// walking to the pad, arriving at neither. Leaving is a decision about the
+    /// run, not a state of the health bar.
+    private bool _bailed;
+
+    /// The last moment the bot was still out there, which under `linger:auto` is
+    /// an outcome rather than an input. -1 means it never got as far as orbiting
+    /// — the route was unfinished when the run ended.
+    private float _stayedUntil = -1.0f;
+
     /// Seconds of run time to stay alive before heading for the pad. The default
     /// of zero extracts as soon as the route is done; a larger value is how the
     /// difficulty curve gets measured rather than assumed.
@@ -111,8 +141,13 @@ public partial class AutoPlay : SceneTree
         _noLoot = System.Array.IndexOf(args, "noloot") >= 0;
         foreach (string arg in args)
         {
-            if (arg.StartsWith("linger:") && float.TryParse(arg[7..], out float seconds))
+            if (arg == "linger:auto")
+                _lingerAuto = true;
+            else if (arg.StartsWith("linger:") && float.TryParse(arg[7..], out float seconds))
                 _lingerSeconds = seconds;
+
+            if (arg.StartsWith("bail:") && float.TryParse(arg[5..], out float fraction))
+                _bailFraction = Mathf.Clamp(fraction, 0.05f, 0.95f);
 
             if (arg.StartsWith("seed:") && ulong.TryParse(arg[5..], out ulong seed))
                 _seed = seed;
@@ -233,9 +268,11 @@ public partial class AutoPlay : SceneTree
         // Once the crates are done, orbit until the linger deadline instead of
         // extracting immediately — that is what turns this into a difficulty
         // measurement rather than a route check.
-        bool lingering = _leg == _route.Length - 1 && _director.Elapsed < _lingerSeconds;
+        bool lingering = _leg == _route.Length - 1 && StillWorthStaying();
 
         // Losing beats arriving — but only while the destination is optional.
+        //
+        // (`StillWorthStaying` is below; it decides whether the orbit continues.)
         //
         // A player at half health with eighteen things on them walks away from a
         // crate. They do not walk away from the *exit*: at that point the crowd
@@ -262,6 +299,13 @@ public partial class AutoPlay : SceneTree
         {
             Steer(target);
             _wasLingering = true;
+
+            // The last moment it was still out there, written every tick rather
+            // than once on the way out. Set only when the orbit *ends* it would
+            // stay at -1 for a run that died while lingering, which is a run that
+            // stayed as long as it possibly could reported as one that never
+            // stayed at all — and the two would land in the same column.
+            _stayedUntil = _director.Elapsed;
             return false;
         }
 
@@ -1079,6 +1123,53 @@ public partial class AutoPlay : SceneTree
     private bool _retreating;
     private int _retreatTicks;
 
+    /// Past this much of the clock the bot leaves whatever its health is.
+    ///
+    /// Not a difficulty rule — a deadline rule. Extraction needs a five second
+    /// hold and the pad can be fifty metres away, so a bot that only ever left on
+    /// health would spend the tail of a good run walking and time out on the pad
+    /// with the run already over. 0.8 of a 300 second clock leaves a minute.
+    private const float LingerCeiling = 0.8f;
+
+    /// Whether the orbit continues.
+    ///
+    /// Two modes, and the second exists because the first cannot price a weapon
+    /// that sells safety. `linger:60` is the original: orbit until the clock says
+    /// stop, which measures how much a run is worth after exactly sixty seconds
+    /// of pressure. `linger:auto` measures something a player actually decides —
+    /// stay while the run is going well, leave when it stops.
+    ///
+    /// The difference matters most for exactly the weapons the table read worst.
+    /// A run that keeps the field below the cap is a run a player stays in, and
+    /// under a fixed linger that advantage has nowhere to go: it comes back as
+    /// health left over at the exit, which no column converts into anything.
+    private bool StillWorthStaying()
+    {
+        if (!_lingerAuto)
+            return _director.Elapsed < _lingerSeconds;
+
+        if (_bailed)
+            return false;
+
+        if (_director.Intensity >= LingerCeiling)
+        {
+            _bailed = true;
+            GD.Print($"  leaving at {_director.Elapsed:F0}s — out of clock, "
+                   + $"{_player.Health:F0}/{_player.MaxHealth:F0} health");
+            return false;
+        }
+
+        if (_player.Health <= _player.MaxHealth * _bailFraction)
+        {
+            _bailed = true;
+            GD.Print($"  leaving at {_director.Elapsed:F0}s — down to "
+                   + $"{_player.Health:F0}/{_player.MaxHealth:F0} health");
+            return false;
+        }
+
+        return true;
+    }
+
     private bool ShouldBreakContact()
     {
         if (_retreatTicks > RetreatCap)
@@ -1248,7 +1339,15 @@ public partial class AutoPlay : SceneTree
     private void Sweep(string outcome, float seconds, int banked) =>
         GD.Print($"SWEEP outcome={outcome} seconds={seconds:F1} banked={banked} " +
                  $"lowestHp={_lowestHealth:F0} maxHp={_player.MaxHealth:F0} " +
-                 $"peak={_peakEnemies} ended={_horde.Pool.Count} linger={_lingerSeconds:F0} " +
+                 $"peak={_peakEnemies} ended={_horde.Pool.Count} " +
+
+                 // Under `linger:auto` the linger is an outcome, so what is
+                 // reported is how long it *stayed*, not what it was told. -1
+                 // means it never got as far as orbiting — the route was still
+                 // unfinished when the run ended, and averaging that in with a
+                 // deliberate departure would be a third thing in one column.
+                 $"linger={(_lingerAuto ? _stayedUntil : _lingerSeconds):F0} " +
+                 $"stayed={_stayedUntil:F0} " +
                  $"zone={(_zone == null ? "none" : _zoneCleared ? _zone.Title.Replace(" ", "") : "failed")} " +
 
                  // The tier actually attempted, not the tier asked for. A sweep

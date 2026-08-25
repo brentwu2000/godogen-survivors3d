@@ -785,11 +785,100 @@ to leave at 120 s will not reach 180 s however well it is doing. Exit code 1 on 
 wrong in it, which is the kind of alarm that teaches the next reader to skip the verdict line. It says
 the question was not put, and exits zero.
 
+### ✅ H4d — The bot decides when to leave
+
+`linger:auto`. The bot stays while the run is going well and leaves when it stops — health at or
+below 0.6 of its maximum, or 0.8 of the clock gone, whichever comes first. `bail:` moves the
+fraction; `lingers:auto` makes it a tier of the sweep like any other.
+
+**0.6 rather than something desperate.** The question is when a player decides a run has turned, and
+that decision is made with a margin left. A bot that leaves at 10% is measuring how close to death it
+can be steered, which is a different experiment and one nobody plays.
+
+**The decision is latched.** Health comes back — regen, a medkit, the crowd thinning — and a bot that
+un-decided every time it did would oscillate between orbiting and walking to the pad and arrive at
+neither. Leaving is a conclusion about the run, not a reading of the health bar.
+
+**And there is a ceiling, which is a deadline rule rather than a difficulty one.** Extraction needs a
+five second hold and the pad can be fifty metres away, so a bot that only ever left on health would
+spend the tail of a good run walking and time out on the pad with the clock already gone.
+
+The linger is now an *outcome*, so the `SWEEP` line carries `stayed=` alongside it — what the run did,
+not what it was told, the same rule `zoneTier` and `weapon` follow.
+
+##### It converts, and that was the whole question
+
+One layout, the same seed H4c measured:
+
+| | stayed | banked | weapon level |
+| :--- | ---: | ---: | :--- |
+| Scavenged Rifle | 150 s | 2870 | 8/8, ceiling at 65 s |
+| Service Rifle | **177 s** | **3281** | 16/16, ceiling at 103 s |
+
+Twenty-seven seconds longer and fourteen per cent more banked, from the weapon that under a fixed
+linger looked like it banked *less* than the free one. The safety had been real the whole time and had
+nowhere to go: the measurement held the one variable it was worth anything in.
+
+Worth keeping past this phase — **a fixed input that a change is supposed to move is not a control,
+it is a blindfold.** The linger was pinned because a balance number that moves for two reasons is not
+a balance number, which is correct and was the right call for every question asked before this one.
+
+##### The clock reached 180 seconds for the first time
+
+`SWEEP OK — at least one run reached 180s and walked out`. `README.md` has carried "half the seeds die
+in the second half" and "the 300 s clock remains unvalidated at human skill" since the balance work
+started, and every attempt to move it went at the difficulty. It was never only difficulty: a bot on
+a fixed 180 s linger is a bot *instructed* to stand in the worst part of the run until it is over,
+which is not what a player does and not what the clock was built around.
+
+##### It also restructured the whole table, which was not the point of it
+
+Twelve layouts, `lingers:auto`:
+
+| weapon | survived | median banked | median seconds | worst peak |
+| :--- | ---: | ---: | ---: | ---: |
+| Service Rifle | 9/12 | **1850** | 119 | 160 |
+| Scavenged Rifle | 10/12 | **1844** | 127 | 160 |
+| Reaper Scythe | 10/12 | 1166 | 119 | 183 |
+| Pump Shotgun | 10/12 | 946 | 56 | 184 |
+| Fire Axe | 10/12 | 673 | 57 | 184 |
+| Marksman Rifle | 8/12 | 542 | 56 | 174 |
+
+**1850 against 1844 is the answer to H4b.** The weapon that beat the starting rifle on all thirteen of
+its axes is now level with it on payout to a third of a per cent, and differs in how it gets there.
+That is what the shop is supposed to sell.
+
+**Given the choice, four of the six leave in under two minutes and two of them at 56 seconds.** Under
+a fixed linger all six rows sat within a factor of two of each other on every column, because every
+one of them had been made to stand there for the same length of time. That gap is a much stronger
+statement about what those weapons are for than the previous table could make, and it was invisible
+while the driver had no say.
+
+It also opens a question this phase does not answer: the two rifles bank roughly **twice** the scythe
+and three times the axe. Two of the four behind them are weapons this bot cannot use — it never kites,
+so the Marksman Rifle's range is worth nothing, and the Pump Shotgun's case for closing is most of
+what it sells. The scythe is the one that is hard to wave away, because standing in a crowd is exactly
+what this driver does.
+
+##### Five layouts said something else, and five layouts was not enough
+
+The first run of this table used the sweep's default five and reported the Service Rifle at a median
+158 seconds and a worst peak of 145 — the longest run in the set and the only weapon holding the field
+below the cap. At twelve those became 119 and 160, level with everything else. **Both readings were
+printed from the same code against the same game**; the first was three seeds of noise wearing a
+result, and it had already been written into this file before the wider run replaced it.
+
+`DefaultSeeds` went to twelve in C3 for this exact reason and the note there says so: a median of four
+or five runs is a number one unlucky layout moves by a third. Worth re-reading before the next table
+is taken on `seeds:5` because it is quicker.
+
 ### H4 — Still open
 
-- **The Service Rifle's price is unverified**, and the reason is the bot rather than the weapon. See
-  H4c. It wants a linger the driver decides — leave when health drops below a fraction — so that a
-  calmer run can turn into a longer one.
+- **Sustained fire out-earns everything else about two to one**, and what the weapon table should do
+  about that is not yet known. Two of the four weapons behind the rifles are ones this bot cannot
+  use — it never kites, so the Marksman Rifle's range is worth nothing to it — but the Reaper Scythe
+  is not one of those, and it banks 1166 against 1845. Whether that is a melee problem, a driver
+  problem, or the correct shape of a game about a crowd is the next thing the arm can be asked.
 - **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See
   H4a. The honest fix is more gear rather than different labels, and it is now priceable: the weapon
   arm exists, so a new piece can be measured rather than argued about.

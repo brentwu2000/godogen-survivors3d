@@ -1,16 +1,30 @@
 # Survivors 3D
 
-A 2.5D extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). Orthographic Brawl-Stars framing,
+An extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). A turnable third-person camera,
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
 Status: both loops close, the surface is on, the run reports itself, the arena is a place, and things
-happen when you shoot. A run is fight, loot, grow,
-extract on an arena generated fresh each time; it ends on a debrief rather than a timer; between runs
-a base screen turns what came back into gear that changes the next one, offers three contracts and
-keeps your records, and dying in that gear loses it. Five enemy variants with their own art, finite
-ammo, items you can use or throw, synthesised audio, a HUD of bars rather than labels, and hit
-feedback. Every probe below passes. Build gate re-verified 2026-08-18.
+happen when you shoot. A run is fight, loot, grow, extract on an arena generated fresh each time; it
+ends on a debrief rather than a timer; between runs a walkable shelter turns what came back into gear
+that changes the next one, offers three contracts and keeps your records, and dying in that gear loses
+it.
+
+**Nine enemy variants** as solid low-poly bodies rigged in the vertex stage, across **five places**
+that ask different questions of a build, from a rail yard to a laboratory interior with its own light.
+**Three survivors**, chosen before the loadout. **Nine weapons**, none of them a strictly better
+version of another. Threat is a *place* — danger zones you choose to enter — rather than a spawn rate,
+and a map leans toward one kind of them rather than holding one of each. The growth deck has five
+lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
+audio and music that follows the run's shape, a HUD of bars rather than labels, a minimap that records
+where you have been rather than revealing the map, and hit feedback.
+
+The billboard sprite path is still there and still works, behind `Horde.SolidBodies` — it is the
+fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
+scene with it so it cannot quietly rot.
+
+Sweep clean at 44 probes; the table below lists 34 of them and is the older set. Build gate
+re-verified 2026-08-25.
 
 ## Running it
 
@@ -348,11 +362,20 @@ to stop reading.
 **Every weapon carries a signature as well as a stat line.** Six weapons separated only by damage,
 range and magazine size are six difficulty settings for one weapon, and the choice at the shop is
 supposed to be "which way do I want to fight". The knife bleeds — which rewards touching many things
-once, the exact opposite of what its damage number suggests. The axe and the scythe cleave, hitting
-what is behind at half and three quarters, so being surrounded stops being purely a problem. The bow
-ricochets to a *new* target, which is what makes it different from penetration: it curves through a
-group instead of needing them lined up. Both rifles burst, and the trait's cost is the ammunition —
-a burst that fires extra shots for free is a damage buff with a sound effect.
+once, the exact opposite of what its damage number suggests. The axe and the scythe both cleave, at a
+quarter and three quarters, and the gap is the point: the scythe sweeps 160 degrees and carries most
+of its damage through, while the axe is a 70-degree chop with the most damage per swing of any melee
+weapon and the hardest shove in the game. One answers a crowd and one answers the thing in front of
+you. The bow ricochets to a *new* target, which is what makes it different from penetration: it
+curves through a group instead of needing them lined up. Both rifles burst, and the trait's cost is
+the ammunition — a burst that fires extra shots for free is a damage buff with a sound effect.
+
+**No weapon is a strictly better version of a sibling, and `WeaponProbe` has a stage that says so.**
+The gear table has lived by that rule since the loadout rework and the weapon table never had it: the
+Service Rifle beat the starting rifle on all thirteen of its axes for 1400 credits, and the Reaper
+Scythe beat the Fire Axe on all eight of theirs. The rifle is the one that never stops now — the
+largest magazine and reserve in the game and the fastest reload, paid for with a lighter round and a
+shorter reach — and the axe went from being a worse scythe to being the opposite of one.
 
 Two bugs the traits uncovered, both about an index that stopped meaning what it meant:
 
@@ -1037,6 +1060,27 @@ with five blocks that was enough; on a generated one it walked into the first wa
 crate and reported the route as blocked. A player looks at the screen and goes around, and the
 closest thing to that this project already owns is the field.
 
+**And they were measured with the starting kit, every one of them, until the weapon arm existed.** A
+play-test runs on a fresh ephemeral profile for the reason below, and a fresh profile owns the
+Scavenged Rifle and the Combat Knife — so every number this file printed before that arm was about two
+weapons out of nine, and the shop was a thing the balance table had never once looked at.
+`AutoPlay -- weapon:<file>` carries one; `BalanceSweep -- weapons:a,b,c` makes it a column. Both
+report **what the run actually carried** rather than what was asked for, which is the rule `zoneTier`
+paid for in C3.
+
+**A fixed linger is a control that blindfolds.** The bot left at whatever second the flag said,
+healthy or not — so a weapon whose whole value is that the run stays calm had nowhere to put it, and
+the Service Rifle finished on 93 health against the starting rifle's 70 and banked *less*. That is not
+a result about the rifle. `linger:auto` stays while the run is going well and leaves at 0.6 health,
+and it is what first carried a run past the 180 s the sweep has always been judged against.
+
+Twelve layouts on `lingers:auto`, median banked: **Service Rifle 1850, Scavenged Rifle 1844**, Reaper
+Scythe 1166, Pump Shotgun 946, Fire Axe 673, Marksman Rifle 542. The paid rifle and the free one are
+level to a third of a per cent and differ in how they get there, which is what the shop is supposed
+to sell. Given the choice, four of the six leave the field in under two minutes and two of them at 56
+seconds — a gap that was invisible while every weapon was made to stand there for the same length of
+time.
+
 **These are measured on a fresh profile, and the earlier ones were not.** The table recorded when
 variants landed was taken against a save with 37 points of firearm practice on it, which under the
 old uncapped system meant a rifle already past every floor it had — a maxed weapon, by accident. The
@@ -1126,11 +1170,16 @@ person**, not things that need code.
   headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
   whose tests are green only when someone runs them by hand.
 - **The clock is unvalidated by a human.** The bot picks crates by worth, breaks contact when it is
-  losing, and knows not to do that on the way to the exit — but it still does not use cover, does not
-  kite, and never decides to leave early because a run is going badly. See Balance.
-- **Half the seeds die in the second half.** Two of four measured runs never reach 180 s at all, and
-  the supply caches did not change that — they fixed what a surviving run is worth, not whether it
-  survives. See Balance.
+  losing, knows not to do that on the way to the exit, and under `linger:auto` decides for itself when
+  a run has turned — but it still does not use cover and does not kite. Range is therefore worth
+  nothing to it, which is most of what the Marksman Rifle and the Pump Shotgun are sold on, and their
+  rows in the weapon table should be read as measurements of the driver. See Balance.
+- **Under a fixed linger, half the seeds died in the second half; under `linger:auto` the 180 s target
+  is met.** A bot told to stand in the worst part of the run until a stopwatch says otherwise is not
+  doing what a player does, and the difference is the whole gap: given the choice it leaves at 0.6
+  health, reaches 158 s on the Service Rifle and walks out. What is still unmeasured is whether a
+  *person* can hold that ground longer, which is the same question as before and now has a floor
+  under it.
 - **The proof video is three phases stale.** `test/Presentation.cs` films a game without elites, a
   boss, biomes, or music.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
