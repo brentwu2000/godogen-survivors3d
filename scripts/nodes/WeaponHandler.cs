@@ -109,6 +109,25 @@ public partial class WeaponHandler : Node3D
     /// carried out of one: what the player keeps is the loot and the practice.
     public int RunUpgrades => _slots[_active].RunUpgrades;
 
+    /// The same readings for a named slot.
+    ///
+    /// The properties above all mean "the one in hand", which was the only one
+    /// that could fire and is now one of two that do. The HUD has to show both or
+    /// it is reporting half of what the player is doing — a magazine emptying on
+    /// a weapon the readout never mentions is the kind of thing a player concludes
+    /// is a bug in the damage.
+    public int SlotCount => _slots.Length;
+    public WeaponResource? WeaponIn(int slot) => _slots[slot].Weapon;
+    public int AmmoIn(int slot) => _slots[slot].Ammo;
+    public int ReserveIn(int slot) => _slots[slot].Reserve;
+    public bool ReloadingIn(int slot) => _slots[slot].ReloadRemaining > 0.0f;
+
+    public bool IsDryIn(int slot) =>
+        _slots[slot].Weapon is { MagazineSize: > 0 } && _slots[slot].Ammo <= 0 && _slots[slot].Reserve <= 0;
+
+    /// Whether this slot is one of the ones firing. See `LiveSlots`.
+    public bool FiringIn(int slot) => slot == _active || slot < LiveSlots;
+
     /// Where this run begins. Practice counts for at most half the weapon's
     /// ceiling, so a veteran starts further along but never arrives — there is
     /// always a climb left, which is the only reason in-run growth is worth
@@ -116,12 +135,25 @@ public partial class WeaponHandler : Node3D
     ///
     /// Practice above that half is not wasted, it is unspent: a weapon with a
     /// higher ceiling lets more of the same practice count.
-    public int StartLevel => Weapon == null
-        ? 0
-        : Mathf.Min(_proficiency[(int)Weapon.Category], Weapon.MaxLevel / 2) + Weapon.TierStartBonus;
+    public int StartLevel => StartLevelOf(_slots[_active]);
 
     /// The one number every curve is read at.
-    public int Level => Weapon == null ? 0 : Weapon.ClampLevel(StartLevel + RunUpgrades);
+    public int Level => LevelOf(_slots[_active]);
+
+    /// Both of the above, for a named slot rather than the one in hand.
+    ///
+    /// **Every curve in this file used to be read at "the active weapon's
+    /// level", because only the active weapon fired.** Both fire now, so a
+    /// level asked for without saying whose is a question with two answers —
+    /// and the wrong one is a sidearm swinging on a rifle's numbers.
+    private int StartLevelOf(Slot slot) => slot.Weapon == null
+        ? 0
+        : Mathf.Min(_proficiency[(int)slot.Weapon.Category], slot.Weapon.MaxLevel / 2)
+          + slot.Weapon.TierStartBonus;
+
+    private int LevelOf(Slot slot) => slot.Weapon == null
+        ? 0
+        : slot.Weapon.ClampLevel(StartLevelOf(slot) + slot.RunUpgrades);
 
     public int MaxLevel => Weapon?.MaxLevel ?? 0;
     public bool AtCeiling => Weapon != null && Level >= Weapon.MaxLevel;
@@ -327,11 +359,53 @@ public partial class WeaponHandler : Node3D
         foreach (Slot each in _slots)
             each.SinceFired += step;
 
-        Slot slot = _slots[_active];
-        if (slot.Weapon is not { } weapon || _horde == null)
+        if (_horde == null)
             return;
 
-        int level = Level;
+        // **Both of them.**
+        //
+        // Only `_slots[_active]` used to fire and the other sat idle except for
+        // its charge timer, so half of every loadout in the game did nothing.
+        // That is also why melee measured badly: what a melee weapon buys is
+        // that it never runs out, and against a rifle that never runs out either
+        // the trade was worth nothing. A weapon that keeps working while the
+        // other reloads, empties, or cannot reach what is already touching the
+        // player is the version of that trade with something in it.
+        //
+        // In slot order rather than active-first, so a run is repeatable: two
+        // weapons that both want the same target resolve the same way every
+        // time, and a swap mid-fight does not silently reorder who shoots first.
+        for (int i = 0; i < _slots.Length; i++)
+        {
+            // `LiveSlots` is the control variable for the measurement this change
+            // exists to produce, and it is a real setting rather than a test-only
+            // back door: at 1 the game is exactly what it was before both slots
+            // fired, which is the only honest "before" a "how much is a pair
+            // worth" table can be read against. Same code, same layouts, one
+            // variable.
+            if (i != _active && i >= LiveSlots)
+                continue;
+
+            TickSlot(_slots[i], step);
+        }
+    }
+
+    /// How many slots fire. Two is the game; one is the game before this change.
+    [Export] public int LiveSlots { get; set; } = 2;
+
+    /// One slot's whole firing path.
+    ///
+    /// Lifted out of `_PhysicsProcess` unchanged except for reading `slot`
+    /// rather than `_slots[_active]`. Its five exits — no weapon, a burst in
+    /// progress, a reload, a dry magazine, a cooldown — were all written as
+    /// `return` against the single active weapon, so leaving them in place would
+    /// have made the first slot's reload end the second slot's turn.
+    private void TickSlot(Slot slot, float step)
+    {
+        if (slot.Weapon is not { } weapon)
+            return;
+
+        int level = LevelOf(slot);
 
         // A burst finishes even if the target has died or moved: the shots were
         // already fired as far as the player is concerned, and a burst that
@@ -344,7 +418,7 @@ public partial class WeaponHandler : Node3D
                 slot.BurstLeft--;
                 slot.BurstDelay = weapon.TraitAmount;
                 slot.SinceFired = 0.0f;
-                Fire(GlobalPosition, slot.BurstDirection, level, allowBurst: false);
+                Fire(slot, GlobalPosition, slot.BurstDirection, level, allowBurst: false);
 
                 if (weapon.MagazineSize > 0)
                     slot.Ammo = Mathf.Max(0, slot.Ammo - 1);
@@ -387,7 +461,7 @@ public partial class WeaponHandler : Node3D
         if (!TryGetAimDirection(origin, range, out Vector2 direction))
             return;
 
-        Fire(origin, direction, level);
+        Fire(slot, origin, direction, level);
         slot.SinceFired = 0.0f;
         slot.Cooldown = weapon.GetEffectiveAttackDelay(level) * Mods.AttackDelayScale;
 
@@ -405,7 +479,7 @@ public partial class WeaponHandler : Node3D
         if (Weapon == null || _horde == null)
             return;
 
-        Fire(GlobalPosition, direction.Normalized(), Level);
+        Fire(_slots[_active], GlobalPosition, direction.Normalized(), Level);
 
         // Spent here too. This is a real attack site — a probe firing twice in a
         // row must not get two charged shots — and it is the third of three,
@@ -444,7 +518,7 @@ public partial class WeaponHandler : Node3D
         return true;
     }
 
-    private void Fire(Vector3 origin, Vector2 direction, int level, bool allowBurst = true)
+    private void Fire(Slot slot, Vector3 origin, Vector2 direction, int level, bool allowBurst = true)
     {
         WeaponResource weapon = Weapon!;
         float range = weapon.GetEffectiveRange(level);
@@ -470,7 +544,6 @@ public partial class WeaponHandler : Node3D
 
         if (allowBurst && weapon.Trait == WeaponTrait.Burst && weapon.TraitCount > 0)
         {
-            Slot slot = _slots[_active];
             slot.BurstLeft = weapon.TraitCount;
             slot.BurstDelay = weapon.TraitAmount;
             slot.BurstDirection = direction;

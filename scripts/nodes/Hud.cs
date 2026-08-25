@@ -419,11 +419,38 @@ public partial class Hud : CanvasLayer
             return;
         }
 
-        string ammo = weapon.MagazineSize > 0
-            ? $"   {_weapons.Ammo}/{_weapons.Reserve}" + (_weapons.IsDry ? "  DRY" : _weapons.Reloading ? "  reloading" : "")
-            : "";
+        // Both of them, because both of them fire.
+        //
+        // A line per slot, the held one marked. Which weapon is *held* still
+        // matters — it is the one the body draws and the one a level-up card
+        // raises — but it stopped being the only one doing anything, and a
+        // readout that names one while two are shooting is a readout the player
+        // will disbelieve on the first magazine that empties silently.
+        var lines = new System.Collections.Generic.List<string>();
 
-        _arms.Text = $"{weapon.WeaponName}{ammo}";
+        for (int i = 0; i < _weapons.SlotCount; i++)
+        {
+            if (_weapons.WeaponIn(i) is not { } each)
+                continue;
+
+            string ammo = each.MagazineSize > 0
+                ? $"   {_weapons.AmmoIn(i)}/{_weapons.ReserveIn(i)}"
+                  + (_weapons.IsDryIn(i) ? "  DRY" : _weapons.ReloadingIn(i) ? "  reloading" : "")
+                : "";
+
+            // The marker says which is in hand, not which is working — a dot
+            // against an idle slot would be exactly the wrong thing to learn.
+            string held = i == _weapons.ActiveSlot ? "> " : "  ";
+            string idle = _weapons.FiringIn(i) ? "" : "   (idle)";
+
+            lines.Add($"{held}{each.WeaponName}{ammo}{idle}");
+        }
+
+        // A newline escape, never AppendLine. That writes Environment.NewLine,
+        // which on Windows is carriage-return plus newline, and Godot Label
+        // treats the carriage return as a line break of its own — every menu in
+        // this game was double-spaced for sixteen phases because of it.
+        _arms.Text = string.Join("\n", lines);
 
         // Level against its ceiling, as a length rather than as a fraction. How
         // much climb is left is what makes a better weapon legible as a longer

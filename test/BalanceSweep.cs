@@ -106,6 +106,9 @@ public partial class BalanceSweep : SceneTree
         public readonly string Line;
         public readonly int PicksInLine;
 
+        /// How many weapon slots fired.
+        public readonly int Slots;
+
         /// The share of this run's arrivals that came as a knot, 0 for a
         /// scattered run. Printed per row rather than summarised, because the
         /// question it answers is a 2x2 — does a loadout that wants a crowd do
@@ -116,8 +119,9 @@ public partial class BalanceSweep : SceneTree
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
                    int banked, int lowestHp, int peak, string weapon, string character, string gear, float knotShare,
-                   string line, int picksInLine)
+                   string line, int picksInLine, int slots)
         {
+            Slots = slots;
             KnotShare = knotShare;
             Line = line;
             PicksInLine = picksInLine;
@@ -175,6 +179,11 @@ public partial class BalanceSweep : SceneTree
 
         // One empty entry: the Phase 8 pick order, which plays no line at all.
         string[] lines = { "" };
+
+        // How many weapon slots fire. Two is the game; one is the game before
+        // both slots did, and it is the only honest control for "what is a pair
+        // worth" — same code, same layouts, one variable.
+        string[] slotArms = { "" };
 
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
@@ -278,6 +287,9 @@ public partial class BalanceSweep : SceneTree
                     lines = parsed.ToArray();
             }
 
+            if (arg == "slots:both")
+                slotArms = new[] { "", "solo" };
+
             if (arg.StartsWith("lingers:"))
             {
                 string[] parts = arg[8..].Split(',');
@@ -305,9 +317,10 @@ public partial class BalanceSweep : SceneTree
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
                  $"{arms.Length} arm(s) x {weapons.Length} weapon(s) x " +
                  $"{characters.Length} survivor(s) x {loadouts.Length} loadout(s) x " +
-                 $"{lines.Length} line(s) = " +
-                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length * lines.Length} runs");
+                 $"{lines.Length} line(s) x {slotArms.Length} slot arm(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length * lines.Length * slotArms.Length} runs");
 
+        foreach (string slotArm in slotArms)
         foreach (string line in lines)
         foreach (string loadout in loadouts)
         foreach (string character in characters)
@@ -319,7 +332,7 @@ public partial class BalanceSweep : SceneTree
                 {
                     foreach (ulong seed in seeds)
                     {
-                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout, line);
+                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout, line, slotArm);
                         if (row is { } value)
                             rows.Add(value);
                         else
@@ -337,7 +350,7 @@ public partial class BalanceSweep : SceneTree
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
     private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character,
-                               string loadout, string growthLine)
+                               string loadout, string growthLine, string slotArm)
     {
         var output = new Godot.Collections.Array();
 
@@ -359,6 +372,9 @@ public partial class BalanceSweep : SceneTree
 
         if (growthLine.Length > 0)
             args.Add($"line:{growthLine}");
+
+        if (slotArm.Length > 0)
+            args.Add(slotArm);
 
         if (arm != NoZone)
         {
@@ -409,7 +425,8 @@ public partial class BalanceSweep : SceneTree
             Field(line, "gear"),
             Number(line, "knotShare"),
             Field(line, "line"),
-            Mathf.RoundToInt(Number(line, "inLine")));
+            Mathf.RoundToInt(Number(line, "inLine")),
+            Mathf.RoundToInt(Number(line, "slots")));
     }
 
     private static string Field(string line, string key)
@@ -481,6 +498,7 @@ public partial class BalanceSweep : SceneTree
         ReportCharacters(rows);
         ReportLoadouts(rows);
         ReportLines(rows);
+        ReportSlots(rows);
         ReportGrowth(rows);
 
         GD.Print("");
@@ -757,6 +775,28 @@ public partial class BalanceSweep : SceneTree
         }
 
         PrintGroups("line", groups);
+    }
+
+    /// One row per number of weapons firing — the measurement the dual-wield
+    /// change exists to produce.
+    private static void ReportSlots(System.Collections.Generic.List<Row> rows)
+    {
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (int count in new[] { 1, 2 })
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (row.Slots == count)
+                    picked.Add(row);
+            }
+
+            if (picked.Count > 0)
+                groups.Add(($"{count} weapon{(count == 1 ? "" : "s")}", picked));
+        }
+
+        PrintGroups("firing", groups);
     }
 
     /// The one table shape this file prints, so an arm and a weapon are read the

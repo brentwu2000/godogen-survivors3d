@@ -71,7 +71,7 @@ public partial class ItemProbe : SceneTree
             case 1: return RunStage(StageWasteNothing, "nothing is spent when it would not help");
             case 2: return RunStage(StageAmmo, "looted rounds refill the reserve, and it has no ceiling");
             case 3: return RunStage(StageAdrenaline, "adrenaline is speed for a price, and expires");
-            case 4: return RunStage(StageDryThenSwap, "a dry rifle stops; the sidearm does not");
+            case 4: return RunStage(StageDryThenSwap, "a dry primary does not stop the player");
             case 5: return RunStage(StageSlotsAreSeparate, "each slot keeps its own ammo and levels");
             case 6: return RunStage(StageThrowSeparate, "throwing is its own verb, not the use key");
             case 7: return RunStage(StageExplosive, "a thrown charge clears a radius where it lands");
@@ -414,34 +414,44 @@ public partial class ItemProbe : SceneTree
             return null;
         }
 
-        // Two seconds of standing next to targets: the one round goes, then
-        // nothing.
+        // Two seconds: the one round goes and the primary is out.
         if (tick == 120)
         {
             _survivedDry = _horde!.Pool.Count;
             _wasDry = _weapons!.IsDry;
-            _weapons.SwapWeapon();
-            _swappedTo = _weapons.Weapon?.WeaponName ?? "(none)";
+            _heldSlot = _weapons.ActiveSlot;
             return null;
         }
 
         if (tick < 300)
             return null;
 
-        int afterSwap = _horde!.Pool.Count;
+        int left = _horde!.Pool.Count;
+        int killed = _dryStartCount - left;
 
-        GD.Print($"  one round then dry: {_dryStartCount} -> {_survivedDry} enemies " +
-                 $"(dry = {_wasDry}); swapped to {_swappedTo}, then {_survivedDry} -> {afterSwap}");
+        GD.Print($"  one round then dry ({_wasDry}); {_dryStartCount} -> {_survivedDry} at the "
+               + $"moment it emptied -> {left} after; {killed} dead in total, "
+               + $"slot {_heldSlot} held throughout = {_heldSlot == _weapons!.ActiveSlot}");
 
-        // Exactly one dies to the single round, the rest survive the dry spell,
-        // and the sidearm finishes them.
-        return _wasDry && _survivedDry == _dryStartCount - 1 && afterSwap < _survivedDry;
+        // **This stage used to be about swapping and there is nothing to swap
+        // to any more.** Both slots fire, so a sidearm never stopped in the
+        // first place — what it asserted, "the rest survive the dry spell",
+        // is now false by design and the probe was right to say so.
+        //
+        // The claim that replaces it is the one the change exists for: a
+        // primary running out does not stop the player.
+        //
+        // Its own control, so it cannot pass on a horde that walked into a
+        // wall: the rifle carries one round and a penetration of 1, so it can
+        // account for exactly one death. **More than one, with no key pressed
+        // and the same slot in hand throughout, can only be the other weapon.**
+        return _wasDry && killed > 1 && _heldSlot == _weapons.ActiveSlot;
     }
 
     private int _dryStartCount;
     private int _survivedDry;
     private bool _wasDry;
-    private string _swappedTo = "";
+    private int _heldSlot;
 
     /// A sidearm that forgets its magazine every time it is put away is not a
     /// sidearm, and a swap must not hand the fresh weapon the other's levels.

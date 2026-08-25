@@ -61,6 +61,7 @@ public partial class AutoPlay : SceneTree
     private int _zoneTier = -1;
     private string _weaponWanted = "";
     private string _weaponCarried = "none";
+    private bool _soloWeapon;
     private string _gearWanted = "";
     private string _gearWorn = "kit";
     private bool _zoneCleared;
@@ -988,6 +989,11 @@ public partial class AutoPlay : SceneTree
             if (argument.StartsWith("gear:"))
                 _gearWanted = argument[5..];
 
+            // The control for "what is a pair worth". `solo` is the game before
+            // both slots fired.
+            if (argument == "solo")
+                _soloWeapon = true;
+
             if (argument.StartsWith("line:")
                 && System.Enum.TryParse(argument[5..], ignoreCase: true, out GrowthLine wantedLine))
             {
@@ -1025,6 +1031,9 @@ public partial class AutoPlay : SceneTree
         // the reason `zoneTier` is: a run that could not carry what it was asked
         // to carry must not land in that weapon's column. C3 already paid for
         // this lesson once with a fallback zone tier.
+        if (_soloWeapon && _weapons != null)
+            _weapons.LiveSlots = 1;
+
         _weaponCarried = _weapons?.Weapon?.WeaponName.Replace(" ", "") ?? "none";
 
         // What it is wearing.
@@ -1599,7 +1608,7 @@ public partial class AutoPlay : SceneTree
                  $"zoneTier={(_zone?.Tier ?? -1)} " +
 
                  // The weapon the run actually started with, on the same rule.
-                 $"weapon={_weaponCarried} gear={_gearWorn} " +
+                 $"weapon={_weaponCarried} slots={_weapons?.LiveSlots ?? 0} gear={_gearWorn} " +
 
                  // And who played it. Read back from the book rather than echoed
                  // from the flag, so a name that did not resolve lands in the
