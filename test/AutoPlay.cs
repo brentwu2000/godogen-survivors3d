@@ -1358,6 +1358,19 @@ public partial class AutoPlay : SceneTree
 
                  // The weapon the run actually started with, on the same rule.
                  $"weapon={_weaponCarried} " +
+
+                 // When the gun first had nothing left, or -1 for never.
+                 //
+                 // Tracked since the reserve was tuned and printed only in the
+                 // run's own summary, so no table has ever carried it. It is the
+                 // one column that can price a melee weapon: what melee buys is
+                 // that it cannot run out, and whether that is worth anything
+                 // depends entirely on whether a firearm ever does. The reserve
+                 // is calibrated to empty if and only if the player stops
+                 // looting, and this bot always loots — so the advantage may be
+                 // one the design has already neutralised, which is a finding
+                 // rather than a guess only once it is a number.
+                 $"dryAt={_dryAt:F0} " +
                  $"level={_growth?.Level ?? 0} picks={_picksTaken} " +
                  $"weaponLv={_weapons?.Level ?? 0} weaponMax={_weapons?.MaxLevel ?? 0} " +
                  $"ceilingAt={(_ceilingAt < 0.0f ? -1.0f : _ceilingAt):F0} " +

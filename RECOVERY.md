@@ -872,13 +872,46 @@ result, and it had already been written into this file before the wider run repl
 or five runs is a number one unlucky layout moves by a third. Worth re-reading before the next table
 is taken on `seeds:5` because it is quicker.
 
+### ✅ H4e — What melee buys, priced
+
+Before tuning the melee gap, the instrument was checked, because a bot that orbits at a standoff
+would make the whole melee row an artefact. It does not: the orbit target is the best remaining crate
+or a 16 m circuit, so the bot walks *through* the crowd, and melee swings at nothing rather than
+holding fire. The rows are real.
+
+So what does a melee weapon buy? Cleave, bleed, no reload — and that it can never run out.
+`AutoPlay` has tracked `_dryAt` since the reserve was tuned and printed it only in a run's own
+summary, so no table has ever carried it. It is a column now.
+
+| | banked | stayed | ran dry |
+| :--- | ---: | ---: | :--- |
+| Scavenged Rifle | 2870 | 150 s | **never** |
+| Service Rifle | 3281 | 177 s | **149 s** |
+| Reaper Scythe | 1217 | 109 s | never — it has no ammunition |
+
+**Melee's compensating advantage does not exist in practice, because the starting rifle does not run
+out either.** `README.md` records the reserve as calibrated to empty *if and only if* the player stops
+looting, and no player who is looting stops. So "it can never run dry" is priced against a threat the
+design already removed, and the scythe is carrying cleave and bleed against a rifle's range for
+nothing.
+
+The one weapon it would bite is the Service Rifle, which does empty — at 149 s, in the last third of
+a long run, because seven rounds a second is what 320 of them costs. That is a real cost on a real
+weapon and it is invisible on any run shorter than two minutes, which is every run the sweep took
+before `linger:auto`.
+
+**Not tuned here.** The two honest fixes pull opposite ways and one of them is already decided: making
+firearms scarcer is `MaxReserve`, which the owner asked to have removed and which stays removed; the
+other is giving melee something it does not have. That is a design question rather than a number, and
+it should be asked with the gap measured rather than guessed at.
+
 ### H4 — Still open
 
-- **Sustained fire out-earns everything else about two to one**, and what the weapon table should do
-  about that is not yet known. Two of the four weapons behind the rifles are ones this bot cannot
-  use — it never kites, so the Marksman Rifle's range is worth nothing to it — but the Reaper Scythe
-  is not one of those, and it banks 1166 against 1845. Whether that is a melee problem, a driver
-  problem, or the correct shape of a game about a crowd is the next thing the arm can be asked.
+- **Melee banks about two thirds of what a rifle does and it is not the driver's fault.** H4e prices
+  what melee buys and finds it is buying insurance against something that does not happen. The gap is
+  measured; what to do about it is not decided. Two of the four weapons behind the rifles *are*
+  driver artefacts — it never kites, so the Marksman Rifle's range is worth nothing to it — and the
+  scythe is not one of them.
 - **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See
   H4a. The honest fix is more gear rather than different labels, and it is now priceable: the weapon
   arm exists, so a new piece can be measured rather than argued about.

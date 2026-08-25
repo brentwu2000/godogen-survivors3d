@@ -942,6 +942,13 @@ crates and then circles is dry at 95 s and ends with a knife against a hundred e
 searching as it goes never empties. Looting is a supply line, not a phase that ends in the first
 minute.
 
+**That calibration is also what melee is priced against, and it is why melee is behind.** What a melee
+weapon buys is that it can never run out — and the starting rifle does not run out either, so the
+insurance is against something the design already removed. Measured on a long run: the Scavenged Rifle
+never went dry across 150 seconds, and the Reaper Scythe banked 1217 against its 2870. The one weapon
+that does empty is the Service Rifle, at 149 s, because seven rounds a second is what 320 of them
+costs — a real cost, on a real weapon, invisible on any run shorter than two minutes.
+
 **Cover makes the horde accumulate.** 206 enemies alive at 120 s where the old open arena held 55: a
 crowd that has to route around fifty blocks arrives slower than it spawns. The field the player is
 kiting through is denser than the same run used to be, and the reason is the map, not the rate.
