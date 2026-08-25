@@ -1106,15 +1106,71 @@ the thing the knot was supposed to reward.
 bot's pick order, and it is the next tool. Recorded here rather than worked around, because slicing
 eight runs until a favourable split appears is exactly how this file's earlier tables went wrong.
 
+### ✅ H4h — The twelfth layout
+
+Seed `3210233709` came back `Stuck` in every arm, every weapon, every survivor and every loadout, so
+**every median this project has printed was computed over eleven layouts and nothing said so.** It
+extracts now, at 61.3 s with 1194 banked, having searched both crates.
+
+It took three findings to get there and each one hid the next.
+
+##### The report did not say which of two answers it was
+
+`Navigate` has two: `EscapeFrom` for "the bot is standing inside an inflated footprint", and `Sample`
+for the route. The stuck line printed the vector and not its source, and those fail differently — a
+`Sample` pointing the wrong way is routing, an `EscapeFrom` firing at all is a bot in a wall, and a bot
+that escapes and is pulled straight back in is a third thing again. The report names the source now,
+and whether the bot *and the target* are standing in a footprint.
+
+Which gave the answer in one run: `escape (0.00, 0.00), sample (1.00, 0.00); standing in a footprint =
+False, **target in one = True**`.
+
+##### A blocked destination has no route to it, and the field said so in a way nobody could read
+
+`Rebuild` seeds its flood from the target's cell. Started from a blocked one it produces a field with
+no source, and `Sample` hands back whatever is left in the array rather than an honest zero — which is
+how a bot walked due east toward something due north for sixty seconds.
+
+The margin is the point rather than the bug. It is 0.55 m of body radius so the route is one a body
+can walk, and a crate standing against cover is an ordinary thing for a generator to place. So the fix
+is not a thinner margin, which would put the bot back on the corners it was widened to clear:
+`FlowField.NearestOpen` returns the closest walkable point to somewhere that may not be, and `Navigate`
+refuses to ask the field for a route to a blocked cell at all.
+
+##### And then it stood 2.4 m from a crate with a reach of 1.8 m, for a hundred seconds, until it died
+
+That is the same run failing one step later, and it presented as `Died` — a balance result — rather
+than as a bot that never got past its first objective. Two things were wrong.
+
+**The walk is guarded by a leg timeout and the wait was not.** `if (!crate.Looted) return false;` has
+no clock on it, so a bot parked just outside a crate's reach waits there forever. It reports now, with
+the distance and the reach and which of the two possible faults that implies.
+
+**And the margin is not a wall.** The player's collision radius is 0.35 against the field's 0.55, so
+ground the field calls blocked is usually ground the player can stand on. The field owns the route and
+the physics owns the last two metres: once the routed point is reached the bot steers at what it
+actually wanted and the collision shape decides how close that gets.
+
+**The general shape is worth keeping.** A grid consumer that treats its own safety margin as geometry
+will eventually be asked to go somewhere inside it, and every layer of this project that has met that
+question has answered it wrong at least once — the enemy-radius inflation sealing a doorway in E-half,
+the bot's own 0.9 m margin before it was cut to 0.55, and now a destination the margin swallowed.
+
+##### Every table above this line is an eleven-layout table
+
+H4c, H4d, D3c and H4g all ran `seeds:5` or `seeds:12`, and every one of those sets contains
+`3210233709` as a row that contributed a zero. Their medians are over eleven layouts and their survival
+rates carry a death nobody could have avoided — D3c's "9/12, 10/12 and 10/12" is really nine, ten and
+ten out of **eleven**, with the twelfth failing for a reason that had nothing to do with the survivor.
+
+Not restated here from a re-run, because the conclusions they were used for do not turn on it: the
+Service Rifle is level with the starting rifle, the three survivors are three profiles, and the knot
+does not favour Ordnance. What changes is that the *next* table is over twelve, and comparing one
+against the other would be comparing two samples.
+
 ### H4 — Still open
 
-- **One of the twelve default layouts has never produced a row.** Seed `3210233709` comes back `Stuck`
-  in every arm, every weapon and every loadout, so **every median this file prints is computed over
-  eleven layouts and nobody knew**. Diagnosed and not fixed: the bot stops 5.6 m short of a crate at
-  (−7.8, 36.1) heading for (−8.0, 41.7) — due north — while its own flow field returns **(1.00, 0.00)**,
-  due east, and it covers 2.30 m in ten seconds. C3 fixed the neighbouring case, where `Sample` returns
-  *zero* inside an obstacle's inflated band and the bot substituted a straight line; this is `Sample`
-  returning a direction into a wall. `FlowField.EscapeFrom` exists and this path does not use it.
+- ~~**One of the twelve default layouts has never produced a row.**~~ Fixed — see H4h below.
 - **A `line:` argument for the deck.** See H4g: gear tilts what is *offered* and the bot's Phase 8
   preference list decides what is *taken*, so no measurement here has ever been of a growth line. It
   is what the knot, the trinket slot and the two new backpacks all need to be judged properly.

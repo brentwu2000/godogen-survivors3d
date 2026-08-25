@@ -312,7 +312,24 @@ public partial class AutoPlay : SceneTree
             return false;
         }
 
-        Vector3 target = lingering ? OrbitPoint() : _route[_leg];
+        Vector3 wanted = lingering ? OrbitPoint() : _route[_leg];
+        Vector3 routed = Reachable(wanted);
+
+        // The field owns the route and the physics owns the last two metres.
+        //
+        // Obstacles are inflated by 0.55 m so the route the field returns is one a
+        // body can follow without catching every corner. **That margin is not a
+        // wall** — the player's collision radius is 0.35, so ground the field calls
+        // blocked is usually ground the player can stand on. On one of the twelve
+        // sweep layouts a crate sits 2.4 m inside it, and a bot that stopped where
+        // the field stopped stood 0.6 m outside the crate's own 1.8 m reach until
+        // something killed it.
+        //
+        // So once the routed point is reached, steer at what was actually wanted
+        // and let the collision shape decide how close that gets. Resolved once
+        // either way, because a bot routed toward one point while measuring its
+        // distance to another walks to the first and never arrives at the second.
+        Vector3 target = _player.GlobalPosition.DistanceTo(routed) <= ArriveDistance ? wanted : routed;
         float distance = _player.GlobalPosition.DistanceTo(target);
 
         if (lingering)
@@ -362,6 +379,31 @@ public partial class AutoPlay : SceneTree
                 GD.Print($"  stuck at ({_player.GlobalPosition.X:F1}, {_player.GlobalPosition.Z:F1}) " +
                          $"heading for ({target.X:F1}, {target.Z:F1}); " +
                          $"flow ({flow.X:F2}, {flow.Y:F2}), moved {_stuckDrift:F2} m in the last ten seconds");
+
+                // Where that vector came from, which is the whole diagnosis.
+                //
+                // `Navigate` has two answers and they fail differently. `Sample`
+                // pointing the wrong way is a routing problem; `EscapeFrom`
+                // pointing anywhere at all means the bot is standing inside an
+                // inflated footprint, and a bot that escapes and is then pulled
+                // straight back in is a third thing again — an oscillation, which
+                // reads as "stuck" and is not the same bug as either.
+                //
+                // And whether the *target* is blocked, because a `Rebuild` from a
+                // cell inside an obstacle produces a field with no source: every
+                // cell unreachable, `Sample` zero everywhere, and the bot walking
+                // the straight line into whatever is in the way. That is a
+                // generator problem wearing a pathing problem's clothes.
+                if (_navField != null)
+                {
+                    Vector2 escape = _navField.EscapeFrom(_player.GlobalPosition);
+                    Vector2 sampled = _navField.Sample(_player.GlobalPosition);
+
+                    GD.Print($"  source: escape ({escape.X:F2}, {escape.Y:F2}), "
+                           + $"sample ({sampled.X:F2}, {sampled.Y:F2}); "
+                           + $"standing in a footprint = {_navField.IsBlockedAt(_player.GlobalPosition)}, "
+                           + $"target in one = {_navField.IsBlockedAt(target)}");
+                }
 
                 ReportNearbyCover();
 
@@ -441,6 +483,33 @@ public partial class AutoPlay : SceneTree
         {
             if (!_crates[_leg].Looted)
             {
+                // Standing next to a crate that never opens is not a run, and it
+                // used to be indistinguishable from one.
+                //
+                // The walk here is guarded by a leg timeout; **the wait was not.**
+                // So a bot parked just outside a crate's 1.8 m reach stood there
+                // until something killed it, and the sweep recorded `Died` — a
+                // balance result — for a run that never got past its first
+                // objective. The stuck path at least says so.
+                if (_legTicks > LegTimeoutTicks)
+                {
+                    Release();
+                    float reach = _crates[_leg].SearchRadius + _player.Mods.SearchRadiusBonus;
+                    float away = _player.GlobalPosition.DistanceTo(_crates[_leg].GlobalPosition);
+
+                    GD.Print($"AUTOPLAY FAILED — stood at {Label()} for 60s without opening it, "
+                           + $"{_horde.Pool.Count} enemies on the field");
+                    GD.Print($"  {away:F1} m from it against a reach of {reach:F1} m — "
+                           + (away > reach
+                               ? "out of range, so the walk stopped short of where it had to stop"
+                               : "in range, so the search itself is not completing"));
+
+                    GD.Print(Growth());
+                    Sweep("Stuck", _tick / 60.0f, _player.SafeBox.TotalValue);
+                    Quit(1);
+                    return true;
+                }
+
                 MakeRoomFor(_crates[_leg]);
                 return false;
             }
@@ -588,6 +657,65 @@ public partial class AutoPlay : SceneTree
         Vector3 delta = target - _player.GlobalPosition;
         var straight = new Vector2(delta.X, delta.Z).Normalized();
 
+        EnsureField();
+
+        // A blocked destination has no route to it, so do not ask for one.
+        //
+        // `Rebuild` seeds its flood from the target's cell; started from a blocked
+        // one it produces a field with no source, and `Sample` then hands back
+        // whatever is left in the array rather than an honest zero. That is how a
+        // bot ended up walking due east toward something due north. Inside the
+        // margin the straight line is the right answer — see the final-approach
+        // note above.
+        if (_navField!.IsBlockedAt(target))
+            return straight;
+
+        if (target.DistanceSquaredTo(_navTarget) > 0.01f)
+        {
+            _navTarget = target;
+            _navField.Rebuild(target);
+        }
+
+        // Out of a wall first, if that is where the bot is standing.
+        //
+        // "Straight on is the honest fallback" was wrong, and specifically wrong
+        // in the one case it was written for. Inside an inflated footprint the
+        // target is usually on the *other side* of the thing being stood against,
+        // so the straight line points into it — the bot leaned on the south face
+        // of an eight-metre wall for sixty seconds, seven and a half metres from
+        // the extraction pad, while the sweep recorded the run as having no result
+        // at all. `EscapeFrom` is the field's answer to "which way is out".
+        Vector2 escape = _navField!.EscapeFrom(_player.GlobalPosition);
+        if (escape != Vector2.Zero)
+            return escape;
+
+        Vector2 flow = _navField.Sample(_player.GlobalPosition);
+
+        // Zero here now means a genuinely unreachable target rather than a body
+        // in a margin, and straight on is the honest answer to that.
+        return flow == Vector2.Zero ? straight : flow;
+    }
+
+    /// The closest point to `wanted` the bot can actually stand on.
+    ///
+    /// **Used for the distance test as well as the steering, and that is the
+    /// whole of why it is a method rather than a line inside `Navigate`.** A bot
+    /// routed toward one point while measuring its distance to another walks to
+    /// the first and never arrives at the second, which is a timeout that reads
+    /// exactly like a blocked route.
+    ///
+    /// Four metres of search. The crate's own reach is 1.8 m and the grid is 1.5,
+    /// so anything the margin swallowed is one or two cells from open ground;
+    /// past four the target is not against cover, it is inside it, and walking to
+    /// the far side of a building to stand near a crate is not what a player does.
+    private Vector3 Reachable(Vector3 wanted)
+    {
+        EnsureField();
+        return _navField!.NearestOpen(wanted, 4.0f);
+    }
+
+    private void EnsureField()
+    {
         if (_navField == null)
         {
             _navField = new FlowField(Vector2.Zero, _horde.ArenaExtent, 1.5f);
@@ -620,30 +748,6 @@ public partial class AutoPlay : SceneTree
             }
         }
 
-        if (target.DistanceSquaredTo(_navTarget) > 0.01f)
-        {
-            _navTarget = target;
-            _navField.Rebuild(target);
-        }
-
-        // Out of a wall first, if that is where the bot is standing.
-        //
-        // "Straight on is the honest fallback" was wrong, and specifically wrong
-        // in the one case it was written for. Inside an inflated footprint the
-        // target is usually on the *other side* of the thing being stood against,
-        // so the straight line points into it — the bot leaned on the south face
-        // of an eight-metre wall for sixty seconds, seven and a half metres from
-        // the extraction pad, while the sweep recorded the run as having no result
-        // at all. `EscapeFrom` is the field's answer to "which way is out".
-        Vector2 escape = _navField.EscapeFrom(_player.GlobalPosition);
-        if (escape != Vector2.Zero)
-            return escape;
-
-        Vector2 flow = _navField.Sample(_player.GlobalPosition);
-
-        // Zero here now means a genuinely unreachable target rather than a body
-        // in a margin, and straight on is the honest answer to that.
-        return flow == Vector2.Zero ? straight : flow;
     }
 
     private FlowField? _navField;

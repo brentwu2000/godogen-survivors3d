@@ -308,6 +308,102 @@ public sealed class FlowField
         return -1;
     }
 
+    /// The nearest walkable point to somewhere that may not be, or the position
+    /// itself if it already is.
+    ///
+    /// **A destination inside an inflated footprint has no route to it at all.**
+    /// `Rebuild` seeds its search from the target's cell, so a target the margin
+    /// has swallowed starts the flood from a blocked cell and the field comes back
+    /// with nothing usable — every cell unreachable, and the caller left holding a
+    /// direction that means nothing.
+    ///
+    /// That is not a hypothetical. One of the twelve layouts the balance sweep
+    /// runs on put a crate 5.6 m from where the bot gave up, with the crate's own
+    /// cell inside a margin: the run came back `Stuck` in **every arm, every
+    /// weapon and every loadout**, so every median that file has ever printed was
+    /// computed over eleven layouts and nothing said so.
+    ///
+    /// The margin is the point rather than the bug — it is 0.55 m of body radius
+    /// so the route is one a body can walk — and a thing standing against cover is
+    /// an ordinary thing for a generator to place. So the answer is not a thinner
+    /// margin, which would put the bot back on the corners it was widened to
+    /// clear; it is to walk to the closest place that *is* walkable and let the
+    /// crate's own 1.8 m reach cover the rest.
+    ///
+    /// A ring search outward, so the first hit is the nearest. Returns the
+    /// original position when nothing within `maxRadius` is open, because a caller
+    /// with no walkable ground anywhere near its target has a generator problem
+    /// and should say so rather than silently walk somewhere else.
+    public Vector3 NearestOpen(Vector3 position, float maxRadius)
+    {
+        if (!_blocked[CellOf(position)])
+            return position;
+
+        int rings = Mathf.Max(1, Mathf.CeilToInt(maxRadius / _cellSize));
+        int cx = ClampX(Mathf.FloorToInt((position.X - _origin.X) / _cellSize));
+        int cz = ClampZ(Mathf.FloorToInt((position.Z - _origin.Y) / _cellSize));
+
+        for (int r = 1; r <= rings; r++)
+        {
+            float best = float.MaxValue;
+            Vector3 found = position;
+
+            for (int dz = -r; dz <= r; dz++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    // The ring only, not the filled square — the inside was
+                    // covered by a smaller r and re-checking it would return a
+                    // cell further away than one already rejected.
+                    if (Mathf.Abs(dx) != r && Mathf.Abs(dz) != r)
+                        continue;
+
+                    int x = cx + dx, z = cz + dz;
+                    if (x < 0 || x >= _width || z < 0 || z >= _depth)
+                        continue;
+
+                    if (_blocked[z * _width + x])
+                        continue;
+
+                    // The point in this cell closest to what was wanted, not the
+                    // cell's centre.
+                    //
+                    // A centre is up to a cell's diagonal further away, and at
+                    // 1.5 m cells that is the whole margin between a crate's
+                    // 1.8 m reach and standing outside it. The bot stopped
+                    // getting stuck and started standing 2 m from a crate it
+                    // could not search, for a hundred seconds, until something
+                    // killed it — which is the same run failing one step later.
+                    //
+                    // Inset by a tenth of a cell so the answer is inside the open
+                    // cell rather than on the boundary it shares with the blocked
+                    // one.
+                    float inset = _cellSize * 0.1f;
+                    float minX = _origin.X + x * _cellSize + inset;
+                    float maxX = _origin.X + (x + 1) * _cellSize - inset;
+                    float minZ = _origin.Y + z * _cellSize + inset;
+                    float maxZ = _origin.Y + (z + 1) * _cellSize - inset;
+
+                    var at = new Vector3(
+                        Mathf.Clamp(position.X, minX, maxX), position.Y,
+                        Mathf.Clamp(position.Z, minZ, maxZ));
+
+                    float distance = at.DistanceSquaredTo(position);
+                    if (distance < best)
+                    {
+                        best = distance;
+                        found = at;
+                    }
+                }
+            }
+
+            if (best < float.MaxValue)
+                return found;
+        }
+
+        return position;
+    }
+
     private int CellOf(Vector3 position)
     {
         int x = ClampX(Mathf.FloorToInt((position.X - _origin.X) / _cellSize));
