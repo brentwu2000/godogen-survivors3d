@@ -270,6 +270,77 @@ public partial class BuildGear : SceneTree
                 FortuneUpgradeCap = 0,
             },
 
+            // --- Tier 3, and the reason it is the backpack ------------------
+            //
+            // Five growth lines, and until now the body could only express
+            // three of them: Ward from the armour and the boots, Scavenging
+            // from the backpack and the boots, Gunnery from the bandolier.
+            // **Ordnance and Retinue were reachable through one trinket each**,
+            // so a player who wanted to commit to either before a run had
+            // exactly one piece to do it with, while a player who wanted Ward
+            // had five and could wear three at once. Two of the five lines the
+            // map is built to argue with could only be fallen into.
+            //
+            // Every one of those mappings is honest on its own — armour is
+            // about staying alive and that is Ward — so the asymmetry is not
+            // fixed by relabelling a boot. It is fixed by the slot that is
+            // literally the question "what are you carrying instead of loot",
+            // where "charges" and "the things that fight for you" are two
+            // obvious answers nobody had written down.
+            //
+            // Both pay in bulk, which is the backpack's best stat and therefore
+            // what a rule in this slot costs — the same rule the tier-2 pair
+            // already lives by. Against the Trekking Pack's +8 they are −6 and
+            // −4, so a tier-3 backpack is a decision to stop carrying the run's
+            // supply line, and the Warden's fourteen bulk makes it a different
+            // decision from the Courier's twenty-eight.
+            new()
+            {
+                GearName = "Demolition Rig",
+
+                // A rack of charges rather than a bag. Ordnance is the line that
+                // wants a crowd standing in front of it, and this is what makes
+                // every blast, patch, pulse and chill radius wider before the
+                // first card is dealt.
+                Favours = GrowthLine.Ordnance,
+                FavourStrength = 1.2f,
+                Slot = GearSlot.Backpack,
+                Tier = 3,
+                Price = 1600,
+                CarryBonus = -6,
+                AreaBonus = 0.30f,
+                ShockwaveBonus = 1,
+                AreaUpgradeCap = 6,
+                ShockwaveUpgradeCap = 6,
+                FortuneUpgradeCap = 2,
+            },
+
+            new()
+            {
+                GearName = "Blade Harness",
+
+                // Two blades already turning on a frame, and a current between
+                // them. Retinue is the line whose things fight without you, and
+                // this is the only way to start a run already holding some.
+                //
+                // Its cost is a second one on purpose. Six fewer bulk would have
+                // made it the Demolition Rig with different numbers; the weight
+                // that a spinning frame puts on a walk is what makes the two a
+                // choice rather than a pair of prices.
+                Favours = GrowthLine.Retinue,
+                FavourStrength = 1.2f,
+                Slot = GearSlot.Backpack,
+                Tier = 3,
+                Price = 1500,
+                CarryBonus = -4,
+                MoveSpeedBonus = -0.40f,
+                OrbitBonus = 2,
+                ChainBonus = 0.15f,
+                OrbitUpgradeCap = 8,
+                ChainUpgradeCap = 6,
+                FortuneUpgradeCap = 2,
+            },
+
             // --- Boots: outrun it, or refuse to move -------------------------
 
             new()

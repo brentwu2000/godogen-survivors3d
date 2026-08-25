@@ -92,45 +92,107 @@ public partial class LoadoutProbe : SceneTree
     /// can touch. If one of them is at least as good everywhere, the slot has a
     /// correct answer and the choice is decoration — so the assertion is that
     /// each piece wins somewhere and loses somewhere.
+    /// Nothing a player can buy is a strictly better version of what it stands
+    /// next to on the shelf.
+    ///
+    /// **Read from the directory, and compared within a slot *and* a tier.** This
+    /// held three pairs by hand — `plate_carrier` against `stitched_vest` and two
+    /// more — which is the rule this project keeps relearning: a hand-written list
+    /// of a growing thing's members goes stale in the direction that hides the
+    /// bug. It went untouched when the trinket slot arrived with six pieces in it,
+    /// and it would have gone untouched again for the tier-3 backpacks.
+    ///
+    /// Within a tier as well as a slot, because a tier *is* allowed to be better:
+    /// it costs more and it is gated behind ten extractions. What is not allowed
+    /// is two pieces on the same shelf at the same price where one of them is the
+    /// answer.
     private bool StageNoSlotHasABestPiece()
     {
-        (string A, string B)[] pairs =
+        using var directory = DirAccess.Open("res://resources/gear");
+        if (directory == null)
         {
-            ("plate_carrier", "stitched_vest"),
-            ("trekking_pack", "bandolier"),
-            ("running_shoes", "tread_boots"),
-        };
+            GD.PushError("  cannot open res://resources/gear");
+            return false;
+        }
+
+        var table = new System.Collections.Generic.List<GearResource>();
+
+        foreach (string file in directory.GetFiles())
+        {
+            // Godot hands exported resources back as `.tres.remap`.
+            if (!file.EndsWith(".tres") && !file.EndsWith(".tres.remap"))
+                continue;
+
+            var one = GD.Load<GearResource>(
+                $"res://resources/gear/{file.Replace(".remap", "")}");
+
+            if (one != null)
+                table.Add(one);
+        }
 
         bool ok = true;
+        int compared = 0, shelves = 0;
+        var seenShelf = new System.Collections.Generic.List<string>();
 
-        foreach ((string a, string b) in pairs)
+        for (int i = 0; i < table.Count; i++)
         {
-            GearResource? left = Load(a);
-            GearResource? right = Load(b);
-            if (left == null || right == null)
+            for (int j = i + 1; j < table.Count; j++)
             {
-                ok = false;
-                continue;
-            }
+                GearResource a = table[i], b = table[j];
+                if (a.Slot != b.Slot || a.Tier != b.Tier)
+                    continue;
 
-            float[] mine = Axes(left);
-            float[] theirs = Axes(right);
+                // Tier 1 is the starting kit and grants nothing at all, which is
+                // its own stage. Two pieces of nothing tie on every axis, which
+                // this check passes anyway — counted out so the printed total is
+                // the number of real comparisons.
+                if (a.Tier <= 1)
+                    continue;
 
-            bool leftWinsSomewhere = false, rightWinsSomewhere = false;
-            for (int i = 0; i < mine.Length; i++)
-            {
-                leftWinsSomewhere |= mine[i] > theirs[i];
-                rightWinsSomewhere |= theirs[i] > mine[i];
-            }
+                string shelf = $"{a.Slot}/{a.Tier}";
+                if (!seenShelf.Contains(shelf))
+                {
+                    seenShelf.Add(shelf);
+                    shelves++;
+                }
 
-            if (!leftWinsSomewhere || !rightWinsSomewhere)
-            {
-                GD.PushError($"  {a} vs {b}: one of them is at least as good everywhere");
-                ok = false;
+                compared++;
+
+                float[] mine = Axes(a);
+                float[] theirs = Axes(b);
+
+                bool aWins = false, bWins = false;
+                for (int axis = 0; axis < mine.Length; axis++)
+                {
+                    aWins |= mine[axis] > theirs[axis];
+                    bWins |= theirs[axis] > mine[axis];
+                }
+
+                if (aWins && !bWins)
+                {
+                    GD.PushError($"  {b.GearName} is beaten by {a.GearName} on every axis and "
+                               + "better on none — a tier, not a choice");
+                    ok = false;
+                }
+                else if (bWins && !aWins)
+                {
+                    GD.PushError($"  {a.GearName} is beaten by {b.GearName} on every axis and "
+                               + "better on none — a tier, not a choice");
+                    ok = false;
+                }
             }
         }
 
-        GD.Print($"  {pairs.Length} slots, each a trade rather than a tier");
+        // A directory read that found nothing passes every assertion above it,
+        // which is the failure mode this whole rewrite is meant to remove.
+        if (compared == 0)
+        {
+            GD.PushError($"  {table.Count} pieces loaded and not one pair to compare");
+            return false;
+        }
+
+        GD.Print($"  {table.Count} pieces, {shelves} shelves, {compared} same-shelf pairs, "
+               + "each a trade rather than a tier");
         return ok;
     }
 
@@ -146,6 +208,15 @@ public partial class LoadoutProbe : SceneTree
         Mathf.Max(0, g.AreaUpgradeCap), Mathf.Max(0, g.ThornsUpgradeCap),
         Mathf.Max(0, g.RegenUpgradeCap), Mathf.Max(0, g.KnockbackUpgradeCap),
         Mathf.Max(0, g.DodgeUpgradeCap), Mathf.Max(0, g.FortuneUpgradeCap),
+
+        // The kit fields, which were missing and had to be: the six trinkets
+        // differ on almost nothing else, so without these every one of them
+        // looked identical to this check and the whole slot would have compared
+        // as a shelf of ties. It passed only because the slot was never on the
+        // hand-written pair list.
+        g.OrbitBonus, g.ShockwaveBonus, g.ChainBonus, g.ChillBonus,
+        Mathf.Max(0, g.OrbitUpgradeCap), Mathf.Max(0, g.ShockwaveUpgradeCap),
+        Mathf.Max(0, g.ChainUpgradeCap), Mathf.Max(0, g.ChillUpgradeCap),
     };
 
     /// A granted rule that only exists after the first upgrade is a piece of

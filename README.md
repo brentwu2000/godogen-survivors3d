@@ -251,6 +251,24 @@ neighbour is best at:
 | backpack | **Trekking Pack** carries loot: +8 bulk, +2 safe box, fortune to 5 | **Bandolier** carries ammunition: +1 pierce, pierce to 5, crit to 6, **fortune 0** |
 | boots | **Running Shoes** leave: +0.6 speed, speed ceiling 5 | **Tread Boots** stay: regen, knockback, +20% area, **speed ceiling 1** |
 
+**Tier 3 is one shelf and it is the backpack**, because that slot is literally the question *what are
+you carrying instead of loot*, and "charges" and "the things that fight for you" are the two answers
+the body had no way to give:
+
+| Slot | | |
+| :--- | :--- | :--- |
+| backpack | **Demolition Rig** carries charges: +30% area, a shockwave already turning, **−6 bulk** | **Blade Harness** carries a retinue: +2 blades, +15% chain, **−4 bulk and −0.4 speed** |
+
+Both pay in bulk, because bulk is what this slot is best at and a rule costs what the slot is best at.
+That is the same rule the tier-2 pair lives by, against a Trekking Pack that grants *+8* of it — so a
+tier-3 backpack is a decision to stop carrying the run's supply line, and it means something different
+to the Warden's fourteen bulk than to the Courier's twenty-eight.
+
+**Every growth line can now be committed to before a run**, which is what makes a leaning map an
+argument rather than a verdict. Ward has five pieces and everything else two or three; the backpack
+holds four of the five lines and lets you wear one, which makes it the largest single decision on the
+screen.
+
 Gear grants its rules *before the first level-up*, not as a bonus applied later —
 a piece that appears to do nothing for the first ninety seconds is a piece the
 player judges on those ninety seconds. It also sets the ceiling on the options it

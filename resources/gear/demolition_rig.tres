@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_ax4u4"]
+
+[resource]
+script = ExtResource("1_ax4u4")
+GearName = "Demolition Rig"
+Slot = 1
+Tier = 3
+Price = 1600
+CarryBonus = -6
+AreaBonus = 0.3
+ShockwaveBonus = 1
+Favours = 2
+FavourStrength = 1.2
+ShockwaveUpgradeCap = 6
+AreaUpgradeCap = 6
+FortuneUpgradeCap = 2

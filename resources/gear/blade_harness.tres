@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="GearResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/GearResource.cs" id="1_2chaa"]
+
+[resource]
+script = ExtResource("1_2chaa")
+GearName = "Blade Harness"
+Slot = 1
+Tier = 3
+Price = 1500
+MoveSpeedBonus = -0.4
+CarryBonus = -4
+OrbitBonus = 2
+ChainBonus = 0.15
+Favours = 4
+FavourStrength = 1.2
+OrbitUpgradeCap = 8
+ChainUpgradeCap = 6
+FortuneUpgradeCap = 2

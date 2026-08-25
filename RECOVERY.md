@@ -905,6 +905,50 @@ firearms scarcer is `MaxReserve`, which the owner asked to have removed and whic
 other is giving melee something it does not have. That is a design question rather than a number, and
 it should be asked with the gap measured rather than guessed at.
 
+### ✅ H4f — Two lines that could only be fallen into
+
+H4a recorded the asymmetry and refused to fix it by relabelling a boot. This is the honest version:
+**Ordnance and Retinue are reachable from a body slot now**, through a tier-3 pair in the one slot
+that is literally the question *what are you carrying instead of loot*.
+
+| Line | Body | Trinket | Most at once |
+| :--- | :--- | ---: | ---: |
+| Ward | armour ×2, boots | 2 | 3 |
+| Scavenging | backpack, boots | 1 | 3 |
+| Gunnery | backpack | 1 | 2 |
+| **Ordnance** | **backpack (new)** | 1 | **2** |
+| **Retinue** | **backpack (new)** | 1 | **2** |
+
+**The Demolition Rig** is a rack of charges: every blast, patch, pulse and chill radius 30% wider and
+a shockwave already turning, for six fewer bulk. **The Blade Harness** is two blades on a frame with a
+current between them, for four fewer bulk *and* four tenths of a metre a second.
+
+The second cost is deliberate. Six fewer bulk would have made the harness the rig with different
+numbers; the weight a spinning frame puts on a walk is what makes the two a choice rather than a pair
+of prices. Both pay in **bulk**, because bulk is the backpack's best stat and that is what a rule in
+this slot costs — the same rule the tier-2 pair already lives by, against a Trekking Pack that grants
+*+8*.
+
+**The backpack now holds four of the five lines and lets you wear one.** That is the biggest single
+decision in the loadout, and it lands on the slot where the Warden's fourteen bulk and the Courier's
+twenty-eight already mean different things.
+
+##### The probe that guarded this had never seen a trinket
+
+`LoadoutProbe`'s first stage named three pairs by hand — the same shape as `LoadoutProbe`'s own lesson
+about hand-written lists, and the same one `WeaponProbe` and `TraitProbe` were caught by earlier
+today. **The trinket slot arrived with six pieces and the stage never noticed**, so ten pairs on one
+shelf had gone unchecked for as long as they had existed, and the tier-3 backpacks would have gone the
+same way.
+
+It reads the directory now and compares within a slot *and* a tier — a tier is allowed to be better,
+because it costs more and is gated behind ten extractions; what is not allowed is two pieces on the
+same shelf at the same price where one of them is the answer. 17 pieces, 5 shelves, 14 pairs.
+
+And `Axes` was missing every kit field. The six trinkets differ on almost nothing else, so each of
+them looked identical to this check — the slot would have compared as a shelf of ties even once it was
+being read. It passed for the life of the trinket slot by never being asked.
+
 ### H4 — Still open
 
 - **Melee banks about two thirds of what a rifle does and it is not the driver's fault.** H4e prices
@@ -912,9 +956,9 @@ it should be asked with the gap measured rather than guessed at.
   measured; what to do about it is not decided. Two of the four weapons behind the rifles *are*
   driver artefacts — it never kites, so the Marksman Rifle's range is worth nothing to it — and the
   scythe is not one of them.
-- **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See
-  H4a. The honest fix is more gear rather than different labels, and it is now priceable: the weapon
-  arm exists, so a new piece can be measured rather than argued about.
+- **Ward is still the widest line**, at five pieces against everyone else's two or three, and that is
+  left alone. It is the only line every slot has a natural claim on, and evening it out would mean
+  giving armour or boots a lean they do not have.
 - **The assessment recommends using `MaxReserve` for ammunition scarcity.** The owner asked for that
   cap removed, so it stays removed. The tension is real and is recorded rather than resolved.
 
