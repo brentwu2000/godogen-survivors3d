@@ -6,12 +6,12 @@
 script = ExtResource("1_cawff")
 WeaponName = "Fire Axe"
 Category = 1
-BaseDamage = 16.0
-BaseAttackSpeed = 1.1
+BaseDamage = 26.0
+BaseAttackSpeed = 0.85
 BaseRange = 3.0
-SwingArcDegrees = 100.0
+SwingArcDegrees = 70.0
 MagazineSize = 0
-Knockback = 0.55
+Knockback = 0.95
 Trait = 4
-TraitAmount = 0.5
+TraitAmount = 0.25
 Price = 250

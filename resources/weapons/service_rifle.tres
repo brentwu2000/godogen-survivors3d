@@ -5,14 +5,13 @@
 [resource]
 script = ExtResource("1_y2s3g")
 WeaponName = "Service Rifle"
-BaseDamage = 15.0
+BaseDamage = 11.0
 BaseAttackSpeed = 7.0
-BaseRange = 20.0
-BaseSpreadDegrees = 6.0
+BaseRange = 16.0
+BaseSpreadDegrees = 9.0
 BaseReloadTime = 1.8
 MagazineSize = 40
 StartingReserve = 320
-Penetration = 2
 Knockback = 0.1
 Trait = 1
 TraitAmount = 0.07

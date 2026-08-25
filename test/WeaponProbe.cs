@@ -76,6 +76,7 @@ public partial class WeaponProbe : SceneTree
             case 0: return RunStage(StageFirearm, "firearm penetration");
             case 1: return RunStage(StageMelee, "melee arc");
             case 2: return RunStage(StageBow, "bow projectile");
+            case 3: return RunStage(StageNothingDominates, "no weapon beats a sibling everywhere");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -95,6 +96,169 @@ public partial class WeaponProbe : SceneTree
         _stageTick = 0;
         return false;
     }
+
+    /// Nothing in a category is a strictly better version of a sibling.
+    ///
+    /// The gear table has lived by this rule since the loadout rework — the piece
+    /// that grants a rule pays for it in the stat its neighbour is best at, and
+    /// `LoadoutProbe` has a stage that says so. **The weapon table never had one.**
+    /// A shop where one weapon per category is simply correct makes every other row
+    /// a step on the way to it, and then the deck's five lines, the biome that
+    /// refuses a build and the survivor chosen before the loadout are all arguing
+    /// about a decision the player already settled in the armoury.
+    ///
+    /// Within a category only. A knife's 1.6 m against a rifle's 20 is not a
+    /// comparison.
+    ///
+    /// **A magazine of zero is not a small magazine.** It means the weapon never
+    /// reloads and can never run dry, which is the strongest thing that can be said
+    /// about ammunition — compared as a number it reads as the worst, and the bow
+    /// and all three melee weapons would be scored as though their defining
+    /// advantage were a defect. Reload time goes the same way: a knife's default
+    /// 2.0 s is a field nothing ever reads.
+    ///
+    /// Read from the directory rather than from a list of pairs. `LoadoutProbe`'s
+    /// version names its three by hand, which is the rule this project keeps
+    /// relearning: a hand-written list of a growing thing's members goes stale in
+    /// the direction that hides the bug.
+    private bool? StageNothingDominates(int tick)
+    {
+        using var directory = DirAccess.Open("res://resources/weapons");
+        if (directory == null)
+        {
+            GD.PushError("  cannot open res://resources/weapons");
+            return false;
+        }
+
+        var table = new System.Collections.Generic.List<WeaponResource>();
+
+        foreach (string file in directory.GetFiles())
+        {
+            // Godot hands exported resources back as `.tres.remap`, so the
+            // extension is trimmed rather than matched.
+            if (!file.EndsWith(".tres") && !file.EndsWith(".tres.remap"))
+                continue;
+
+            var one = GD.Load<WeaponResource>(
+                $"res://resources/weapons/{file.Replace(".remap", "")}");
+
+            if (one != null)
+                table.Add(one);
+        }
+
+        if (table.Count < 2)
+        {
+            GD.PushError($"  {table.Count} weapons loaded — nothing to compare");
+            return false;
+        }
+
+        bool ok = true;
+        int pairs = 0;
+
+        for (int i = 0; i < table.Count; i++)
+        {
+            for (int j = i + 1; j < table.Count; j++)
+            {
+                WeaponResource a = table[i], b = table[j];
+                if (a.Category != b.Category)
+                    continue;
+
+                pairs++;
+
+                (float[] mine, float[] theirs) = Axes(a, b);
+
+                bool aWins = false, bWins = false;
+                for (int axis = 0; axis < mine.Length; axis++)
+                {
+                    aWins |= mine[axis] > theirs[axis];
+                    bWins |= theirs[axis] > mine[axis];
+                }
+
+                if (aWins && !bWins)
+                {
+                    GD.PushError($"  {b.WeaponName} is beaten by {a.WeaponName} on every "
+                               + "axis and better on none — a tier, not a choice");
+                    ok = false;
+                }
+                else if (bWins && !aWins)
+                {
+                    GD.PushError($"  {a.WeaponName} is beaten by {b.WeaponName} on every "
+                               + "axis and better on none — a tier, not a choice");
+                    ok = false;
+                }
+            }
+        }
+
+        GD.Print($"  {table.Count} weapons, {pairs} same-category pairs, each a trade");
+        return ok;
+    }
+
+    /// The two weapons as comparable numbers, higher being better.
+    ///
+    /// Taken as a pair rather than one at a time because two of the axes only
+    /// exist when both sides have them: a ricochet count of 1 against a blast
+    /// radius of 4 is two different weapons, not a worse one and a better one, and
+    /// scoring them against each other would let anything carrying a large trait
+    /// number appear to win an axis it does not share.
+    private static (float[] Mine, float[] Theirs) Axes(WeaponResource a, WeaponResource b)
+    {
+        bool sameTrait = a.Trait == b.Trait;
+        (float amountSign, float countSign) = TraitSigns(a.Trait);
+
+        static float Magazine(WeaponResource w) =>
+            w.MagazineSize == 0 ? float.PositiveInfinity : w.MagazineSize;
+
+        static float Reserve(WeaponResource w) =>
+            w.MagazineSize == 0 ? float.PositiveInfinity : w.StartingReserve;
+
+        static float Reload(WeaponResource w) =>
+            w.MagazineSize == 0 ? 0.0f : w.BaseReloadTime;
+
+        float[] Score(WeaponResource w) => new[]
+        {
+            w.BaseDamage,
+            w.BaseAttackSpeed,
+            w.BaseRange,
+            w.Penetration,
+            w.Knockback,
+            w.SwingArcDegrees,
+            Magazine(w),
+            Reserve(w),
+
+            // Where less is better.
+            -w.BaseSpreadDegrees,
+            -Reload(w),
+
+            // What the shop is really selling on the long curves: where the
+            // weapon starts and how far it can climb.
+            w.MaxLevel,
+            w.TierStartBonus,
+
+            sameTrait ? amountSign * w.TraitAmount : 0.0f,
+            sameTrait ? countSign * w.TraitCount : 0.0f,
+        };
+
+        return (Score(a), Score(b));
+    }
+
+    /// Which way each trait's two numbers point.
+    ///
+    /// `TraitAmount` and `TraitCount` mean something different for every trait,
+    /// and for two of them more is worse. A burst's amount is the gap between its
+    /// extra shots, so a tighter burst is a *smaller* number; a charge's count is
+    /// how many seconds the weapon must sit idle before the multiplier is ready.
+    ///
+    /// **This is what stopped the first version of this stage finding the thing it
+    /// was written to find.** Scored as plain magnitudes, the Service Rifle's
+    /// 0.07-second burst read as a loss against the Scavenged Rifle's 0.09 — one
+    /// axis, pointing the wrong way, and a weapon that beats the starting kit on
+    /// every one of the other thirteen came back as a fair trade.
+    private static (float Amount, float Count) TraitSigns(WeaponTrait trait) => trait switch
+    {
+        WeaponTrait.Burst => (-1.0f, +1.0f),
+        WeaponTrait.Charge => (+1.0f, -1.0f),
+        _ => (+1.0f, +1.0f),
+    };
 
     /// Pure data checks — no simulation needed, so a wrong curve is reported as a
     /// curve problem rather than as a mysterious combat result later.

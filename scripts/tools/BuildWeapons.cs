@@ -70,22 +70,43 @@ public partial class BuildWeapons : SceneTree
                 Knockback = 0.05f,
             },
 
-            // Long melee: wide sweep, slow, knocks the front rank back — the
-            // answer to being surrounded rather than to a single target.
+            // Long melee: one heavy chop that shoves what it hits.
+            //
+            // It used to be "a wide sweep, slow, the answer to being surrounded",
+            // which is the Reaper Scythe's job and the scythe did it better on
+            // every number there is — more damage, faster, longer, a 160-degree
+            // arc against 100, more knockback, twice the ceiling and half again
+            // the cleave. Eight axes to nothing. A tier-1 weapon that a tier-2
+            // weapon strictly replaces is not a cheap option, it is the part of
+            // the game before the player has the real one.
+            //
+            // So the two melee weapons answer opposite questions now. The scythe
+            // is the crowd: a wide arc and three quarters of its damage carrying
+            // through to whatever stands behind. The axe is the *single heavy
+            // thing* — the most damage per swing of any melee weapon and the
+            // hardest shove in the game — which is the brute, the bulwark and
+            // anything the player needs to get out of a doorway. Its cleave drops
+            // to a quarter because a chop is not a sweep, and its arc to 70
+            // degrees for the same reason.
+            //
+            // Slower than the scythe on purpose. 26 x 0.85 is 22 a second against
+            // the scythe's 28.6, so the axe loses the damage race outright and
+            // wins every exchange it picks — which is the trade, and it is
+            // available for 250 credits on the first run.
             new()
             {
                 WeaponName = "Fire Axe",
                 Trait = WeaponTrait.Cleave,
-                TraitAmount = 0.5f,
+                TraitAmount = 0.25f,
                 TraitCount = 0,
                 Category = WeaponCategory.MeleeLong,
                 Price = 250,
-                BaseDamage = 16.0f,
-                BaseAttackSpeed = 1.1f,
+                BaseDamage = 26.0f,
+                BaseAttackSpeed = 0.85f,
                 BaseRange = 3.0f,
-                SwingArcDegrees = 100.0f,
+                SwingArcDegrees = 70.0f,
                 MagazineSize = 0,
-                Knockback = 0.55f,
+                Knockback = 0.95f,
             },
 
             // Bow: travel time and a pierce, so lining shots up along a lane
@@ -136,6 +157,41 @@ public partial class BuildWeapons : SceneTree
             // Tier 2. What credits buy is not a bigger number but a longer
             // curve: a ceiling of 16 against the scavenged rifle's 8, which also
             // means twice as much of the player's practice finally counts.
+            //
+            // **That sentence was written first and the numbers did not follow
+            // it.** This weapon shipped ahead of the scavenged rifle on damage,
+            // rate, range, spread, reload, magazine, reserve, penetration,
+            // knockback, burst tightness, burst count, ceiling and starting
+            // bonus — thirteen for thirteen, for 1400 credits and no trade at
+            // all. Every other decision the game asks about a build is made
+            // downstream of the armoury, so one weapon that is simply correct
+            // makes the deck's five lines, the biome that refuses a build and
+            // the survivor chosen before the loadout all arguments about a
+            // question already settled.
+            //
+            // It is the weapon that **never stops**: the largest magazine and
+            // reserve in the game, the fastest reload, the tightest burst. It
+            // pays for that in the two things the starting rifle keeps — a
+            // heavier round and a longer reach — and in penetration, which
+            // belongs to the marksman rifle and the bow and is on sale from the
+            // bandolier for anyone who wants it here.
+            //
+            // Two costs, not three. The first attempt also opened the cone to 10
+            // degrees, which at the six metres a target is usually engaged from
+            // is a metre of lateral error against a 0.7 m body — about a third of
+            // its shots on the floor, on top of a lighter round and a shorter
+            // reach. That is not a trade, it is a downgrade with a bigger
+            // magazine, and it showed up as the rifle firing for the whole of a
+            // measurement window because its target kept surviving. The cone sits
+            // level with the starting rifle's 9 degrees: this weapon is not more
+            // accurate, and it is not less.
+            //
+            // Effective damage, magazine and reload together: 40 rounds at 7/s
+            // is 5.7 s of fire against 1.8 s of reload, so 76% of the time is
+            // spent shooting where the scavenged rifle manages 69%. 11 x 7.0 x
+            // 0.76 is 58.5 against 12 x 6.0 x 0.69 = 50. Seventeen per cent more
+            // damage over a minute, from a weapon that is worse in every single
+            // exchange. That is what uptime is worth and it is the whole pitch.
             new()
             {
                 WeaponName = "Service Rifle",
@@ -147,14 +203,14 @@ public partial class BuildWeapons : SceneTree
                 Price = 1400,
                 MaxLevel = 16,
                 TierStartBonus = 2,
-                BaseDamage = 15.0f,
+                BaseDamage = 11.0f,
                 BaseAttackSpeed = 7.0f,
-                BaseRange = 20.0f,
-                BaseSpreadDegrees = 6.0f,
+                BaseRange = 16.0f,
+                BaseSpreadDegrees = 9.0f,
                 BaseReloadTime = 1.8f,
                 MagazineSize = 40,
                 StartingReserve = 320,
-                Penetration = 2,
+                Penetration = 1,
                 Knockback = 0.1f,
             },
 

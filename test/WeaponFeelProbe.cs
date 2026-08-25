@@ -46,7 +46,20 @@ public partial class WeaponFeelProbe : SceneTree
     /// `ShotScale` of zero means nothing crossed the screen at all — every melee
     /// weapon, and itself a signature.
     private readonly record struct Print(string Name, int Puffs, float Size, float Kick,
-                                         Color ShotTint, float ShotScale);
+                                         Color ShotTint, float ShotScale, int Shots)
+    {
+        /// Emissions per round, which is what "a shotgun fans" is a claim about.
+        ///
+        /// The raw total is per *window*, and a window is forty ticks of firing at
+        /// whatever rate the weapon manages against a target that may or may not
+        /// still be alive — so it reads an automatic's rate of fire and a
+        /// shotgun's fan as the same kind of number. It also made the reading
+        /// depend on accuracy: opening the Service Rifle's cone during H4b made it
+        /// miss more, its target survived the whole window instead of dying to the
+        /// first shot, and its emission total went from 6 to 9 without one thing
+        /// about its muzzle effect changing.
+        public float PerShot => Shots > 0 ? Puffs / (float)Shots : 0.0f;
+    }
 
     private readonly System.Collections.Generic.List<Print> _prints = new();
     private string[] _paths = System.Array.Empty<string>();
@@ -90,6 +103,11 @@ public partial class WeaponFeelProbe : SceneTree
             }
 
             scene.GetNodeOrNull<RunDirector>("RunDirector")?.SetPhysicsProcess(false);
+
+            // Counted at the source rather than inferred from ammo: three of the
+            // nine weapons have no magazine at all, so an ammo delta is zero for
+            // a knife that swung forty times.
+            _weapons.Fired += (_, _, _) => _shotsFired++;
 
             // Read the directory rather than listing names here. A weapon added
             // to the game and not to this array is exactly the weapon nobody has
@@ -171,6 +189,7 @@ public partial class WeaponFeelProbe : SceneTree
                                        CameraRig.Forward(_rig.Yaw).Y) * away, 0);
 
             _effects!.Effects.ForgetTotals();
+            _shotsFired = 0;
             _peakShake = 0.0f;
             _shotTint = default;
             _shotScale = 0.0f;
@@ -193,13 +212,14 @@ public partial class WeaponFeelProbe : SceneTree
         float kick = _peakShake;
 
         _prints.Add(new Print(weaponName, pool.TotalSpawned, pool.TotalStartSize, kick,
-                              _shotTint, _shotScale));
+                              _shotTint, _shotScale, _shotsFired));
 
         string shot = _shotScale <= 0.0f
             ? "nothing in flight"
             : $"{_shotScale:F2}x ({_shotTint.R:F2},{_shotTint.G:F2},{_shotTint.B:F2})";
 
-        GD.Print($"  {weaponName,-16} {pool.TotalSpawned,3} puffs, "
+        GD.Print($"  {weaponName,-16} {pool.TotalSpawned,3} puffs over {_shotsFired,2} shots "
+               + $"({(_shotsFired > 0 ? pool.TotalSpawned / (float)_shotsFired : 0.0f),4:F1}/shot), "
                + $"{pool.TotalStartSize,6:F2} size, kick {kick:F3}, shot {shot}");
 
         if (pool.TotalSpawned == 0)
@@ -211,6 +231,7 @@ public partial class WeaponFeelProbe : SceneTree
         return null;
     }
 
+    private int _shotsFired;
     private float _peakShake;
     private Color _shotTint;
     private float _shotScale;
@@ -293,9 +314,14 @@ public partial class WeaponFeelProbe : SceneTree
 
         // A fan of pellets is more emissions than a single report, and that is
         // what makes a shotgun read as a shotgun before the damage lands.
-        if (shotgun.Puffs <= rifle.Puffs)
+        //
+        // Per shot. Compared as window totals this asked whether a weapon firing
+        // 1.4 times a second emits more than one firing seven times a second, and
+        // the answer had nothing to do with either muzzle.
+        if (shotgun.PerShot <= rifle.PerShot)
         {
-            GD.PushError($"  the shotgun emits {shotgun.Puffs} against the rifle's {rifle.Puffs} — no fan");
+            GD.PushError($"  the shotgun emits {shotgun.PerShot:F1} per shot against the rifle's "
+                       + $"{rifle.PerShot:F1} — no fan");
             ok = false;
         }
 
@@ -327,7 +353,7 @@ public partial class WeaponFeelProbe : SceneTree
             ok = false;
         }
 
-        GD.Print($"  shotgun {shotgun.Puffs} puffs vs rifle {rifle.Puffs}; "
+        GD.Print($"  shotgun {shotgun.PerShot:F1} puffs/shot vs rifle {rifle.PerShot:F1}; "
                + $"bow kick {bow.Kick:F3} vs shotgun {shotgun.Kick:F3}; "
                + $"knife smear {knife.Size:F2} vs rifle flash {rifle.Size:F2}");
 

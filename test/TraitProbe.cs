@@ -469,17 +469,38 @@ public partial class TraitProbe : SceneTree
         }
 
         // Long enough for the queued shots to come out at their spacing.
-        if (tick < 40)
+        if (tick < 120)
             return null;
 
         int hits = _weapons!.HitsThisRun(WeaponCategory.Firearm);
         int spent = _ammoBefore - _weapons.Ammo;
 
-        GD.Print($"  one trigger pull on a {rifle.TraitCount}-round burst: {hits} hits, {spent} rounds spent");
+        GD.Print($"  {rifle.TraitCount} queued shots cost {spent} rounds, and {hits} landed on the "
+               + "wall (the initiating shot is free through ForceFire, not in the game)");
 
-        // The trait's cost is the ammo. A burst that fires extra shots for free
-        // is a damage buff with a sound effect.
-        return hits > rifle.TraitCount && spent >= rifle.TraitCount;
+        // The burst is the *rounds*, not the bodies.
+        //
+        // This used to require `hits > TraitCount`, and the Service Rifle
+        // satisfied it through **penetration** rather than through its burst: a
+        // pierce of 2 against a wall of brutes doubles every shot's hit count, so
+        // two queued rounds landed four hits and the stage read that as evidence
+        // of the trait. H4b moved the rifle's penetration to 1, the burst carried
+        // on working exactly as it always had, and the stage went red — it had
+        // never been measuring the thing it names.
+        //
+        // What the trait promises is that its extra shots are not free, so what is
+        // asserted is that the queue costs a round each and that every round it
+        // spends reaches the wall. Counted against `TraitCount` read from the
+        // resource rather than against a total written in here.
+        //
+        // The initiating shot is deliberately absent from `spent`: `ForceFire`
+        // documents itself as ignoring cooldown and ammo, because a probe that had
+        // to wait for a cooldown and for auto-targeting to agree with it would be
+        // measuring those instead. A real trigger pull goes through the ordinary
+        // path, which decrements — so the game spends `1 + TraitCount` and this
+        // stage can only see `TraitCount`. Worth knowing before reading the number
+        // as a missing round.
+        return spent >= rifle.TraitCount && hits >= spent;
     }
 
     private int _ammoBefore;

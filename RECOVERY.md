@@ -678,15 +678,73 @@ Recorded as the next thing rather than fixed by relabelling a piece. Making the 
 calling a boot Ordnance would trade a real asymmetry for a dishonest mapping, and the mapping is what
 makes the tilt legible to the player in the first place.
 
+### ✅ H4b — Two weapons that were a tier rather than a choice
+
+The gear table has lived by one rule since the loadout rework: the piece that grants a rule pays for
+it in the stat its neighbour is best at, and `LoadoutProbe` has a stage that says so. **The weapon
+table never had one.** Two of its nine rows were strictly better versions of a sibling.
+
+`WeaponProbe` gains the stage that says so here. It reads the directory rather than naming pairs by
+hand — `LoadoutProbe`'s version lists its three, which is the rule this project keeps relearning —
+compares within a category only, and fails any pair where one weapon is at least as good on every
+axis and better on at least one.
+
+**A magazine of zero is not a small magazine.** It means the weapon never reloads and can never run
+dry, which is the strongest thing that can be said about ammunition; compared as a number it reads as
+the worst, and the bow and all three melee weapons would have been scored as though their defining
+advantage were a defect.
+
+##### The Service Rifle beat the starting rifle thirteen for thirteen
+
+Damage, rate, range, spread, reload, magazine, reserve, penetration, knockback, burst tightness, burst
+count, ceiling and starting bonus. For 1400 credits, with nothing given up anywhere. Its own comment
+in `BuildWeapons` had said since the day it was written that *what credits buy is not a bigger number
+but a longer curve* — the design was recorded and the numbers had never agreed with it.
+
+It is the weapon that **never stops** now: the largest magazine and reserve in the game, the fastest
+reload, the tightest burst, and 11 damage at 16 m against the starting rifle's 12 at 18 through a
+tighter cone. 40 rounds at 7/s is 5.7 s of fire against 1.8 s of reload — 76% of the time shooting
+where the scavenged rifle manages 69% — so it deals 58.5 a second against 50 while losing every
+individual exchange. That is what uptime is worth and it is the whole pitch. Penetration goes back to
+the marksman rifle and the bow, and stays on sale from the bandolier for a build that wants it here.
+
+##### The Fire Axe was eight axes to nothing against the Reaper Scythe
+
+Both were "the wide sweep for being surrounded" and only one of them was any good at it: more damage,
+faster, longer, 160 degrees against 100, more knockback, twice the ceiling, half again the cleave. A
+tier-1 weapon that a tier-2 weapon strictly replaces is not a cheap option — it is the part of the
+game before the player has the real one.
+
+They answer opposite questions now. The scythe is the crowd. The axe is the **single heavy thing**:
+the most damage per swing of any melee weapon at 26 and the hardest shove in the game at 0.95, on a
+70-degree chop with a quarter cleave. It loses the damage race outright — 22 a second against 28.6 —
+and wins every exchange it picks, which is the brute, the bulwark, and whatever is standing in a
+doorway. Available for 250 credits on the first run.
+
+##### The stage missed the weapon it was written for, on one axis pointing the wrong way
+
+`TraitAmount` and `TraitCount` mean something different for every trait, and for two of them more is
+worse: a burst's amount is the *gap* between its extra shots, and a charge's count is how many seconds
+the weapon must sit idle before the multiplier is ready. Scored as plain magnitudes, the Service
+Rifle's 0.07-second burst read as a loss against the Scavenged Rifle's 0.09 — one axis out of
+fourteen, and a weapon ahead on the other thirteen came back as a fair trade. The stage found the Fire
+Axe on its first run and reported the table otherwise clean.
+
+**A shared pair of fields whose meaning is per-case needs a per-case direction too**, and the
+direction is the half nobody writes down.
+
 ### H4 — Still open
 
-- **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See above.
-  The honest fix is more gear rather than different labels, and it wants the dominant-build sweep to
+- **The balance table has never measured a weapon the player bought.** `AutoPlay` runs on a fresh
+  ephemeral profile, which means the starting kit, which means every balance number this project has
+  ever printed is about the Scavenged Rifle and the Combat Knife. The dominant build was never
+  something the sweep could have seen — H4b fixes the *shape* of the weapon table, and it is
+  probe-enforced, but the *pricing* is unverified until `AutoPlay` can be told what to carry. That is
+  a `weapon:` argument and a `weapons:` arm, the same shape as the `biome:` and `tier:` ones already
+  there.
+- **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See
+  H4a. The honest fix is more gear rather than different labels, and it wants the weapon arm above to
   land first so the new pieces are priced against a table that means something.
-- **The dominant build.** Courier + Service Rifle + knife + capacitor. The Service Rifle leads on
-  damage, magazine, reserve *and* penetration simultaneously; nothing else in the table leads on more
-  than one. Low implementation cost, medium-to-high tuning cost — it needs a sweep across five biomes
-  and three characters.
 - **The assessment recommends using `MaxReserve` for ammunition scarcity.** The owner asked for that
   cap removed, so it stays removed. The tension is real and is recorded rather than resolved.
 
@@ -1152,6 +1210,22 @@ A separate failure mode from the three above, and by now the commoner one. Every
   `CratesLooted` never moves and `LootValue` climbs anyway — which is the correct behaviour of a full
   bag and is **indistinguishable from the bug the stage exists to catch**. It was green only because
   the stage above it was broken in a way that left exactly one cache on the field.
+- `TraitProbe`'s burst stage required `hits > TraitCount`, and the Service Rifle satisfied it through
+  **penetration**: a pierce of 2 against a wall of brutes doubles every round's hit count, so two
+  queued rounds landed four hits and the stage read that as evidence of a burst. H4b moved the rifle
+  to a pierce of 1, the trait carried on working exactly as it always had, and the stage went red. It
+  had never been measuring the thing it names. It counts rounds against `TraitCount` now.
+- `WeaponFeelProbe`'s "the shotgun fans" stage compared **window totals**, so it was asking whether a
+  weapon firing 1.4 times a second emits more than one firing seven times a second. The answer had
+  nothing to do with either muzzle, and it was also a function of *accuracy*: widening the Service
+  Rifle's cone during H4b made it miss, its target survived the whole window instead of dying to the
+  first shot, and its emission total went 6 → 9 with not one thing about its effect changed. Per shot
+  now — 8.0 against 1.5, where it had been 8 against 6.
+
+**Two of those three were exposed by the same change**, and neither was a defect in it. A tuning pass
+that turns probes red is worth reading twice before the tuning is blamed: the ones here were green
+because a number happened to be large enough, and the change removed the accident rather than the
+behaviour.
 
 ### The build gate's first command was not being run
 
