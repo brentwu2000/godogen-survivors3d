@@ -78,6 +78,8 @@ public partial class GrowthProbe : SceneTree
             case 2: return RunStage(StageClimbToCeiling, "kills climb to the ceiling and stop");
             case 3: return RunStage(StageDeckEmpties, "a fully capped deck drops the pick");
             case 4: return RunStage(StagePracticeIsSeparate, "practice does not move during a run");
+            case 5: return RunStage(StageRunsCommit, "a run commits to a line rather than collecting fragments");
+            case 6: return RunStage(StageGearShapesTheDeck, "what you wore decides what you are offered");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -382,5 +384,223 @@ public partial class GrowthProbe : SceneTree
             _growth.Choose(0);
 
         return false;
+    }
+
+    /// A run ends up somewhere rather than everywhere, and still has a choice
+    /// while it gets there.
+    ///
+    /// **The deck had twenty-two options and no shape.** An ordinary run lasts 83
+    /// to 142 seconds and buys a handful of picks, so drawing uniformly hands the
+    /// player fragments of five builds and lets them finish none — which is most
+    /// of why two runs felt the same. `RunGrowth.LineOf` groups the cards and a
+    /// pick tilts the deck toward its own line.
+    ///
+    /// Two things have to hold and they pull against each other, so both are
+    /// measured:
+    ///
+    ///   **The deck tilts.** Compared against the same simulation with the
+    ///   affinity switched off, which is the only honest control — an absolute
+    ///   threshold would be a number chosen to make the test pass.
+    ///
+    ///   **The offer still contains a choice.** This is the one that matters to
+    ///   the player and the first version of this stage did not measure it. It
+    ///   measured how concentrated a run ended up, which a *greedy* simulated
+    ///   player produces on its own: the control came out at 71% with the
+    ///   affinity off entirely. Concentration was never evidence of anything.
+    ///   Whether three cards on the table are all from one line is.
+    private bool? StageRunsCommit(int tick)
+    {
+        const int Runs = 30;
+        const int Picks = 7;
+
+        (float tilted, float choiceOn) = Play(Runs, Picks, _growth!.LineAffinity);
+        (float flat, _) = Play(Runs, Picks, 0.0f);
+
+        GD.Print($"  {Picks} picks over {Runs} runs: strongest line holds {tilted * 100.0f:F0}% "
+               + $"against {flat * 100.0f:F0}% with no affinity; "
+               + $"{choiceOn * 100.0f:F0}% of offers held more than one line");
+
+        bool ok = true;
+
+        if (tilted < flat * 1.1f)
+        {
+            GD.PushError($"  affinity moved concentration from {flat * 100.0f:F0}% to "
+                       + $"{tilted * 100.0f:F0}% — the deck is not tilting");
+            ok = false;
+        }
+
+        // Three cards from one line is a card the player is told to take rather
+        // than one they choose. Some of those are fine and inevitable — the deck
+        // is only twenty-two entries and five lines — but most offers have to be
+        // a decision or the growth layer is decoration again, which is exactly
+        // what it was before the lines existed.
+        if (choiceOn < 0.7f)
+        {
+            GD.PushError($"  only {choiceOn * 100.0f:F0}% of offers held more than one line — "
+                       + "the deck has collapsed and the player is being told what to take");
+            ok = false;
+        }
+
+        return ok;
+    }
+
+    /// Plays `runs` runs of `picks`, always continuing whatever the run has most
+    /// of, and reports how concentrated the result was and how often the offer
+    /// held a real choice.
+    ///
+    /// Through `RunGrowth`'s own offer and take path rather than a
+    /// reimplementation of the draw — a test that models the thing it is testing
+    /// passes when the model is right and the code is wrong.
+    private (float Concentration, float Choice) Play(int runs, int picks, float affinity)
+    {
+        float saved = _growth!.LineAffinity;
+        _growth.LineAffinity = affinity;
+
+        float concentration = 0.0f;
+        int offers = 0;
+        int withChoice = 0;
+
+        for (int r = 0; r < runs; r++)
+        {
+            _growth.ResetForTesting();
+
+            for (int i = 0; i < picks; i++)
+            {
+                GrowthOption[] offer = _growth.PeekOffer();
+                if (offer.Length == 0)
+                    break;
+
+                var lines = new System.Collections.Generic.HashSet<GrowthLine>();
+                foreach (GrowthOption option in offer)
+                    lines.Add(RunGrowth.LineOf(option));
+
+                offers++;
+                if (lines.Count > 1)
+                    withChoice++;
+
+                // The greedy player: take whatever continues what this run
+                // already has. A player picking at random would measure the
+                // deck's shuffle rather than its tilt.
+                int best = 0;
+                int mostSoFar = -1;
+
+                for (int n = 0; n < offer.Length; n++)
+                {
+                    GrowthLine line = RunGrowth.LineOf(offer[n]);
+                    int held = line == GrowthLine.None ? 0 : _growth.TakenInLine(line);
+
+                    if (held > mostSoFar)
+                    {
+                        mostSoFar = held;
+                        best = n;
+                    }
+                }
+
+                _growth.GrantForTesting(offer[best]);
+            }
+
+            int strongest = 0;
+            int spent = 0;
+
+            foreach (GrowthLine line in System.Enum.GetValues<GrowthLine>())
+            {
+                if (line == GrowthLine.None)
+                    continue;
+
+                int taken = _growth.TakenInLine(line);
+                spent += taken;
+                strongest = Mathf.Max(strongest, taken);
+            }
+
+            if (spent > 0)
+                concentration += strongest / (float)spent;
+        }
+
+        _growth.LineAffinity = saved;
+
+        return (runs > 0 ? concentration / runs : 0.0f,
+                offers > 0 ? withChoice / (float)offers : 0.0f);
+    }
+
+    /// A loadout changes what the run offers, not only what it starts with.
+    ///
+    /// **This is the meta layer's whole problem, stated as a test.** An
+    /// assessment asked whether anything the player earns between runs changes
+    /// how a run is *played* as opposed to making the same run easier, and for
+    /// the armour, backpacks and boots the answer was no — they were numerical
+    /// efficiency trades. `GearResource.Favours` names a growth line, and the
+    /// deck reads it in the same currency as a pick.
+    ///
+    /// **Measured as a share of the cards offered, not as "did an offer contain
+    /// one".** The first version asked the second question and very nearly failed
+    /// a working feature: Ward holds six of twenty-two cards and an offer is
+    /// three, so roughly seven offers in ten contain a Ward card *by chance*.
+    /// Against a baseline that high there is no room left to move, and a
+    /// multiplicative threshold on a number near its own ceiling is a test that
+    /// fails for arithmetic reasons rather than for real ones.
+    private bool? StageGearShapesTheDeck(int tick)
+    {
+        const int Offers = 400;
+
+        float bare = ShareOfCards(GrowthLine.Ward, Offers, 0.0f);
+        float worn = ShareOfCards(GrowthLine.Ward, Offers, 2.0f);
+
+        GD.Print($"  Ward is {bare * 100.0f:F0}% of cards offered with no gear, "
+               + $"{worn * 100.0f:F0}% wearing two Ward pieces");
+
+        bool ok = true;
+
+        // Two pieces are worth two picks, and the stage above showed the deck
+        // responding to picks. If this does not move, the gear field is
+        // decoration.
+        if (worn < bare * 1.25f)
+        {
+            GD.PushError($"  two Ward pieces moved Ward from {bare * 100.0f:F0}% to "
+                       + $"{worn * 100.0f:F0}% of cards — the loadout is not shaping the deck");
+            ok = false;
+        }
+
+        // And still a tilt rather than a lock. A loadout that guaranteed its own
+        // line would make the run's own picks meaningless, which is the failure
+        // this change is trying to avoid rather than cause.
+        if (worn > 0.8f)
+        {
+            GD.PushError($"  two pieces made Ward {worn * 100.0f:F0}% of every offer — "
+                       + "the loadout has locked the deck rather than leaning it");
+            ok = false;
+        }
+
+        _growth!.ClearFavour();
+        return ok;
+    }
+
+    /// What share of the cards across `offers` fresh offers belong to `line`,
+    /// with `favour` worth of gear leaning that way.
+    ///
+    /// The deck is reset between offers so every draw sees the same empty run —
+    /// otherwise this would measure the pick affinity from the stage above rather
+    /// than the gear.
+    private float ShareOfCards(GrowthLine line, int offers, float favour)
+    {
+        int cards = 0;
+        int hits = 0;
+
+        for (int i = 0; i < offers; i++)
+        {
+            _growth!.ResetForTesting();
+            _growth.ClearFavour();
+
+            if (favour > 0.0f)
+                _growth.FavourLine(line, favour);
+
+            foreach (GrowthOption option in _growth.PeekOffer())
+            {
+                cards++;
+                if (RunGrowth.LineOf(option) == line)
+                    hits++;
+            }
+        }
+
+        return cards > 0 ? hits / (float)cards : 0.0f;
     }
 }

@@ -590,7 +590,7 @@ public partial class BuildMain : SceneTree
         var body = new StaticBody3D { Name = "Ground" };
 
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ground.gdshader") };
-        material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground.png"));
+        material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground_handpainted.png"));
 
         // MaterialOverride rather than a material on the mesh: this node is
         // owned by the scene, so the override serialises — the case godot.md:46

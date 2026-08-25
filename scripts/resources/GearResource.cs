@@ -103,6 +103,37 @@ public partial class GearResource : Resource
     /// Named for the growth option each one raises, because the pairing is the
     /// point: a piece that grants a rule the run cannot then stack is a piece
     /// whose identity stops mattering after the first minute.
+    // --- What it makes the run become --------------------------------------
+
+    /// Which growth line this piece pulls the deck toward, or None.
+    ///
+    /// **This is the field that makes a loadout a decision rather than a sum.**
+    /// Everything above is a number added to a number: more health, more pierce,
+    /// a blade already turning. An assessment of the game called the armour,
+    /// backpack and boot choices "numerical efficiency trades", and it was right
+    /// — nothing the player bought changed how the run was *played*, only how
+    /// easily it went.
+    ///
+    /// A piece that favours a line makes that line's cards likelier to be
+    /// offered, exactly as taking one of its cards does (see
+    /// `RunGrowth.LineAffinity`). So the shop is where a build starts: a scope
+    /// that leans Gunnery means the run will keep handing you Gunnery, and two
+    /// pieces leaning the same way is a run committed before it begins.
+    ///
+    /// It is a *tilt*, never a lock. The deck still offers other lines — about
+    /// nine offers in ten hold more than one — so a player who buys into Ordnance
+    /// and draws a map with nowhere to hold can still turn.
+    [Export] public GrowthLine Favours { get; set; } = GrowthLine.None;
+
+    /// How hard it pulls. One piece at 1.0 is worth about one pick of that line.
+    ///
+    /// Deliberately the same currency as a pick, so a player can reason about it:
+    /// wearing two Ward pieces means the run starts as though two Ward cards had
+    /// already been taken. Anything much above 1.5 on a single piece makes the
+    /// shop choice overwhelm the run's own choices, which is the opposite of the
+    /// point.
+    [Export] public float FavourStrength { get; set; } = 1.0f;
+
     [Export] public int OrbitUpgradeCap { get; set; } = -1;
     [Export] public int ShockwaveUpgradeCap { get; set; } = -1;
     [Export] public int ChainUpgradeCap { get; set; } = -1;

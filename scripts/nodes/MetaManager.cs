@@ -98,6 +98,11 @@ public partial class MetaManager : Node
         float area = 0.0f, thorns = 0.0f, regen = 0.0f, knockback = 0.0f, dodge = 0.0f;
         int orbit = 0, shockwave = 0;
         float chain = 0.0f, chill = 0.0f;
+
+        // Cleared before the loop, not after: `ReapplyGearForTesting` calls this
+        // twice inside one process, and a lean that accumulated would make the
+        // second reading of the same loadout twice as committed as the first.
+        _growth?.ClearFavour();
         var ruleCaps = new System.Collections.Generic.Dictionary<GrowthOption, int>();
 
         foreach (string path in Profile.EquippedGear)
@@ -135,6 +140,10 @@ public partial class MetaManager : Node
             regen += piece.RegenBonus;
             knockback += piece.KnockbackBonus;
             dodge += piece.DodgeBonus;
+
+            // What this piece makes the run become, as distinct from what it adds
+            // to it. See `GearResource.Favours`.
+            _growth?.FavourLine(piece.Favours, piece.FavourStrength);
 
             orbit += piece.OrbitBonus;
             shockwave += piece.ShockwaveBonus;

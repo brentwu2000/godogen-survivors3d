@@ -29,6 +29,23 @@ public partial class BuildGear : SceneTree
             return false;
         }
 
+        // Most pieces name a `GrowthLine`, and that is the field that makes a
+        // loadout a decision rather than a sum.
+        //
+        // Everything else here is a number added to a number. An assessment of
+        // the game called the armour, backpack and boot choices "numerical
+        // efficiency trades" and it was right: nothing the player bought changed
+        // how the run was *played*, only how easily it went. A piece that favours
+        // a line makes that line's cards likelier to be offered, in the same
+        // currency as taking one of them — so buying two Ward pieces starts a run
+        // as though two Ward cards had already been taken.
+        //
+        // The three starting pieces lean nothing on purpose. They are what a
+        // player has before they have chosen anything, and a lean on them would
+        // be a build nobody picked.
+        //
+        // Strengths sit between 0.6 and 1.2. Much above that and the shop
+        // overwhelms the run's own choices, which is the opposite of the point.
         GearResource[] gear =
         {
             // --- Tier 1: the shirt on your back ------------------------------
@@ -73,6 +90,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Whetstone",
+
+                // A sharper weapon is a Gunnery run in one object.
+                Favours = GrowthLine.Gunnery,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Trinket,
                 Tier = 2,
                 Price = 550,
@@ -86,6 +107,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Cracked Capacitor",
+
+                // It is the shockwave in a box, and Ordnance is the line the shockwave belongs to.
+                Favours = GrowthLine.Ordnance,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Trinket,
                 Tier = 2,
                 Price = 550,
@@ -97,6 +122,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Copper Coil",
+
+                // Chain fights on its own once it is bought, which is what Retinue means.
+                Favours = GrowthLine.Retinue,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Trinket,
                 Tier = 2,
                 Price = 650,
@@ -109,6 +138,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Frost Cell",
+
+                // Cold ground is ground you can stand on, so it pulls toward the line about standing there.
+                Favours = GrowthLine.Ward,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Trinket,
                 Tier = 3,
                 Price = 900,
@@ -123,6 +156,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Lucky Bone",
+
+                // Nothing else in the shop wants a route rather than a fight, so this pulls a little harder to make Scavenging reachable at all.
+                Favours = GrowthLine.Scavenging,
+                FavourStrength = 1.2f,
                 Slot = GearSlot.Trinket,
                 Tier = 2,
                 Price = 700,
@@ -133,6 +170,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Tourniquet",
+
+                // Weaker than the Frost Cell: it keeps you alive without changing where you can stand.
+                Favours = GrowthLine.Ward,
+                FavourStrength = 0.8f,
                 Slot = GearSlot.Trinket,
                 Tier = 2,
                 Price = 600,
@@ -149,6 +190,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Plate Carrier",
+
+                // Armour is the Ward line stated as a number.
+                Favours = GrowthLine.Ward,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Armour,
                 Tier = 2,
                 Price = 900,
@@ -167,6 +212,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Stitched Vest",
+
+                // The cheap armour leans the same way and less far, so the tier is a difference in commitment as well as in points.
+                Favours = GrowthLine.Ward,
+                FavourStrength = 0.6f,
                 Slot = GearSlot.Armour,
                 Tier = 2,
                 Price = 900,
@@ -187,6 +236,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Trekking Pack",
+
+                // A bigger bag is a longer route.
+                Favours = GrowthLine.Scavenging,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Backpack,
                 Tier = 2,
                 Price = 1200,
@@ -202,6 +255,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Bandolier",
+
+                // It exists to keep a weapon firing, which is what Gunnery is for.
+                Favours = GrowthLine.Gunnery,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Backpack,
                 Tier = 2,
                 Price = 1000,
@@ -218,6 +275,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Running Shoes",
+
+                // Speed is how a Scavenging run survives having no defences.
+                Favours = GrowthLine.Scavenging,
+                FavourStrength = 1.0f,
                 Slot = GearSlot.Boots,
                 Tier = 2,
                 Price = 700,
@@ -232,6 +293,10 @@ public partial class BuildGear : SceneTree
             new()
             {
                 GearName = "Tread Boots",
+
+                // The heavy boot is the one that plants you, so it leans the other way from the light one — which is the whole reason to have both.
+                Favours = GrowthLine.Ward,
+                FavourStrength = 0.7f,
                 Slot = GearSlot.Boots,
                 Tier = 2,
                 Price = 700,

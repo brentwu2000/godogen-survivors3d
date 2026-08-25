@@ -122,7 +122,44 @@ public partial class RunDirector : Node3D
     private ExtractionZone[] _extractions = System.Array.Empty<ExtractionZone>();
     private bool _padsRevealed;
     private float _spawnCredit;
+    /// Seeded from the level in `_Ready`, not left at this constant.
+    ///
+    /// **It was a fixed constant, so every run ever played drew the same
+    /// sequence.** Supply drops landed on the same bearings in the same order in
+    /// run one and run four hundred; only the player's own position moved them.
+    /// A director meant to vary a run cannot do it from a stream that never
+    /// varies.
     private ulong _rng = 0x853C49E6748FEA9BUL;
+
+    /// When this run's events land, drawn once from the seed.
+    ///
+    /// **The schedule was fixed, and it is most of why the middle of a run is
+    /// the same every time.** Pads at 45 s, supply at 75 s, boss at 120 s,
+    /// supply at 174 s, and nothing whatever in the two minutes after that. A
+    /// player four runs in knows the timetable, and a timetable is not a
+    /// decision — there is nothing to read and nothing to be wrong about.
+    ///
+    /// The bands are deliberately narrow around the numbers that were tuned. The
+    /// boss sits near 0.40 because the sweep showed runs ending between 83 and
+    /// 142 seconds, so a boss at 186 happened once in twenty; the first supply
+    /// sits near 0.25 because the bag is full at 60 s and empty at 120 s. None of
+    /// that is being thrown away. The point is only that the player should not be
+    /// able to set a watch by it.
+    private float _bossAt;
+    private float[] _supplyAt = System.Array.Empty<float>();
+
+    /// Where the surge lands, or -1 for a run that has none.
+    ///
+    /// The third event, and the one that makes two runs differ in *kind* rather
+    /// than in timing. A surge is one announced wave from one bearing — no new
+    /// system, it is what a danger zone already does to fill its opening burst.
+    /// Somewhat over half of runs have one.
+    ///
+    /// A run without a surge is not an easier run with something missing; it is a
+    /// run in which the player who was holding a grenade back for it was wrong.
+    /// That is the whole value of it being optional.
+    private float _surgeAt = -1.0f;
+    private bool _surgeSent;
 
     /// The pads this run will offer, whether or not they are open yet. The HUD
     /// needs them to point somewhere once they are revealed.
@@ -150,6 +187,33 @@ public partial class RunDirector : Node3D
         _horde = GetParent().GetNodeOrNull<Horde>("Horde");
         _player = GetParent().GetNodeOrNull<Player>("Player");
         _extractions = FindPads();
+
+        // The run's own schedule, off the level's seed.
+        //
+        // From the level rather than from the clock, so a replayed seed is a
+        // replayed run: the balance sweep pins a seed and would otherwise be
+        // measuring a different schedule on every pass, which is the difference
+        // between a table and a rumour.
+        //
+        // Mixed rather than used raw. The generator hashes the same seed for its
+        // own side streams, and two consumers stepping the same xorshift from the
+        // same start would produce correlated draws — the boss time would move
+        // with the terrain offset for no reason anybody could ever find.
+        var level = GetParent().GetNodeOrNull<LevelGenerator>("Level");
+        if (level != null && level.Seed != 0)
+        {
+            ulong mix = level.Seed ^ 0xC2B2AE3D27D4EB4FUL;
+            mix ^= mix >> 29;
+            mix *= 0x9E3779B97F4A7C15UL;
+            mix ^= mix >> 32;
+
+            // Zero is a fixed point of xorshift: the state stays zero forever and
+            // every draw returns 0.0, which would put the boss at the bottom of
+            // its band on every run that happened to hash there.
+            _rng = mix | 1UL;
+        }
+
+        PlanTheRun();
 
         if (_player != null)
             _player.Died += OnPlayerDied;
@@ -230,8 +294,11 @@ public partial class RunDirector : Node3D
         if (!_padsRevealed && Intensity >= ExtractionOpensAt)
             RevealPads();
 
-        if (!BossSpawned && Intensity >= BossAt)
+        if (!BossSpawned && Intensity >= _bossAt)
             SendTheBoss();
+
+        if (!_surgeSent && _surgeAt > 0.0f && Intensity >= _surgeAt)
+            SendTheSurge();
 
         CheckSupplyDrops();
 
@@ -382,10 +449,10 @@ public partial class RunDirector : Node3D
 
     private void CheckSupplyDrops()
     {
-        if (SupplyDropsAt == null || _suppliesDropped >= SupplyDropsAt.Length)
+        if (_supplyAt.Length == 0 || _suppliesDropped >= _supplyAt.Length)
             return;
 
-        if (Intensity < SupplyDropsAt[_suppliesDropped])
+        if (Intensity < _supplyAt[_suppliesDropped])
             return;
 
         _suppliesDropped++;
@@ -474,11 +541,95 @@ public partial class RunDirector : Node3D
         if (!_padsRevealed && Intensity >= ExtractionOpensAt)
             RevealPads();
 
-        if (!BossSpawned && Intensity >= BossAt)
+        if (!BossSpawned && Intensity >= _bossAt)
             SendTheBoss();
+
+        if (!_surgeSent && _surgeAt > 0.0f && Intensity >= _surgeAt)
+            SendTheSurge();
 
         CheckSupplyDrops();
     }
+
+    /// Draws this run's schedule.
+    ///
+    /// Called once, before anything reads a time. Every draw comes off the seeded
+    /// stream, so a replayed seed replays the same run and the balance sweep
+    /// measures a schedule rather than noise.
+    private void PlanTheRun()
+    {
+        _bossAt = BossAt + (NextFloat() - 0.5f) * 0.14f;
+
+        // The first supply stays close to its tuned value because it is
+        // load-bearing: it has to land while the opening haul is being spent
+        // rather than after it. The second is free to wander, because a run that
+        // reaches it is a long one by definition.
+        var supplies = new float[SupplyDropsAt.Length];
+        for (int i = 0; i < supplies.Length; i++)
+            supplies[i] = SupplyDropsAt[i] + (NextFloat() - 0.5f) * (i == 0 ? 0.06f : 0.16f);
+
+        System.Array.Sort(supplies);
+        _supplyAt = supplies;
+
+        // Away from the boss, so the two are separate events rather than one long
+        // bad minute — before it if the boss is late, after it if it is early.
+        _surgeAt = NextFloat() < 0.55f
+            ? (NextFloat() < 0.5f ? _bossAt - 0.12f : _bossAt + 0.14f)
+            : -1.0f;
+
+        GD.Print($"run plan: boss {_bossAt:F2}, supplies "
+               + string.Join("/", System.Array.ConvertAll(_supplyAt, f => f.ToString("F2")))
+               + (_surgeAt > 0.0f ? $", surge {_surgeAt:F2}" : ", no surge"));
+    }
+
+    /// One wave, from one bearing, announced.
+    ///
+    /// Announced for the same reason the boss is: a spike the player notices only
+    /// when their health starts dropping is difficulty, and one they are told
+    /// about is a decision. A few seconds is enough to move, spend something, or
+    /// leave.
+    private void SendTheSurge()
+    {
+        _surgeSent = true;
+
+        if (_horde == null)
+            return;
+
+        Vector3 around = _player?.GlobalPosition ?? Vector3.Zero;
+        float bearing = NextFloat() * Mathf.Tau;
+
+        // Scaled with the run, so a surge late is worse than a surge early — the
+        // same reading of `Intensity` everything else in this file uses.
+        int count = 14 + Mathf.RoundToInt(Intensity * 16.0f);
+        int sent = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            // A wedge, not a ring. A ring is the ordinary spawn pattern with more
+            // of it; a wedge is a *direction*, which is something the player can
+            // turn away from or fire into.
+            float angle = bearing + (NextFloat() - 0.5f) * 0.9f;
+            float range = 24.0f + NextFloat() * 8.0f;
+
+            var at = new Vector3(
+                Mathf.Clamp(around.X + Mathf.Cos(angle) * range, -ArenaExtent, ArenaExtent),
+                0.0f,
+                Mathf.Clamp(around.Z + Mathf.Sin(angle) * range, -ArenaExtent, ArenaExtent));
+
+            if (_horde.SpawnByIntensity(at))
+                sent++;
+        }
+
+        GD.Print($"surge at {Elapsed:F0}s: {sent} from one side");
+        EmitSignal(SignalName.SurgeArrived, sent);
+    }
+
+    /// A wave is coming, and how many.
+    [Signal] public delegate void SurgeArrivedEventHandler(int count);
+
+    /// What this run drew, for a probe and for the readout. -1 means no surge.
+    public float PlannedBossAt => _bossAt;
+    public float PlannedSurgeAt => _surgeAt;
+    public float[] PlannedSupplyAt => _supplyAt;
 
     /// Ends the run from a probe. Same path the game uses, so a probe cannot
     /// leave the director in a state a real run could never reach.

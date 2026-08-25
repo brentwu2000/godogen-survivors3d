@@ -11,6 +11,7 @@ Price = 1000
 CarryBonus = 2
 SearchUpgradeCap = 1
 PierceBonus = 1
+Favours = 1
 PierceUpgradeCap = 5
 CritUpgradeCap = 6
 FortuneUpgradeCap = 0

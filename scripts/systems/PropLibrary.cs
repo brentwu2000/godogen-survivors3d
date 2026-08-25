@@ -42,6 +42,15 @@ public enum PropKind
     SpecimenTank,
     VentStack,
     Gantry,
+
+    // Large structures. These fill whole layout blocks rather than behaving as
+    // furniture; all are authored in the same unit footprint as cover.
+    GoodsWagonRake,
+    RailGantryCrane,
+    GrainElevator,
+    CollapsedShopTerrace,
+    CarParkDeck,
+    BrokenFlyover,
 }
 
 /// What a piece of cover is *for*, as opposed to what it is.
@@ -86,6 +95,10 @@ public enum PropRole
     /// Scenery again, and deliberately a second one: a single landmark shape
     /// repeated around the edge reads as a texture rather than as a skyline.
     Sign,
+
+    /// An eight-to-twenty metre building or boundary mass. Several kinds may
+    /// share this role; they live in a biome's separate structure set.
+    Structure,
 }
 
 /// The arena's cover, built out of boxes at startup.
@@ -176,6 +189,13 @@ public static class PropLibrary
         PropKind.VentStack => VentStack(),
         PropKind.Gantry => Gantry(),
 
+        PropKind.GoodsWagonRake => GoodsWagonRake(),
+        PropKind.RailGantryCrane => RailGantryCrane(),
+        PropKind.GrainElevator => GrainElevator(),
+        PropKind.CollapsedShopTerrace => CollapsedShopTerrace(),
+        PropKind.CarParkDeck => CarParkDeck(),
+        PropKind.BrokenFlyover => BrokenFlyover(),
+
         _ => Container(),
     };
 
@@ -205,6 +225,13 @@ public static class PropLibrary
         PropKind.SpecimenTank => 2.4f,
         PropKind.VentStack => 16.0f,
         PropKind.Gantry => 10.0f,
+
+        PropKind.GoodsWagonRake => 4.0f,
+        PropKind.RailGantryCrane => 11.6f,
+        PropKind.GrainElevator => 18.0f,
+        PropKind.CollapsedShopTerrace => 8.7f,
+        PropKind.CarParkDeck => 11.5f,
+        PropKind.BrokenFlyover => 10.5f,
 
         // Full height, and this is the number that makes Cold Storage an
         // interior rather than a blue field at night.
@@ -264,6 +291,10 @@ public static class PropLibrary
         PropKind.SpecimenTank => PropRole.Odd,
         PropKind.VentStack => PropRole.Tall,
         PropKind.Gantry => PropRole.Sign,
+
+        PropKind.GoodsWagonRake or PropKind.RailGantryCrane or PropKind.GrainElevator
+            or PropKind.CollapsedShopTerrace or PropKind.CarParkDeck or PropKind.BrokenFlyover
+            => PropRole.Structure,
 
         _ => PropRole.Heap,
     };
@@ -463,6 +494,20 @@ public static class PropLibrary
         PropKind.SpecimenTank,
         PropKind.VentStack,
         PropKind.Gantry,
+    };
+
+    public static readonly PropKind[] YardStructureSet =
+    {
+        PropKind.GoodsWagonRake,
+        PropKind.RailGantryCrane,
+        PropKind.GrainElevator,
+    };
+
+    public static readonly PropKind[] CityStructureSet =
+    {
+        PropKind.CollapsedShopTerrace,
+        PropKind.CarParkDeck,
+        PropKind.BrokenFlyover,
     };
 
     // --- The city ----------------------------------------------------------
@@ -1053,6 +1098,130 @@ public static class PropLibrary
         for (int i = 0; i < 5; i++)
             mesh.Box(new Vector3(-0.4f + i * 0.2f, 8.1f, 0.13f), new Vector3(0.09f, 0.44f, 0.02f), Amber);
 
+        return mesh.Build();
+    }
+
+    // --- Large outdoor structures -----------------------------------------
+
+    private static ArrayMesh GoodsWagonRake()
+    {
+        var mesh = new MeshBuilder();
+
+        // Three coupled wagons run across the full block. Their staggered roofs
+        // make one long boundary silhouette instead of three pieces of cover.
+        for (int i = 0; i < 3; i++)
+        {
+            float x = -0.34f + i * 0.34f;
+            Color body = i == 1 ? PaintRed.Lerp(Rust, 0.45f) : Rust.Lerp(Steel, 0.18f);
+            mesh.Box(new Vector3(x, 2.55f, 0.0f), new Vector3(0.32f, 2.5f, 0.88f), body);
+            mesh.Box(new Vector3(x, 3.88f, 0.0f), new Vector3(0.34f, 0.18f, 0.92f), Steel);
+            foreach (int sz in new[] { -1, 1 })
+            {
+                mesh.Box(new Vector3(x, 1.08f, sz * 0.34f), new Vector3(0.29f, 0.2f, 0.12f), Tar);
+                mesh.Box(new Vector3(x, 2.6f, sz * 0.46f), new Vector3(0.05f, 2.2f, 0.05f), Steel);
+            }
+        }
+
+        mesh.Box(new Vector3(0.0f, 0.3f, -0.43f), new Vector3(1.0f, 0.6f, 0.14f), ConcreteDark);
+        mesh.Box(new Vector3(0.0f, 0.3f, 0.43f), new Vector3(1.0f, 0.6f, 0.14f), ConcreteDark);
+        mesh.Box(new Vector3(0.0f, 0.74f, 0.0f), new Vector3(1.0f, 0.14f, 0.92f), Steel);
+        return mesh.Build();
+    }
+
+    private static ArrayMesh RailGantryCrane()
+    {
+        var mesh = new MeshBuilder();
+
+        foreach (int sx in new[] { -1, 1 })
+        {
+            foreach (int sz in new[] { -1, 1 })
+            {
+                mesh.Box(new Vector3(sx * 0.43f, 5.4f, sz * 0.43f), new Vector3(0.14f, 10.8f, 0.14f), Steel);
+                mesh.Box(new Vector3(sx * 0.43f, 0.25f, sz * 0.43f), new Vector3(0.28f, 0.5f, 0.28f), ConcreteDark);
+            }
+            mesh.Box(new Vector3(sx * 0.43f, 8.0f, 0.0f), new Vector3(0.12f, 0.12f, 0.9f), Rust, 0.0f);
+        }
+
+        mesh.Box(new Vector3(0.0f, 11.0f, 0.0f), new Vector3(1.12f, 0.7f, 0.32f), Steel);
+        mesh.Box(new Vector3(0.0f, 11.5f, 0.0f), new Vector3(1.0f, 0.22f, 0.72f), Rust);
+        mesh.Box(new Vector3(-0.18f, 10.35f, 0.0f), new Vector3(0.28f, 0.45f, 0.46f), PaintYellow.Lerp(Tar, 0.45f));
+        mesh.Box(new Vector3(-0.18f, 7.2f, 0.0f), new Vector3(0.05f, 5.9f, 0.05f), Tar);
+        mesh.Box(new Vector3(-0.18f, 4.15f, 0.0f), new Vector3(0.24f, 0.4f, 0.24f), Steel, 18.0f);
+        return mesh.Build();
+    }
+
+    private static ArrayMesh GrainElevator()
+    {
+        var mesh = new MeshBuilder();
+
+        // The machinery plinth owns the entire collider footprint; the towers
+        // above can then slump and separate without leaving invisible corners.
+        mesh.Box(new Vector3(0.0f, 0.25f, 0.0f), new Vector3(1.0f, 0.5f, 1.0f), ConcreteDark);
+        mesh.Box(new Vector3(-0.22f, 8.1f, 0.05f), new Vector3(0.5f, 16.2f, 0.72f), Concrete.Lerp(Tar, 0.22f), 4.0f);
+        mesh.Tube(new Vector3(0.24f, 0.0f, -0.2f), new Vector3(0.24f, 12.8f, -0.2f), 0.21f, ConcreteDark, 10);
+        mesh.Tube(new Vector3(0.3f, 0.0f, 0.25f), new Vector3(0.36f, 10.8f, 0.25f), 0.19f, Concrete.Lerp(Rust, 0.18f), 10);
+        mesh.Box(new Vector3(0.0f, 14.4f, 0.0f), new Vector3(0.86f, 0.45f, 0.34f), Steel, -8.0f);
+        mesh.Box(new Vector3(0.14f, 16.25f, 0.0f), new Vector3(0.18f, 3.7f, 0.2f), Steel, -8.0f);
+        mesh.Box(new Vector3(0.0f, 17.75f, 0.0f), new Vector3(0.72f, 0.5f, 0.42f), Rust, -8.0f);
+        mesh.Box(new Vector3(0.24f, 5.1f, 0.44f), new Vector3(0.5f, 0.38f, 0.16f), Steel, 18.0f);
+        mesh.Box(new Vector3(0.44f, 2.55f, 0.38f), new Vector3(0.12f, 5.1f, 0.12f), Steel, 8.0f);
+        return mesh.Build();
+    }
+
+    private static ArrayMesh CollapsedShopTerrace()
+    {
+        var mesh = new MeshBuilder();
+
+        // One continuous rear mass reaches every corner; four shop bays cut a
+        // readable cadence into its street face without turning it into bands.
+        mesh.Box(new Vector3(0.0f, 4.2f, -0.12f), new Vector3(1.0f, 8.4f, 0.76f), Brick.Lerp(Tar, 0.18f));
+        for (int i = 0; i < 4; i++)
+        {
+            float x = -0.375f + i * 0.25f;
+            float top = i == 2 ? 5.9f : 8.0f + (i % 2) * 0.7f;
+            mesh.Box(new Vector3(x, top * 0.5f, 0.32f), new Vector3(0.23f, top, 0.1f), ConcreteDark);
+            mesh.Box(new Vector3(x, 1.1f, 0.4f), new Vector3(0.18f, 2.0f, 0.08f), i == 1 ? Tar : Glass);
+            mesh.Box(new Vector3(x, 2.4f, 0.43f), new Vector3(0.21f, 0.32f, 0.12f), Board.Lerp(Rust, 0.28f));
+        }
+        mesh.Box(new Vector3(0.22f, 7.6f, 0.22f), new Vector3(0.42f, 0.45f, 0.52f), Concrete, 12.0f);
+        mesh.Box(new Vector3(0.38f, 4.8f, 0.38f), new Vector3(0.2f, 4.4f, 0.18f), Brick, 18.0f);
+        return mesh.Build();
+    }
+
+    private static ArrayMesh CarParkDeck()
+    {
+        var mesh = new MeshBuilder();
+
+        foreach (int sx in new[] { -1, 1 })
+        foreach (int sz in new[] { -1, 1 })
+            mesh.Box(new Vector3(sx * 0.42f, 5.2f, sz * 0.42f), new Vector3(0.16f, 10.4f, 0.16f), ConcreteDark);
+
+        // A dominant roof slab and ramp make the open-sided mass unmistakable;
+        // the lower floor edges are subordinate rather than equal stripes.
+        mesh.Box(new Vector3(0.0f, 10.45f, 0.0f), new Vector3(1.0f, 0.7f, 1.0f), Concrete);
+        mesh.Box(new Vector3(0.0f, 5.8f, 0.0f), new Vector3(0.94f, 0.35f, 0.92f), ConcreteDark);
+        mesh.Box(new Vector3(0.06f, 3.0f, 0.0f), new Vector3(0.72f, 0.38f, 0.88f), ConcreteDark, 10.0f);
+        mesh.Box(new Vector3(-0.28f, 7.9f, 0.0f), new Vector3(0.34f, 0.35f, 0.9f), Concrete, -9.0f);
+        mesh.Box(new Vector3(0.0f, 11.15f, -0.44f), new Vector3(1.0f, 0.7f, 0.12f), ConcreteDark);
+        mesh.Box(new Vector3(-0.34f, 9.0f, 0.35f), new Vector3(0.22f, 0.5f, 0.38f), PaintBlue.Lerp(Tar, 0.5f));
+        return mesh.Build();
+    }
+
+    private static ArrayMesh BrokenFlyover()
+    {
+        var mesh = new MeshBuilder();
+
+        foreach (int sx in new[] { -1, 1 })
+        {
+            mesh.Box(new Vector3(sx * 0.38f, 4.3f, 0.0f), new Vector3(0.2f, 8.6f, 0.28f), ConcreteDark);
+            mesh.Box(new Vector3(sx * 0.38f, 8.75f, 0.0f), new Vector3(0.36f, 0.45f, 0.55f), Concrete);
+        }
+        mesh.Box(new Vector3(-0.2f, 9.25f, 0.0f), new Vector3(0.62f, 0.8f, 1.0f), Concrete);
+        mesh.Box(new Vector3(0.3f, 8.55f, 0.0f), new Vector3(0.5f, 0.72f, 1.0f), ConcreteDark, 13.0f);
+        mesh.Box(new Vector3(-0.18f, 9.72f, 0.0f), new Vector3(0.62f, 0.08f, 0.94f), Tar);
+        mesh.Box(new Vector3(-0.18f, 10.075f, -0.45f), new Vector3(0.62f, 0.85f, 0.1f), ConcreteDark);
+        for (int i = 0; i < 5; i++)
+            mesh.Box(new Vector3(0.5f, 8.8f, -0.36f + i * 0.18f), new Vector3(0.34f, 0.05f, 0.04f), Rust, i * 6.0f);
         return mesh.Build();
     }
 

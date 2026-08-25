@@ -69,9 +69,16 @@ public partial class BiomeResource : Resource
     /// names only its cover still gets landmarks.
     [Export] public int[] PropSet { get; set; } = System.Array.Empty<int>();
 
+    /// Large block-filling masses. Unlike furniture there may be several kinds
+    /// in the same role, and an indoor biome may deliberately have none.
+    [Export] public int[] StructureSet { get; set; } = System.Array.Empty<int>();
+
     /// What this biome puts in a given role.
     public PropKind Prop(PropRole role)
     {
+        if (role == PropRole.Structure)
+            throw new System.ArgumentException("Structure is a set role; use Structures()", nameof(role));
+
         int index = (int)role;
 
         if (PropSet != null && index < PropSet.Length)
@@ -159,13 +166,35 @@ public partial class BiomeResource : Resource
     /// order, which is what `PropRenderer` allocates against.
     public PropKind[] Kinds()
     {
-        var roles = System.Enum.GetValues<PropRole>();
-        var kinds = new PropKind[roles.Length];
+        var roles = System.Array.FindAll(System.Enum.GetValues<PropRole>(), role => role != PropRole.Structure);
+        var furniture = new PropKind[roles.Length];
 
         for (int i = 0; i < roles.Length; i++)
-            kinds[i] = Prop(roles[i]);
+            furniture[i] = Prop(roles[i]);
 
+        PropKind[] structures = Structures();
+        var kinds = new PropKind[furniture.Length + structures.Length];
+        furniture.CopyTo(kinds, 0);
+        structures.CopyTo(kinds, furniture.Length);
         return kinds;
+    }
+
+    public PropKind[] Structures()
+    {
+        if (StructureSet == null || StructureSet.Length == 0)
+            return System.Array.Empty<PropKind>();
+
+        var result = new System.Collections.Generic.List<PropKind>(StructureSet.Length);
+        foreach (int entry in StructureSet)
+        {
+            var kind = (PropKind)entry;
+            if (System.Enum.IsDefined(typeof(PropKind), kind)
+                && PropLibrary.RoleOf(kind) == PropRole.Structure)
+                result.Add(kind);
+            else
+                GD.PushWarning($"{BiomeName}: {entry} is not a structure kind");
+        }
+        return result.ToArray();
     }
 
     // --- Look ---------------------------------------------------------------

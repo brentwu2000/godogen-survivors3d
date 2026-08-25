@@ -5,4 +5,5 @@
 [resource]
 script = ExtResource("1_j1mbu")
 BiomeName = "Rail Yard"
+StructureSet = PackedInt32Array(21, 22, 23)
 Blurb = "mixed cover, honest sight lines"

@@ -47,7 +47,10 @@ public sealed class SoloBody
 
     private SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent, bool fromSpec)
     {
-        mesh.SurfaceSetMaterial(0, new ShaderMaterial { Shader = shader });
+        var material = new ShaderMaterial { Shader = shader };
+        material.SetShaderParameter("surface_detail",
+            GD.Load<Texture2D>("res://assets/textures/survivor_handpainted.png"));
+        mesh.SurfaceSetMaterial(0, material);
 
         _multiMesh = new MultiMesh
         {

@@ -9,4 +9,6 @@ Slot = 3
 Tier = 2
 Price = 600
 RegenBonus = 0.6
+Favours = 3
+FavourStrength = 0.8
 RegenUpgradeCap = 6

@@ -539,6 +539,157 @@ exercises is one that quietly stops working.
 - **No joint geometry.** Limbs meet the torso by overlapping rather than by anything sealing the
   gap, which shows on the widest variants when an arm swings.
 
+## H — Too few mutually exclusive situations
+
+**Two outside assessments, asked for by the owner on 2026-08-25** after "畫面精細度，耐玩性都還很差".
+Both said the work in progress was aimed at the wrong target. The replayability one's core
+diagnosis:
+
+> The game has enough objects, but too few mutually exclusive situations. Most systems reward being
+> fast, carrying more, dealing more area damage and waiting longer. Until different runs make one of
+> those goals wrong, replayability will remain poor.
+
+### ✅ H1 — A map leans
+
+`ZonePlan` built its kinds as `i % 3`, so **every map ever generated had exactly one Hold, one Purge
+and one Breach.** Positions moved and structure never did, so once a player had learned the three,
+every map was the same checklist in rearranged geography.
+
+A map picks a lead kind and a second, draws roughly two to one, and shuffles the order so the nearest
+zone is not reliably the same one. Some runs reward holding ground and some reward being able to
+leave. Measured across forty layouts: six distinct compositions, every layout leaning, none
+degenerate, all three kinds still appearing.
+
+Two bugs fell out, both found by writing the probe to look across forty seeds rather than one:
+
+- **The guard was a no-op in half its cases.** "If all three came out the same, replace the last"
+  wrote `other` unconditionally — correct when all three came up `lead`, and a no-op when all three
+  came up `other`. About five per cent of maps.
+- **A zone could contain an extraction pad**, which pays a hard encounter's reward for walking to the
+  exit. The generator's comment claims ordering handles it; building after pads means their positions
+  are *known*, not avoided. Latent since zones shipped, invisible because one arbitrary RNG sequence
+  never hit it.
+
+`ZoneProbe`'s first stage had asserted `kinds.Count == zones.Length` and passed for the life of the
+game. **A probe defending the invariant that is the problem is the worst kind of green.**
+
+### ✅ H2 — A run has a schedule instead of a timetable
+
+Pads at 45 s, supply at 75 s, boss at 120 s, supply at 174 s, and nothing whatever in the two minutes
+after that. A player four runs in knows the timetable, and a timetable is not a decision — there is
+nothing to read and nothing to be wrong about.
+
+The times are drawn per seed now, in bands deliberately narrow around the numbers that were tuned:
+the boss near 0.40 because the sweep found runs ending between 83 and 142 seconds, the first supply
+near 0.25 because the bag is full at 60 s and empty at 120 s. None of that is discarded. The player
+simply cannot set a watch by it.
+
+**The director's RNG was a hard-coded constant**, so every run ever played drew the same sequence —
+supply drops on the same bearings in the same order in run one and run four hundred, with only the
+player's position moving them. Seeded from the level now, mixed rather than used raw so it does not
+correlate with the generator's own side streams, and guarded against the zero fixed point of
+xorshift.
+
+There is a **surge** in somewhat over half of runs: one announced wave from a single bearing. A wedge
+rather than a ring, because a ring is the ordinary spawn pattern with more of it while a wedge is a
+*direction* — something the player can turn away from or fire into. A run without one is not an
+easier run with something missing; it is a run in which the player holding a grenade back for it was
+wrong.
+
+`PlanTheRun` was defined and never called for one build, which would have put the boss at intensity
+0.0 — second one of the run. That reads as a balance catastrophe rather than a missing line.
+
+### ✅ H3 — The deck has lines
+
+Twenty-two options and no shape. An ordinary run buys a handful of picks, so drawing uniformly hands
+the player fragments of five builds and lets them finish none.
+
+Cards belong to five lines — **Gunnery**, **Ordnance**, **Ward**, **Retinue**, **Scavenging** — and a
+pick tilts the deck toward its own line. The first two picks therefore *choose* something and the
+rest compounds it.
+
+**The lines are not balanced against each other in power. They are balanced in what they ask of the
+map.** Ordnance wants a crowd to stand in front of it, Ward wants ground worth holding, Scavenging
+wants a route. A run that draws into one and meets a map refusing it should be a bad run — which is
+what H1 makes possible. The two changes only work together.
+
+`WeaponWeight` stays at 4.8 against the assessment's advice, because the file's own reasoning is
+sound: a deck where the weapon is one row of twenty-one produces runs with eight rules and a starting
+rifle. Weapon level is excluded from the lines entirely — a universal card inside one line would make
+that line strictly better.
+
+**The first version of the probe measured the wrong thing.** It reported how concentrated a run ended
+up, and 85% looked like collapse — until the control with the affinity switched off entirely came out
+at 71%. A greedy simulated player concentrates on its own, so concentration was never evidence of
+anything. What matters to a player is whether the three cards on the table are all from one line.
+Measured: the deck tilts (85% against 71%) and **94% of offers still hold more than one line.**
+
+### ✅ H4a — The shop is where a build starts
+
+The assessment's sharpest line about the meta layer was that the armour, backpack and boot choices are
+"numerical efficiency trades". It was right: every piece added a number to a number, so what the player
+bought changed how easily a run went and never what the run *was*. H3 gave the deck five lines and made
+a pick tilt it, and gear could tilt nothing — which left the shop outside the one system that decides
+what a run becomes.
+
+`GearResource.Favours` names a line, `FavourStrength` says how hard it pulls, and `RunGrowth.FavourLine`
+feeds both into the same term a pick feeds:
+
+    weight *= 1 + (picks in line + favour in line) * LineAffinity
+
+**Deliberately the same currency as a pick**, so there is no second mental model to hold: wearing two
+Ward pieces means the run starts as though two Ward cards had already been taken. At
+`LineAffinity = 0.5`, one piece at 1.0 is +50% on that line's cards.
+
+Measured by `GrowthProbe` stage 6 — Ward is **30%** of cards offered with no gear and **43%** wearing
+two Ward pieces. It is a tilt and never a lock: stage 5 holds 94% of offers to more than one line, so a
+player who bought into a line and drew a map refusing it can still turn. That combination is the whole
+design. A lock would make H1's leaning maps a punishment for a decision made in a menu.
+
+**The starting kit favours nothing**, which is the rule `LoadoutProbe` already asserts about its
+numbers, for the same reason: a player who cannot afford gear must get a deck that is not leaning
+anywhere, or the first run teaches a build nobody chose.
+
+**Cleared before the loop, not after.** `SetCaps` and `SetRuleCaps` have already cost this project a
+loadout whose ceilings were a delta on the previous one. The identical shape here would make
+re-equipping in the base screen compound the lean, and `ReapplyGearForTesting` calls the path twice in
+one process — so the second reading of one loadout would be twice as committed as the first.
+
+##### Two of the five lines can only be reached through one trinket
+
+| Line | Pieces | Slots they sit in | Most wearable at once |
+| :--- | ---: | :--- | ---: |
+| Ward | 5 | armour ×2, boots, trinket ×2 | 3 |
+| Scavenging | 3 | backpack, boots, trinket | 3 |
+| Gunnery | 2 | backpack, trinket | 2 |
+| Ordnance | 1 | trinket | 1 |
+| Retinue | 1 | trinket | 1 |
+
+Every one of those mappings is honest on its own: armour is about staying alive and that is Ward, a
+bandolier carries ammunition and that is Gunnery. The asymmetry falls out of the body slots only being
+*about* three of the five things the deck is about.
+
+The effect is not honest, though. A player committing to Ordnance before a run has exactly one piece to
+do it with — the Cracked Capacitor, which costs 25 health — while Ward has five and three can be worn
+together. Two of the five lines the map is built to argue with cannot be pre-committed to at all, which
+makes them lines a run can only fall into rather than choose.
+
+Recorded as the next thing rather than fixed by relabelling a piece. Making the table symmetric by
+calling a boot Ordnance would trade a real asymmetry for a dishonest mapping, and the mapping is what
+makes the tilt legible to the player in the first place.
+
+### H4 — Still open
+
+- **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See above.
+  The honest fix is more gear rather than different labels, and it wants the dominant-build sweep to
+  land first so the new pieces are priced against a table that means something.
+- **The dominant build.** Courier + Service Rifle + knife + capacitor. The Service Rifle leads on
+  damage, magazine, reserve *and* penetration simultaneously; nothing else in the table leads on more
+  than one. Low implementation cost, medium-to-high tuning cost — it needs a sweep across five biomes
+  and three characters.
+- **The assessment recommends using `MaxReserve` for ammunition scarcity.** The owner asked for that
+  cap removed, so it stays removed. The tension is real and is recorded rather than resolved.
+
 ## Half F — the things in your hands
 
 **The owner's goal, stated 2026-08-24:** scene, characters, monsters, items and skills all

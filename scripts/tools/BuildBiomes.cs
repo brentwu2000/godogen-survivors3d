@@ -31,6 +31,7 @@ public partial class BuildBiomes : SceneTree
             new()
             {
                 BiomeName = "Rail Yard",
+                StructureSet = System.Array.ConvertAll(PropLibrary.YardStructureSet, kind => (int)kind),
                 Blurb = "mixed cover, honest sight lines",
                 TileWeights = new[] { 1.0f, 1.0f, 1.0f, 1.0f },
                 CrateCount = 8,
@@ -166,6 +167,7 @@ public partial class BuildBiomes : SceneTree
                 // Cars, buses, hoardings, a kiosk — and a tower block and a
                 // broken overpass on the horizon instead of a water tower.
                 PropSet = System.Array.ConvertAll(PropLibrary.CitySet, kind => (int)kind),
+                StructureSet = System.Array.ConvertAll(PropLibrary.CityStructureSet, kind => (int)kind),
 
                 GroundTint = new Color(0.86f, 0.86f, 0.90f),
                 PropTint = new Color(0.94f, 0.93f, 0.96f),

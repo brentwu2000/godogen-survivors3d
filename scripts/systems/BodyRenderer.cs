@@ -55,7 +55,10 @@ public sealed class BodyRenderer
         for (int i = 0; i < variants; i++)
         {
             ArrayMesh mesh = MeshFor(types[i]);
-            mesh.SurfaceSetMaterial(0, new ShaderMaterial { Shader = shader });
+            var material = new ShaderMaterial { Shader = shader };
+            material.SetShaderParameter("surface_detail",
+                GD.Load<Texture2D>(DetailTextureFor(types[i].TypeName)));
+            mesh.SurfaceSetMaterial(0, material);
 
             _multiMeshes[i] = new MultiMesh
             {
@@ -85,6 +88,17 @@ public sealed class BodyRenderer
             Node.AddChild(_nodes[i]);
         }
     }
+
+    /// A body category owns a painted surface, not merely a tint. Fast infected
+    /// read as torn skin and cloth; the heavy roster reads as layered hide and
+    /// calcified armour. Keeping this on the material preserves one draw call per
+    /// variant and avoids spending either animation UV channel on texture data.
+    private static string DetailTextureFor(string typeName) => typeName switch
+    {
+        "brute" or "bloater" or "bulwark" or "boss" or "lantern" =>
+            "res://assets/textures/mutant_handpainted.png",
+        _ => "res://assets/textures/infected_handpainted.png",
+    };
 
     /// The mesh for one variant: a baked body if it names one, procedural if not.
     ///
@@ -277,14 +291,25 @@ public sealed class BodyRenderer
         return units + Mathf.Clamp(stride, 0.0f, 0.9999f);
     }
 
-    /// Hue rotation for an elite mark, in turns.
+    /// How hard the elite mark is pushed, 0 for none.
     ///
     /// A rotation rather than a multiply. `Elites.Tint` returns a colour meant to
     /// be multiplied into a sprite's texture, which works on a mostly-grey PNG
     /// and fails on saturated vertex colours — a red tint on the green bloater
     /// gives black, so the most distinctive variant loses its silhouette exactly
     /// when it becomes the most dangerous one.
-    private static float HueShift(byte elite) => elite == 0 ? 0.0f : 0.12f + elite * 0.17f;
+    ///
+    /// **The scale is much smaller than it was.** This returned 0.29 to 0.63
+    /// turns and the shader spent all of it on hue, which on a muted palette
+    /// produced lavender and mint — the most dangerous bodies in a crowd came out
+    /// as the prettiest. The shader now reads this as a *strength*, spending a
+    /// twelfth of a turn on hue and the rest on saturating and darkening, so an
+    /// elite is the same creature deeper and dirtier rather than a different
+    /// colour. See `body.gdshader`.
+    ///
+    /// Still one number per kind, and still separated enough that three kinds are
+    /// three marks rather than a gradient.
+    private static float HueShift(byte elite) => elite == 0 ? 0.0f : 0.45f + elite * 0.28f;
 
     /// A small, stable per-body brightness offset in [-1, 1].
     ///

@@ -10,4 +10,5 @@ Tier = 2
 Price = 550
 HealthBonus = -25.0
 ShockwaveBonus = 1
+Favours = 2
 ShockwaveUpgradeCap = 6

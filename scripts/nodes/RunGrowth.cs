@@ -2,6 +2,45 @@ using Godot;
 
 /// Every in-run upgrade. Order is the pick's identity — it indexes the taken and
 /// cap tables — so new entries go on the end.
+/// Which way of fighting a card belongs to.
+///
+/// **The deck had twenty-two options and no shape.** An ordinary run lasts 83 to
+/// 142 seconds and buys a handful of picks, so drawing uniformly from twenty-two
+/// hands the player fragments of five different builds and lets them complete
+/// none. Every run ended as the same soup: a weapon level, a proc percentage, a
+/// bit of armour, and whichever kit card happened to show up.
+///
+/// A card belongs to a line, and taking one makes that line likelier. The first
+/// two picks therefore *choose* something, and the rest of the run compounds it
+/// — which is the difference between a build and a pile.
+///
+/// The lines are deliberately not balanced against each other in power. They are
+/// balanced in *what they ask of the map*: Ordnance wants a crowd to stand in
+/// front of it, Ward wants ground worth holding, Retinue wants time, Scavenging
+/// wants a route. A run that draws heavily into one and meets a map that refuses
+/// it should be a bad run. That is the whole point of the zones leaning.
+public enum GrowthLine
+{
+    /// Not part of any line. The weapon level is what every build spends on, so
+    /// putting it in one would make that line strictly better.
+    None,
+
+    /// The weapon hits harder, faster, or through more.
+    Gunnery,
+
+    /// One hit becomes several. Wants a crowd.
+    Ordnance,
+
+    /// Staying alive where you are standing.
+    Ward,
+
+    /// Things that fight without you.
+    Retinue,
+
+    /// Moving, reaching, and taking more out.
+    Scavenging,
+}
+
 public enum GrowthOption
 {
     WeaponLevel,
@@ -110,6 +149,104 @@ public partial class RunGrowth : Node
     /// entries it is about a fifth of draws, which is where it was before the kit
     /// cards diluted it.
     [Export] public float WeaponWeight { get; set; } = 4.8f;
+
+    /// How much one pick tilts the deck toward its own line.
+    ///
+    /// At 0.5, a line the player has taken twice from is twice as likely to be
+    /// offered as one they have ignored. That is enough to make a run cohere by
+    /// the fourth or fifth pick and not so much that the deck collapses to one
+    /// line — which would trade "fragments of everything" for "no choice at all",
+    /// and the second is worse because at least the first has variety in it.
+    ///
+    /// Applied at draw time rather than folded into `WeightOf`, which stays a
+    /// statement of what a card is worth on its own.
+    [Export] public float LineAffinity { get; set; } = 0.5f;
+
+    /// Which line each option belongs to.
+    ///
+    /// Kept as a switch rather than a field on the enum because it is a fact
+    /// about the *deck*, not about the card: the same Pierce could sit in a
+    /// different line in a different game, and the thing that would have to
+    /// change is this table.
+    public static GrowthLine LineOf(GrowthOption option) => option switch
+    {
+        GrowthOption.Pierce or GrowthOption.Crit or GrowthOption.FireRate
+            or GrowthOption.Reach => GrowthLine.Gunnery,
+
+        GrowthOption.Area or GrowthOption.Knockback or GrowthOption.Ignite
+            or GrowthOption.Detonate or GrowthOption.Shockwave => GrowthLine.Ordnance,
+
+        GrowthOption.MaxHealth or GrowthOption.Armour or GrowthOption.Regen
+            or GrowthOption.Dodge or GrowthOption.Thorns or GrowthOption.Chill => GrowthLine.Ward,
+
+        GrowthOption.Orbit or GrowthOption.Chain or GrowthOption.Lifesteal => GrowthLine.Retinue,
+
+        GrowthOption.MoveSpeed or GrowthOption.SearchSpeed
+            or GrowthOption.Fortune => GrowthLine.Scavenging,
+
+        _ => GrowthLine.None,
+    };
+
+    /// What the equipped gear leans toward, set once by `MetaManager`.
+    ///
+    /// Indexed by `GrowthLine`. Kept here rather than read from the profile at
+    /// draw time because the deck is drawn many times a run and the loadout
+    /// cannot change during one — and because a probe comparing two loadouts
+    /// wants to set this directly rather than stand up a shop.
+    private readonly float[] _favour = new float[6];
+
+    /// Tells the deck what the loadout leans toward. Additive, so two pieces
+    /// favouring one line stack the way two picks would.
+    public void FavourLine(GrowthLine line, float strength)
+    {
+        if (line != GrowthLine.None)
+            _favour[(int)line] += strength;
+    }
+
+    /// Forgets the loadout's lean. `MetaManager` calls this before re-applying,
+    /// so re-equipping in the base screen does not compound.
+    public void ClearFavour() => System.Array.Clear(_favour);
+
+    public float FavourOf(GrowthLine line) => _favour[(int)line];
+
+    /// How many picks this run has put into a line. Public so the readout can
+    /// name what the run is becoming, and so a probe can assert it compounds.
+    public int TakenInLine(GrowthLine line)
+    {
+        int total = 0;
+        for (int i = 0; i < OptionCount; i++)
+        {
+            if (LineOf((GrowthOption)i) == line)
+                total += _taken[i];
+        }
+
+        return total;
+    }
+
+    /// The line this run has committed to hardest, or None if it has not.
+    public GrowthLine Committed
+    {
+        get
+        {
+            GrowthLine best = GrowthLine.None;
+            int most = 1;
+
+            foreach (GrowthLine line in System.Enum.GetValues<GrowthLine>())
+            {
+                if (line == GrowthLine.None)
+                    continue;
+
+                int taken = TakenInLine(line);
+                if (taken > most)
+                {
+                    most = taken;
+                    best = line;
+                }
+            }
+
+            return best;
+        }
+    }
 
     public int Level { get; private set; }
     public float Experience { get; private set; }
@@ -410,6 +547,22 @@ public partial class RunGrowth : Node
     /// Applies an option directly, as taking it would. For probes: the effect of
     /// a card and the deck that offers it are separate questions, and testing the
     /// first through the second means every measurement waits on a random draw.
+    /// Forgets every pick this run has made.
+    ///
+    /// Only a probe calls it, and only to play many runs in one process: asking
+    /// whether the deck tilts toward a line needs thirty runs' worth of picks,
+    /// and standing up thirty scenes to get them would measure the scene loader.
+    ///
+    /// The modifiers those picks applied are *not* undone — this resets what the
+    /// deck remembers, not what the player has. A probe that needs a clean player
+    /// wants `Fresh`.
+    public void ResetForTesting()
+    {
+        System.Array.Clear(_taken);
+        Offer = System.Array.Empty<GrowthOption>();
+        PendingPicks = 0;
+    }
+
     public void GrantForTesting(GrowthOption option)
     {
         Apply(option);
@@ -433,7 +586,17 @@ public partial class RunGrowth : Node
             if (!IsAvailable(option))
                 continue;
 
+            // Tilted toward what this run has already bought. See `LineAffinity`.
             float weight = WeightOf(option);
+
+            // Picks taken *and* what the loadout leans toward, in the same
+            // currency: a piece at strength 1.0 counts as one pick of its line.
+            // That is what lets a player reason about the shop — buying two Ward
+            // pieces starts the run as though two Ward cards were already taken.
+            GrowthLine line = LineOf(option);
+            if (line != GrowthLine.None)
+                weight *= 1.0f + (TakenInLine(line) + _favour[(int)line]) * LineAffinity;
+
             pool[count] = option;
             weights[count] = weight;
             total += weight;

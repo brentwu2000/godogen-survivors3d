@@ -14,6 +14,7 @@ CrateCount = 9
 DepthRarityBias = 2.1
 SpawnRingScale = 0.88
 PropSet = PackedInt32Array(7, 8, 9, 10, 11, 12, 13)
+StructureSet = PackedInt32Array(24, 25, 26)
 LandmarkSet = PackedInt32Array(0, 2)
 GroundTint = Color(0.86, 0.86, 0.9, 1)
 PropTint = Color(0.94, 0.93, 0.96, 1)

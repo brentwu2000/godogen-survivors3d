@@ -17,9 +17,9 @@ if (typeof globalThis.FileReader === 'undefined') {
 const specs = {
   walker:  { height: 2.0, width: .43, limb: .055, depth: .20, lean: 5,  hip: .47, shoulder: .79, head: .925, headR: .075 },
   runner:  { height: 1.8, width: .25, limb: .038, depth: .13, lean: 38, hip: .55, shoulder: .78, head: .91, headR: .050, runner: true },
-  brute:   { height: 3.0, width: 1.48,limb: .235, depth: .62, lean: -2, hip: .32, shoulder: .78, head: .855,headR: .045, brute: true },
+  brute:   { height: 3.0, width: .99, limb: .162, depth: .47, lean: -2, hip: .38, shoulder: .78, head: .855,headR: .045, brute: true },
   bloater: { height: 2.4, width: 1.42,limb: .060, depth: 1.14, lean: 0,  hip: .29, shoulder: .68, head: .91, headR: .050, belly: true },
-  spitter: { height: 2.0, width: .27, limb: .034, depth: .13, lean: 0,  hip: .49, shoulder: .86, head: .895,headR: .047, spitter: true },
+  spitter: { height: 2.0, width: .44, limb: .038, depth: .15, lean: 0,  hip: .49, shoulder: .79, head: .915,headR: .055, spitter: true },
   boss:    { height: 5.5, width: 2.15,limb: .145, depth: .72, lean: 2,  hip: .39, shoulder: .76, head: .88, headR: .050, boss: true },
   lantern: { height: 1.9, width: .31, limb: .038, depth: .15, lean: 25, hip: .48, shoulder: .75, head: .84, headR: .055, organ: true, lantern: true },
 }
@@ -130,6 +130,12 @@ async function build(name, s) {
   let handY=shoulderY-armLength
   for(const side of [-1,1]){const sf=side<0?'L':'R',x=side*armX,r=s.limb*.9
     let elbow=point(x,shoulderY-armLength*.52,-r*.12), wrist=point(x,handY,-r*.03)
+    if(name==='spitter') {
+      // A bent, forward-reaching arm reads as anatomy in silhouette; two
+      // parallel plumb lines made the old long arms look like reeds.
+      elbow=point(x+side*r*2.15,shoulderY-armLength*.48,-r*2.0)
+      wrist=point(x-side*r*.65,handY,-r*4.1)
+    }
     if(name==='runner'){ elbow=point(x+side*r*1.8,shoulderY-armLength*.28,r*8.5); wrist=point(x+side*r*.5,shoulderY-armLength*.66,r*13.0); handY=wrist[1] }
     if(name==='boss'&&side<0){ elbow=point(x-side*r*.8,shoulderY-armLength*.50,0); wrist=point(x-side*r*1.8,handY-r*2.0,-r); handY=Math.min(handY,wrist[1]) }
     const mutate=name==='boss'&&side<0?2.55:name==='boss'?.48:(name==='brute'?1.45:1)
@@ -167,4 +173,5 @@ async function build(name, s) {
   console.log(`${name}.glb ${triangles} triangles; ${active.length} surfaces; ${bones.length} bones; hip ${hipY.toFixed(3)} m; shoulder ${shoulderY.toFixed(3)} m; hand ${handY.toFixed(3)} m; head ${h.toFixed(3)} m`)
 }
 
-for(const [name,spec] of Object.entries(specs)) await build(name,spec)
+const requested=new Set(process.argv.slice(2))
+for(const [name,spec] of Object.entries(specs)) if(!requested.size||requested.has(name)) await build(name,spec)

@@ -1,6 +1,10 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 
+uniform sampler2D surface_detail : source_color, filter_linear_mipmap, repeat_enable;
+uniform float surface_detail_scale = 3.2;
+uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.52;
+
 // The walk, and the only place a body is animated.
 //
 // A MultiMesh has no skeleton. There is one mesh and N transforms, and nothing
@@ -36,7 +40,18 @@ const float PACE_QUANTUM = 0.25;
 // distance.
 const float REFERENCE_SPEED = 2.4;
 
+// How far an elite's colour is pushed, per unit of INSTANCE_CUSTOM.y.
+//
+// The rotation is small on purpose — about a twelfth of a turn at the top mark,
+// against the two thirds it used to be. It is enough to separate the three kinds
+// from each other and not enough to leave the palette.
+const float ELITE_HUE = 0.075;
+const float ELITE_SATURATE = 0.55;
+const float ELITE_DARKEN = 0.28;
+
 varying vec3 body_tint;
+varying vec3 detail_position;
+varying vec3 detail_normal;
 
 // How much of this vertex is lit from inside, 0 to 1.
 //
@@ -132,9 +147,45 @@ void vertex() {
     // Twice a stride: the body rises on each footfall, and there are two feet.
     VERTEX.y += bob * amount * sin(phase * 2.0 * TAU);
 
+    // Texture coordinates are occupied by the animation rig. Keep the animated
+    // model-space position and normal for triplanar projection instead, so a
+    // painted texture can wrap every procedural and baked body without changing
+    // the gait data or requiring a second draw pass.
+    detail_position = VERTEX;
+    detail_normal = NORMAL;
+
     body_glow = 1.0 - COLOR.a;
 
-    vec3 colour = shift_hue(COLOR.rgb, INSTANCE_CUSTOM.y);
+    // An elite is the same creature gone *wrong*, not the same creature in a
+    // different colour.
+    //
+    // **The mark used to be a hue rotation of up to two thirds of a turn, and it
+    // was the loudest thing on screen.** `shift_hue` preserves luminance by
+    // design, which is correct arithmetic and the wrong goal: rotating a muted
+    // mid-value colour produces lavender and mint, so on a grim palette the most
+    // dangerous bodies in the crowd were also the prettiest. An assessment of the
+    // game called them "accidentally tinted rather than more dangerous", which is
+    // exactly right.
+    //
+    // What reads as dangerous against this palette is *deeper and dirtier*: a
+    // small hue push so the kind is still distinguishable, then saturation up and
+    // value down. The silhouette is untouched and the body still belongs to its
+    // variant — it has simply hardened.
+    float elite = INSTANCE_CUSTOM.y;
+
+    vec3 colour = shift_hue(COLOR.rgb, elite * ELITE_HUE);
+
+    if (elite > 0.0) {
+        // Away from its own grey, which is saturation without a colour-space
+        // conversion. Anything already near neutral barely moves, which is
+        // correct: a grey creature's elite mark should be that it went darker,
+        // not that it turned blue.
+        float grey = dot(colour, vec3(0.2126, 0.7152, 0.0722));
+        colour = mix(vec3(grey), colour, 1.0 + ELITE_SATURATE);
+
+        colour *= 1.0 - ELITE_DARKEN;
+        colour = max(colour, vec3(0.0));
+    }
 
     // A crowd of identical bodies reads as a texture rather than as a crowd.
     // Brightness only — jittering hue as well would fight the elite mark, which
@@ -149,7 +200,21 @@ void vertex() {
 }
 
 void fragment() {
-    ALBEDO = body_tint;
+    vec3 weights = pow(abs(normalize(detail_normal)), vec3(4.0));
+    weights /= max(weights.x + weights.y + weights.z, 0.0001);
+
+    vec3 sample_x = texture(surface_detail, detail_position.zy * surface_detail_scale).rgb;
+    vec3 sample_y = texture(surface_detail, detail_position.xz * surface_detail_scale).rgb;
+    vec3 sample_z = texture(surface_detail, detail_position.xy * surface_detail_scale).rgb;
+    float painted = dot(sample_x * weights.x + sample_y * weights.y + sample_z * weights.z,
+                        vec3(0.2126, 0.7152, 0.0722));
+
+    // Re-centre the neutral grayscale map around one before multiplying it over
+    // the authored vertex palette. This preserves enemy colour readability while
+    // adding actual cloth grain, chipped paint, pores and grime to every surface.
+    float detail_value = mix(1.0, clamp(0.58 + painted * 0.82, 0.58, 1.28),
+                             surface_detail_strength);
+    ALBEDO = body_tint * detail_value;
 
     // Emission, not a light. The mobile renderer has no global illumination and
     // this is a hundred and fifty bodies deep, so the sac brightens itself and
@@ -161,6 +226,6 @@ void fragment() {
     // Vertex colours arrive linear — MeshBuilder converts them once, at build
     // time, because a vertex colour is handed to the shader as-is while a texture
     // is decoded from sRGB first. Nothing to undo here.
-    ROUGHNESS = 0.85;
+    ROUGHNESS = clamp(0.72 + (1.0 - painted) * 0.24, 0.68, 0.96);
     METALLIC = 0.0;
 }

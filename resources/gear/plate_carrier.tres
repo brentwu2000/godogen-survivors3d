@@ -12,3 +12,4 @@ ArmourBonus = 1.0
 MoveSpeedBonus = -0.35
 HealthUpgradeCap = 7
 ArmourUpgradeCap = 5
+Favours = 3
