@@ -91,6 +91,7 @@ public partial class KitProbe : SceneTree
             case 5: return RunStage(StageChillNeverStops, "stacking chill approaches a limit rather than crossing it");
             case 6: return RunStage(StageResetClearsEverything, "a run's modifiers do not survive into the next one");
             case 7: return RunStage(StageCardsAreVisible, "every card puts something on screen when it works");
+            case 8: return RunStage(StageOrbitBleeds, "the ring leaves a cut, and a smaller one than the knife");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -240,6 +241,70 @@ public partial class KitProbe : SceneTree
 
         return covers;
     }
+
+    /// The blades bleed, and by less than the weapon that bleeds for a living.
+    ///
+    /// **Retinue is the line whose things fight without you, and bleed is damage
+    /// that happens without you.** They were the same sentence with only one of
+    /// them written down, and the line needed a status of its own: the reaction
+    /// system asks three of the five lines to be able to open one, or the
+    /// chemistry belongs entirely to the shop.
+    ///
+    /// Measured after the blades have stopped reaching, not while they are still
+    /// cutting — otherwise this reads the ring's own damage and passes whether or
+    /// not anything was left behind. The target is moved out of reach and the
+    /// health is watched from there.
+    private bool? StageOrbitBleeds(int tick)
+    {
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _player!.Mods.Reset();
+            _player.Mods.OrbitBlades = 3;
+
+            _horde.Spawn(_player.GlobalPosition + new Vector3(_horde.ContactRadius, 0.0f, 0.0f), 2);
+            return null;
+        }
+
+        // Long enough for the ring to connect at least once.
+        if (tick == 30)
+        {
+            if (_horde!.Pool.Count == 0)
+            {
+                GD.PushError("  the target died before the bleed could be read");
+                return false;
+            }
+
+            _bleedAfterCut = _horde.Pool.Bleed[0];
+
+            // Out of the ring, and far enough that nothing else touches it. What
+            // happens to its health from here is the cut and nothing else.
+            _horde.Pool.Position[0] = _player!.GlobalPosition + new Vector3(24.0f, 0.0f, 0.0f);
+            _healthOutside = _horde.Pool.Health[0];
+            return null;
+        }
+
+        if (tick < 90)
+            return null;
+
+        float lost = _healthOutside - _horde!.Pool.Health[0];
+        var knife = GD.Load<WeaponResource>("res://resources/weapons/combat_knife.tres");
+        float knifeBleed = knife?.TraitAmount ?? 0.0f;
+
+        GD.Print($"  the ring left {_bleedAfterCut:F1}/s and cost {lost:F1} more health "
+               + $"out of reach; the knife bleeds {knifeBleed:F1}/s");
+
+        // Three claims. It bleeds at all — a card that applies nothing is the
+        // failure this stage exists for. The bleed keeps working with the ring
+        // nowhere near, which is what makes it a status rather than a second
+        // damage number. And it is below the knife's, because a Sidearm slot's
+        // one bleeding weapon must not be outclassed by one card among
+        // twenty-two.
+        return _bleedAfterCut > 0.0f && lost > 0.0f && _bleedAfterCut < knifeBleed;
+    }
+
+    private float _bleedAfterCut;
+    private float _healthOutside;
 
     private bool? StageOrbitTicks(int tick)
     {

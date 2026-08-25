@@ -44,6 +44,15 @@ public partial class RunKit : Node3D
 
     [Export] public float OrbitSpin { get; set; } = 3.6f;
 
+    /// What a pass leaves behind, per second and for how long.
+    ///
+    /// 2.5 for 2 s against the Combat Knife's 4 for 3. Deliberately below it: the
+    /// knife is the whole of a Sidearm slot and the blades are one card among
+    /// twenty-two, so a ring that bled harder than the weapon would make the
+    /// weapon the worse way to do the thing it exists for.
+    [Export] public float OrbitBleed { get; set; } = 2.5f;
+    [Export] public float OrbitBleedSeconds { get; set; } = 2.0f;
+
     /// Ceiling on drawn blades. Five is the growth cap; the extra three are for
     /// gear that adds them.
     [Export] public int MaxBlades { get; set; } = 8;
@@ -183,6 +192,21 @@ public partial class RunKit : Node3D
             // which is what the card promises — not a wider ring.
             Vector2 away = flat.LengthSquared() > 0.0001f ? flat.Normalized() : Vector2.Right;
             _horde.Damage(index, OrbitDamage * passes, away * 0.2f);
+
+            // The ring cuts, so it leaves a cut.
+            //
+            // **Retinue is the line whose things fight without you, and bleed is
+            // damage that happens without you** — the two were the same sentence
+            // and only one of them was written down. It also gives the line a
+            // *status*, which is what the reaction system needs from it: three of
+            // the five lines have to be able to open a reaction or the chemistry
+            // belongs entirely to the shop.
+            //
+            // Weaker and shorter than a knife's, which is 4 a second for 3. A
+            // blade you are holding should out-bleed a blade that is orbiting on
+            // its own, or the Sidearm slot's one bleeding weapon is outclassed by
+            // a card.
+            _horde.ApplyBleed(index, OrbitBleed, OrbitBleedSeconds);
         }
     }
 

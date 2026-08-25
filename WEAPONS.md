@@ -333,8 +333,20 @@ the next starts.
    carrying. A scythe and a service rifle came back with identical offers, which is the correct output
    of a flag that changes nothing. It goes through the profile now, into the slot the weapon's own type
    asks for.
-4. **Every line applies or consumes.** Orbit bleeds, Chain shocks. Two behaviours on cards that
-   already exist, and `GrowthProbe` gains the stage that counts how many options move each weapon.
+4. **Every line applies or consumes.** **Orbit bleeds — done.** The ring cuts, so it leaves a cut:
+   2.5/s for 2 s against the knife's 4/s for 3, deliberately below it because a Sidearm slot's one
+   bleeding weapon must not be outclassed by one card among twenty-two. `KitProbe` reads the bleed
+   with the target moved *out of the ring*, so it measures what was left behind rather than the
+   blades' own damage.
+
+   **Chain shocks moved to step 6, with its reaction.** Shock has no consumer until Conduct exists, and
+   a status nothing consumes is a feature that is configured and does nothing — the shockwave nobody
+   could see, the touch layer nobody had executed. Bleed did not have that problem: it is damage on its
+   own the moment it lands.
+
+   Still to do here: the `GrowthProbe` stage that counts how many growth options measurably move each
+   weapon's output. It is the stage that would have caught the melee gap two phases before the balance
+   table did.
 5. **The four Sidearms.** The slot is a real choice or it is a knife with extra steps.
 6. **The reactions**, one at a time, each with a probe stage that asserts the status is *spent* — the
    failure mode is a permanent multiplier, and it would read as the reaction working.
