@@ -1063,8 +1063,61 @@ And `Axes` was missing every kit field. The six trinkets differ on almost nothin
 them looked identical to this check — the slot would have compared as a shelf of ties even once it was
 being read. It passed for the life of the trinket slot by never being asked.
 
+### ✅ H4g — The table can be asked about a loadout, and the first thing it says is "no"
+
+`AutoPlay -- gear:a,b,c` fits pieces before the run; `BalanceSweep -- gear:one;other` makes loadouts a
+dimension. Commas build a loadout, semicolons separate the ones to compare. Reported as **what the run
+actually wore**, read back off the profile — the rule `zoneTier`, `weapon` and `character` all follow.
+
+Fitted after `AddChild`, never before: `MetaManager._Ready` assigns a fresh `Profile` when it is
+ephemeral, so anything written earlier is discarded. Granted as well as equipped, because `ApplyGear`
+skips a slot naming a piece the profile does not own — equipping without granting is a loadout that
+silently does nothing.
+
+This was the last dimension the sweep could not express, and it is the one that matters most for what
+D2d and H4f had to leave open: gear grants rules *and* tilts the deck, so one piece is both halves of
+"play this as an Ordnance run".
+
+##### The knot does not measurably reward Ordnance
+
+Eight layouts, `lingers:auto`, Trekking Pack against Demolition Rig — the 2×2 D2d asked for:
+
+| | Trekking Pack → Demolition Rig |
+| :--- | :--- |
+| **knot runs** | +32%, +22%, **−75%**, +1% |
+| **scattered runs** | **+52%**, **+46%**, −5% |
+
+**The rig helps more on the runs that do not knot.** That is the opposite of the hypothesis, and the
+first two knot seeds looked like confirmation — a single +32% was written up here as though it were
+one, and the next knot seed came back at −75%.
+
+Overall the rig is not mispriced: 1313 median banked against 1202, 7/8 survival each, and **172 median
+seconds against 133**. It buys duration and pays in bulk, which is the design. The −6 bulk is what
+stops the extra duration turning into much extra payout.
+
+##### And the reason is that a build was never what was measured
+
+`Favours` makes a line's cards **likelier to be offered**. Which card is *taken* is decided by the
+bot's preference list, written in Phase 8 and never taught what a line is. So this measured "a run
+with 30% more area, a shockwave already turning, and a deck tilted" — not an Ordnance build, which is
+the thing the knot was supposed to reward.
+
+**To measure a line, the driver has to play the line.** That is a `line:` argument that biases the
+bot's pick order, and it is the next tool. Recorded here rather than worked around, because slicing
+eight runs until a favourable split appears is exactly how this file's earlier tables went wrong.
+
 ### H4 — Still open
 
+- **One of the twelve default layouts has never produced a row.** Seed `3210233709` comes back `Stuck`
+  in every arm, every weapon and every loadout, so **every median this file prints is computed over
+  eleven layouts and nobody knew**. Diagnosed and not fixed: the bot stops 5.6 m short of a crate at
+  (−7.8, 36.1) heading for (−8.0, 41.7) — due north — while its own flow field returns **(1.00, 0.00)**,
+  due east, and it covers 2.30 m in ten seconds. C3 fixed the neighbouring case, where `Sample` returns
+  *zero* inside an obstacle's inflated band and the bot substituted a straight line; this is `Sample`
+  returning a direction into a wall. `FlowField.EscapeFrom` exists and this path does not use it.
+- **A `line:` argument for the deck.** See H4g: gear tilts what is *offered* and the bot's Phase 8
+  preference list decides what is *taken*, so no measurement here has ever been of a growth line. It
+  is what the knot, the trinket slot and the two new backpacks all need to be judged properly.
 - **Melee banks about two thirds of what a rifle does and it is not the driver's fault.** H4e prices
   what melee buys and finds it is buying insurance against something that does not happen. The gap is
   measured; what to do about it is not decided. Two of the four weapons behind the rifles *are*

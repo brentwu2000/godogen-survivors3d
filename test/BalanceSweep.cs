@@ -97,12 +97,24 @@ public partial class BalanceSweep : SceneTree
         /// Who played it, as `AutoPlay` reported it. Same rule as `Weapon`.
         public readonly string Character;
 
+        /// What it was wearing above the starting kit, as reported. Same rule.
+        public readonly string Gear;
+
+        /// The share of this run's arrivals that came as a knot, 0 for a
+        /// scattered run. Printed per row rather than summarised, because the
+        /// question it answers is a 2x2 — does a loadout that wants a crowd do
+        /// better on the runs that deliver one — and that is a split of the rows
+        /// rather than another column of medians.
+        public readonly float KnotShare;
+
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
-                   int banked, int lowestHp, int peak, string weapon, string character)
+                   int banked, int lowestHp, int peak, string weapon, string character, string gear, float knotShare)
         {
+            KnotShare = knotShare;
             Weapon = weapon;
             Character = character;
+            Gear = gear;
             Zone = zone;
             ZoneTier = zoneTier;
             Level = level;
@@ -148,6 +160,9 @@ public partial class BalanceSweep : SceneTree
         // One empty entry: whoever `GameSession` defaults to, which is the
         // Drifter — the survivor every number in this file was tuned against.
         string[] characters = { "" };
+
+        // One empty entry: the starting kit, which grants nothing.
+        string[] loadouts = { "" };
 
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
@@ -208,6 +223,27 @@ public partial class BalanceSweep : SceneTree
                     characters = parsed.ToArray();
             }
 
+            // What it is wearing. Comma-separated pieces make one loadout;
+            // semicolons separate the loadouts to compare.
+            //
+            // The last dimension the table could not express, and the one that
+            // matters most for the questions left open: gear grants rules before
+            // the first level-up *and* tilts the deck toward a growth line, so a
+            // single piece is both halves of "play this as an Ordnance run".
+            if (arg.StartsWith("gear:"))
+            {
+                string[] named = arg[5..].Split(';');
+                var parsed = new System.Collections.Generic.List<string>();
+                foreach (string part in named)
+                {
+                    if (part.Length > 0)
+                        parsed.Add(part);
+                }
+
+                if (parsed.Count > 0)
+                    loadouts = parsed.ToArray();
+            }
+
             if (arg.StartsWith("lingers:"))
             {
                 string[] parts = arg[8..].Split(',');
@@ -234,9 +270,10 @@ public partial class BalanceSweep : SceneTree
         var rows = new System.Collections.Generic.List<Row>();
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
                  $"{arms.Length} arm(s) x {weapons.Length} weapon(s) x " +
-                 $"{characters.Length} survivor(s) = " +
-                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length} runs");
+                 $"{characters.Length} survivor(s) x {loadouts.Length} loadout(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length} runs");
 
+        foreach (string loadout in loadouts)
         foreach (string character in characters)
         foreach (string weapon in weapons)
         {
@@ -246,7 +283,7 @@ public partial class BalanceSweep : SceneTree
                 {
                     foreach (ulong seed in seeds)
                     {
-                        Row? row = RunOne(linger, seed, arm, weapon, character);
+                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout);
                         if (row is { } value)
                             rows.Add(value);
                         else
@@ -263,7 +300,8 @@ public partial class BalanceSweep : SceneTree
 
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
-    private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character)
+    private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character,
+                               string loadout)
     {
         var output = new Godot.Collections.Array();
 
@@ -279,6 +317,9 @@ public partial class BalanceSweep : SceneTree
 
         if (character.Length > 0)
             args.Add($"character:{character}");
+
+        if (loadout.Length > 0)
+            args.Add($"gear:{loadout}");
 
         if (arm != NoZone)
         {
@@ -325,7 +366,9 @@ public partial class BalanceSweep : SceneTree
             Mathf.RoundToInt(Number(line, "lowestHp")),
             Mathf.RoundToInt(Number(line, "peak")),
             Field(line, "weapon"),
-            Field(line, "character"));
+            Field(line, "character"),
+            Field(line, "gear"),
+            Number(line, "knotShare"));
     }
 
     private static string Field(string line, string key)
@@ -395,13 +438,15 @@ public partial class BalanceSweep : SceneTree
         ReportArms(rows);
         ReportWeapons(rows);
         ReportCharacters(rows);
+        ReportLoadouts(rows);
         ReportGrowth(rows);
 
         GD.Print("");
         foreach (Row row in rows)
         {
             GD.Print($"  linger {(row.Linger < 0.0f ? "auto" : $"{row.Linger:F0}s"),4} " +
-                     $"seed {row.Seed,-12} {(row.Zone ? "zone" : "past")} " +
+                     $"seed {row.Seed,-12} {(row.KnotShare > 0.0f ? "knots" : "  ---"),5} " +
+                     $"{(row.Gear.Length > 0 ? row.Gear : "kit"),-16} {(row.Zone ? "zone" : "past")} " +
                      $"{row.Outcome,-9} {row.Seconds,6:F1}s  banked {row.Banked,5}  " +
                      $"peak {row.Peak,4}  lowest HP {row.LowestHp,3}");
         }
@@ -599,6 +644,38 @@ public partial class BalanceSweep : SceneTree
         }
 
         PrintGroups("survivor", groups);
+    }
+
+    /// One row per loadout the run actually wore.
+    private static void ReportLoadouts(System.Collections.Generic.List<Row> rows)
+    {
+        var seen = new System.Collections.Generic.List<string>();
+        foreach (Row row in rows)
+        {
+            if (row.Gear.Length > 0 && !seen.Contains(row.Gear))
+                seen.Add(row.Gear);
+        }
+
+        if (seen.Count < 2)
+            return;
+
+        seen.Sort(System.StringComparer.Ordinal);
+
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (string name in seen)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (row.Gear == name)
+                    picked.Add(row);
+            }
+
+            groups.Add((name, picked));
+        }
+
+        PrintGroups("loadout", groups);
     }
 
     /// The one table shape this file prints, so an arm and a weapon are read the

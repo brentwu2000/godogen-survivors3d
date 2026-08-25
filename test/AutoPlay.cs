@@ -60,6 +60,8 @@ public partial class AutoPlay : SceneTree
     private int _zoneTier = -1;
     private string _weaponWanted = "";
     private string _weaponCarried = "none";
+    private string _gearWanted = "";
+    private string _gearWorn = "kit";
     private bool _zoneCleared;
 
     /// The crate a cleared zone drops, which the bot has to actually pick up.
@@ -827,6 +829,9 @@ public partial class AutoPlay : SceneTree
             if (argument.StartsWith("weapon:"))
                 _weaponWanted = argument[7..];
 
+            if (argument.StartsWith("gear:"))
+                _gearWanted = argument[5..];
+
             if (argument == "--zone")
                 _attemptZone = true;
         }
@@ -859,6 +864,63 @@ public partial class AutoPlay : SceneTree
         // to carry must not land in that weapon's column. C3 already paid for
         // this lesson once with a fallback zone tier.
         _weaponCarried = _weapons?.Weapon?.WeaponName.Replace(" ", "") ?? "none";
+
+        // What it is wearing.
+        //
+        // The last thing the sweep could not express. A weapon and a survivor
+        // were reachable; **a build was not** — and in this game a build is
+        // mostly gear, because gear grants rules before the first level-up *and*
+        // tilts the deck toward a growth line (`GearResource.Favours`). So one
+        // piece is both halves of "play this as an Ordnance run", which is what
+        // makes this the argument that unblocks the two questions D2d and H4f had
+        // to leave open.
+        //
+        // Fitted after `AddChild`, never before: `MetaManager._Ready` assigns a
+        // fresh `Profile` when it is ephemeral, so anything written earlier is
+        // discarded. `TrinketProbe` records the same trap.
+        if (_gearWanted.Length > 0 && _meta != null)
+        {
+            foreach (string name in _gearWanted.Split(','))
+            {
+                if (name.Length == 0)
+                    continue;
+
+                string path = $"res://resources/gear/{name}.tres";
+                var piece = GD.Load<GearResource>(path);
+
+                if (piece == null)
+                {
+                    GD.Print($"  no gear file named {name} — leaving that slot alone");
+                    continue;
+                }
+
+                _meta.Profile.EquippedGear[(int)piece.Slot] = path;
+
+                // Owned as well as equipped. `ApplyGear` skips a slot naming a
+                // piece the profile does not own, because a piece lost on the
+                // last run is still named in the slot until the base screen
+                // replaces it — so equipping without granting is a loadout that
+                // silently does nothing.
+                _meta.Profile.Grant(path);
+            }
+
+            _player.Mods.Reset();
+            _meta.ReapplyGearForTesting();
+        }
+
+        // Read back off the profile, same rule again.
+        var worn = new System.Collections.Generic.List<string>();
+        foreach (string path in _meta?.Profile.EquippedGear ?? System.Array.Empty<string>())
+        {
+            if (string.IsNullOrEmpty(path))
+                continue;
+
+            var piece = GD.Load<GearResource>(path);
+            if (piece != null && piece.Tier > 1)
+                worn.Add(piece.GearName.Replace(" ", ""));
+        }
+
+        _gearWorn = worn.Count > 0 ? string.Join("+", worn) : "kit";
 
         foreach (string argument in OS.GetCmdlineArgs())
         {
@@ -1375,7 +1437,7 @@ public partial class AutoPlay : SceneTree
                  $"zoneTier={(_zone?.Tier ?? -1)} " +
 
                  // The weapon the run actually started with, on the same rule.
-                 $"weapon={_weaponCarried} " +
+                 $"weapon={_weaponCarried} gear={_gearWorn} " +
 
                  // And who played it. Read back from the book rather than echoed
                  // from the flag, so a name that did not resolve lands in the
