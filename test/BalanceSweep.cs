@@ -100,6 +100,12 @@ public partial class BalanceSweep : SceneTree
         /// What it was wearing above the starting kit, as reported. Same rule.
         public readonly string Gear;
 
+        /// The line it played and how many picks went into it. The second is what
+        /// says whether it really did — a run offered its line twice in twenty
+        /// picks played the Phase 8 order with a label on it.
+        public readonly string Line;
+        public readonly int PicksInLine;
+
         /// The share of this run's arrivals that came as a knot, 0 for a
         /// scattered run. Printed per row rather than summarised, because the
         /// question it answers is a 2x2 — does a loadout that wants a crowd do
@@ -109,9 +115,12 @@ public partial class BalanceSweep : SceneTree
 
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
-                   int banked, int lowestHp, int peak, string weapon, string character, string gear, float knotShare)
+                   int banked, int lowestHp, int peak, string weapon, string character, string gear, float knotShare,
+                   string line, int picksInLine)
         {
             KnotShare = knotShare;
+            Line = line;
+            PicksInLine = picksInLine;
             Weapon = weapon;
             Character = character;
             Gear = gear;
@@ -163,6 +172,9 @@ public partial class BalanceSweep : SceneTree
 
         // One empty entry: the starting kit, which grants nothing.
         string[] loadouts = { "" };
+
+        // One empty entry: the Phase 8 pick order, which plays no line at all.
+        string[] lines = { "" };
 
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
@@ -244,6 +256,28 @@ public partial class BalanceSweep : SceneTree
                     loadouts = parsed.ToArray();
             }
 
+            // Which growth line the bot plays.
+            //
+            // Until this existed no number in this file was about a line. Gear
+            // and picks tilt what is *offered*; the bot's Phase 8 preference list
+            // decided what was *taken*, so "an Ordnance run" was really "a run
+            // with a tilted deck and a pick order that had never heard of
+            // Ordnance". H4g went looking for the knot rewarding an Ordnance
+            // build and could not put one on the field to look at.
+            if (arg.StartsWith("lines:"))
+            {
+                string[] named = arg[6..].Split(',');
+                var parsed = new System.Collections.Generic.List<string>();
+                foreach (string part in named)
+                {
+                    if (part.Length > 0)
+                        parsed.Add(part);
+                }
+
+                if (parsed.Count > 0)
+                    lines = parsed.ToArray();
+            }
+
             if (arg.StartsWith("lingers:"))
             {
                 string[] parts = arg[8..].Split(',');
@@ -270,9 +304,11 @@ public partial class BalanceSweep : SceneTree
         var rows = new System.Collections.Generic.List<Row>();
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
                  $"{arms.Length} arm(s) x {weapons.Length} weapon(s) x " +
-                 $"{characters.Length} survivor(s) x {loadouts.Length} loadout(s) = " +
-                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length} runs");
+                 $"{characters.Length} survivor(s) x {loadouts.Length} loadout(s) x " +
+                 $"{lines.Length} line(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length * lines.Length} runs");
 
+        foreach (string line in lines)
         foreach (string loadout in loadouts)
         foreach (string character in characters)
         foreach (string weapon in weapons)
@@ -283,7 +319,7 @@ public partial class BalanceSweep : SceneTree
                 {
                     foreach (ulong seed in seeds)
                     {
-                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout);
+                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout, line);
                         if (row is { } value)
                             rows.Add(value);
                         else
@@ -301,7 +337,7 @@ public partial class BalanceSweep : SceneTree
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
     private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character,
-                               string loadout)
+                               string loadout, string growthLine)
     {
         var output = new Godot.Collections.Array();
 
@@ -320,6 +356,9 @@ public partial class BalanceSweep : SceneTree
 
         if (loadout.Length > 0)
             args.Add($"gear:{loadout}");
+
+        if (growthLine.Length > 0)
+            args.Add($"line:{growthLine}");
 
         if (arm != NoZone)
         {
@@ -368,7 +407,9 @@ public partial class BalanceSweep : SceneTree
             Field(line, "weapon"),
             Field(line, "character"),
             Field(line, "gear"),
-            Number(line, "knotShare"));
+            Number(line, "knotShare"),
+            Field(line, "line"),
+            Mathf.RoundToInt(Number(line, "inLine")));
     }
 
     private static string Field(string line, string key)
@@ -439,6 +480,7 @@ public partial class BalanceSweep : SceneTree
         ReportWeapons(rows);
         ReportCharacters(rows);
         ReportLoadouts(rows);
+        ReportLines(rows);
         ReportGrowth(rows);
 
         GD.Print("");
@@ -676,6 +718,45 @@ public partial class BalanceSweep : SceneTree
         }
 
         PrintGroups("loadout", groups);
+    }
+
+    /// One row per growth line the bot played, with how much of the deck went in.
+    private static void ReportLines(System.Collections.Generic.List<Row> rows)
+    {
+        var seen = new System.Collections.Generic.List<string>();
+        foreach (Row row in rows)
+        {
+            if (row.Line.Length > 0 && !seen.Contains(row.Line))
+                seen.Add(row.Line);
+        }
+
+        if (seen.Count < 2)
+            return;
+
+        seen.Sort(System.StringComparer.Ordinal);
+
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (string name in seen)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            var inLine = new System.Collections.Generic.List<float>();
+
+            foreach (Row row in rows)
+            {
+                if (row.Line != name)
+                    continue;
+
+                picked.Add(row);
+                inLine.Add(row.PicksInLine);
+            }
+
+            // The label carries the evidence that the line was actually played,
+            // so a reader cannot take the row for a build without seeing it.
+            groups.Add(($"{name} ({Median(inLine)} picks)", picked));
+        }
+
+        PrintGroups("line", groups);
     }
 
     /// The one table shape this file prints, so an arm and a weapon are read the

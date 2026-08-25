@@ -1168,12 +1168,55 @@ Service Rifle is level with the starting rifle, the three survivors are three pr
 does not favour Ordnance. What changes is that the *next* table is over twelve, and comparing one
 against the other would be comparing two samples.
 
+### ✅ H4i — The bot can play a line
+
+`AutoPlay -- line:Ordnance`, `BalanceSweep -- lines:Ordnance,None`. The last tool the roadmap named,
+and it closes a blind spot every number in this file sat inside:
+
+> `Favours` decides **what is offered**. The Phase 8 preference list decides **what is taken**. So every
+> "Ordnance run" this project has measured was really a run with a tilted deck and a pick order that
+> had never heard of Ordnance.
+
+Three decisions, each for a way it would have measured the bot instead of the line:
+
+- **The survival override stays in front of it.** A bot that ignores its health while dying is not
+  playing a line, and the run ends before the line compounds into anything.
+- **The weapon card is outranked, not refused.** H3 excludes weapon level from every line on purpose,
+  so a bot that took only its line would spend the run on a starting rifle and measure that.
+- **`inLine` is reported next to `line`.** "Played Ordnance" and "was offered Ordnance twice in twenty
+  picks" are different runs, and the second is not evidence about a line. The sweep prints the median
+  in the row label — `Ordnance (15 picks)` — so a reader cannot take the row for a build without
+  seeing whether it was one.
+
+##### What it says about the knot, which is still not much
+
+Twelve layouts, `lingers:auto`, everyone wearing a Demolition Rig:
+
+| line | survived | median banked | median seconds | worst peak |
+| :--- | ---: | ---: | ---: | ---: |
+| None *(0 picks)* | 11/12 | 1721 | 166 | 161 |
+| Ordnance *(15 picks)* | 11/12 | 1469 | **181** | **152** |
+
+Per seed, playing the line against not playing it: **+21% median on the six knot layouts, +14% on the
+five scattered ones.** The direction is the predicted one and the magnitude is inside the noise — the
+spread runs from −36% to +54% — and the aggregate median banked is *lower* for Ordnance. That is not
+a confirmation and it is not being written up as one.
+
+What is solid: an Ordnance run holds the field down (worst peak 152 against 161, and one seed came in
+at 65 against the control's 160) and stays longer, and converts neither into payout because the deck
+it is spending on is not the bag.
+
 ### H4 — Still open
 
 - ~~**One of the twelve default layouts has never produced a row.**~~ Fixed — see H4h below.
-- **A `line:` argument for the deck.** See H4g: gear tilts what is *offered* and the bot's Phase 8
-  preference list decides what is *taken*, so no measurement here has ever been of a growth line. It
-  is what the knot, the trinket slot and the two new backpacks all need to be judged properly.
+- **A second layout the bot cannot finish**, and it is a harder case than H4h's. Seed `3432918353`:
+  the bot stands *inside* a margin 2.0 m from a crate with real geometry between them. `EscapeFrom`
+  pushes north-west, the route pulls it back south-east, and it covers 5.15 m in ten seconds arriving
+  nowhere — the oscillation the H4h report was extended to name. **Suppressing the escape near the goal
+  was tried and reverted**: it also turns off `Sample`, so a crate two metres behind a wall stops being
+  routed around at all, and both layouts went from stuck-at-5.6-m to stuck-at-2.2-m. The real answer is
+  probably to sample the route from the *nearest open cell* rather than from a body standing in a
+  blocked one, which is a change to how the field is read and wants its own phase.
 - **Melee banks about two thirds of what a rifle does and it is not the driver's fault.** H4e prices
   what melee buys and finds it is buying insurance against something that does not happen. The gap is
   measured; what to do about it is not decided. Two of the four weapons behind the rifles *are*

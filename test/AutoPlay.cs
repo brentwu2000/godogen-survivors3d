@@ -17,6 +17,7 @@ using Godot;
 public partial class AutoPlay : SceneTree
 {
     private const float ArriveDistance = 1.2f;
+
     private const int LegTimeoutTicks = 60 * 60;   // one minute per leg
 
     private Player _player = null!;
@@ -627,9 +628,43 @@ public partial class AutoPlay : SceneTree
         // the most useful thing to know about every balance number in this file,
         // and it is worth more written down than papered over.
         bool hurt = _player.Health < _player.MaxHealth * 0.6f;
-        int index = hurt
-            ? IndexOf(GrowthOption.MaxHealth, GrowthOption.Armour, GrowthOption.WeaponLevel)
-            : IndexOf(GrowthOption.WeaponLevel, GrowthOption.Armour, GrowthOption.MaxHealth);
+
+        int index;
+        if (hurt)
+        {
+            index = IndexOf(GrowthOption.MaxHealth, GrowthOption.Armour, GrowthOption.WeaponLevel);
+        }
+        else if (_line != GrowthLine.None && FirstOfLine(_line) >= 0)
+        {
+            // Playing a line, which is the one thing this bot has never been able
+            // to do.
+            //
+            // `GearResource.Favours` makes a line's cards **likelier to be
+            // offered** and the list above decides which is **taken**, so every
+            // measurement this file has produced about Ordnance or Retinue was
+            // really about "a run with a tilted deck and a Phase 8 pick order".
+            // H4g went looking for the knot rewarding an Ordnance build and could
+            // not put one on the field.
+            //
+            // The survival override above stays in front of it on purpose. A bot
+            // that ignores its health while dying is not measuring a line, it is
+            // measuring the bot — and the run ends before the line has compounded
+            // into anything.
+            //
+            // And the weapon card is not refused, it is only outranked: H3
+            // excludes weapon level from every line deliberately, so a bot that
+            // took nothing but its line would go the whole run on a starting
+            // rifle and measure that instead. 94% of offers hold more than one
+            // line, so this is a lean rather than a monoculture.
+            index = FirstOfLine(_line);
+        }
+        else
+        {
+            index = IndexOf(GrowthOption.WeaponLevel, GrowthOption.Armour, GrowthOption.MaxHealth);
+        }
+
+        if (_line != GrowthLine.None && RunGrowth.LineOf(_growth!.Offer[index]) == _line)
+            _picksInLine++;
 
         Tap($"pick_{index + 1}");
         _picksTaken++;
@@ -685,7 +720,8 @@ public partial class AutoPlay : SceneTree
         // of an eight-metre wall for sixty seconds, seven and a half metres from
         // the extraction pad, while the sweep recorded the run as having no result
         // at all. `EscapeFrom` is the field's answer to "which way is out".
-        Vector2 escape = _navField!.EscapeFrom(_player.GlobalPosition);
+        //
+        Vector2 escape = _navField.EscapeFrom(_player.GlobalPosition);
         if (escape != Vector2.Zero)
             return escape;
 
@@ -801,6 +837,22 @@ public partial class AutoPlay : SceneTree
     /// it, and refusing to loot measures how long the starting reserve lasts on
     /// its own — which is the only way to tell whether ammo is a resource.
     private bool _noLoot;
+
+    /// The first card in the offer belonging to a line, or -1.
+    private int FirstOfLine(GrowthLine line)
+    {
+        for (int i = 0; i < _growth!.Offer.Length; i++)
+        {
+            if (RunGrowth.LineOf(_growth.Offer[i]) == line)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// Which growth line the bot plays, or None for the Phase 8 ordering.
+    private GrowthLine _line = GrowthLine.None;
+    private int _picksInLine;
 
     /// First preference present in the offer, or 0 — something always gets
     /// taken, because the offer does not go away on its own.
@@ -935,6 +987,12 @@ public partial class AutoPlay : SceneTree
 
             if (argument.StartsWith("gear:"))
                 _gearWanted = argument[5..];
+
+            if (argument.StartsWith("line:")
+                && System.Enum.TryParse(argument[5..], ignoreCase: true, out GrowthLine wantedLine))
+            {
+                _line = wantedLine;
+            }
 
             if (argument == "--zone")
                 _attemptZone = true;
@@ -1554,6 +1612,12 @@ public partial class AutoPlay : SceneTree
                  // the failure this project has found in a shockwave nobody could
                  // see and a touch layer nobody had ever executed.
                  $"knotShare={_director.PlannedKnotShare:F2} knots={_director.KnotsSent} " +
+
+                 // The line asked for and how much of the deck actually went into
+                 // it. Both, because "played Ordnance" and "was offered Ordnance
+                 // twice in twenty picks" are different runs and the second one
+                 // is not evidence about a line.
+                 $"line={_line} inLine={_picksInLine} " +
 
                  // When the gun first had nothing left, or -1 for never.
                  //
