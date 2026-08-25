@@ -86,10 +86,16 @@ public partial class BalanceSweep : SceneTree
         public readonly int LowestHp;
         public readonly int Peak;
 
+        /// The weapon the run actually started with, as `AutoPlay` reported it.
+        /// Never the one the sweep asked for — see `zoneTier`, which learned this
+        /// the expensive way.
+        public readonly string Weapon;
+
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
-                   int banked, int lowestHp, int peak)
+                   int banked, int lowestHp, int peak, string weapon)
         {
+            Weapon = weapon;
             Zone = zone;
             ZoneTier = zoneTier;
             Level = level;
@@ -129,6 +135,9 @@ public partial class BalanceSweep : SceneTree
         // which zone was taken.
         int[] arms = { NoZone };
 
+        // One empty entry: whatever the profile equips, which is the starting kit.
+        string[] weapons = { "" };
+
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("seeds:") && int.TryParse(arg[6..], out int count))
@@ -142,6 +151,30 @@ public partial class BalanceSweep : SceneTree
 
             if (arg == "zones:tiers")
                 arms = new[] { NoZone, 0, 1 };
+
+            // What the bot carries, as a dimension of the table.
+            //
+            // **Every balance number this project has printed was taken on the
+            // starting kit.** A play-test runs on a fresh ephemeral profile, and
+            // a fresh profile owns the Scavenged Rifle and the Combat Knife — so
+            // the sweep has never once measured a weapon the player bought, and
+            // the dominant build H4b was written against was not something it
+            // could have shown. An empty entry is the starting kit, and it stays
+            // the default so every table this file has already printed keeps
+            // meaning what it meant.
+            if (arg.StartsWith("weapons:"))
+            {
+                string[] named = arg[8..].Split(',');
+                var parsed = new System.Collections.Generic.List<string>();
+                foreach (string part in named)
+                {
+                    if (part.Length > 0)
+                        parsed.Add(part);
+                }
+
+                if (parsed.Count > 0)
+                    weapons = parsed.ToArray();
+            }
 
             if (arg.StartsWith("lingers:"))
             {
@@ -160,19 +193,24 @@ public partial class BalanceSweep : SceneTree
 
         var rows = new System.Collections.Generic.List<Row>();
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
-                 $"{arms.Length} arm(s) = {lingers.Length * seeds.Length * arms.Length} runs");
+                 $"{arms.Length} arm(s) x {weapons.Length} weapon(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length} runs");
 
-        foreach (int arm in arms)
+        foreach (string weapon in weapons)
         {
-            foreach (float linger in lingers)
+            foreach (int arm in arms)
             {
-                foreach (ulong seed in seeds)
+                foreach (float linger in lingers)
                 {
-                    Row? row = RunOne(linger, seed, arm);
-                    if (row is { } value)
-                        rows.Add(value);
-                    else
-                        GD.PushError($"  linger {linger:F0} seed {seed} arm {arm}: no result");
+                    foreach (ulong seed in seeds)
+                    {
+                        Row? row = RunOne(linger, seed, arm, weapon);
+                        if (row is { } value)
+                            rows.Add(value);
+                        else
+                            GD.PushError($"  linger {linger:F0} seed {seed} arm {arm} "
+                                       + $"weapon {(weapon.Length > 0 ? weapon : "kit")}: no result");
+                    }
                 }
             }
         }
@@ -182,7 +220,7 @@ public partial class BalanceSweep : SceneTree
 
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
-    private static Row? RunOne(float linger, ulong seed, int arm)
+    private static Row? RunOne(float linger, ulong seed, int arm, string weapon)
     {
         var output = new Godot.Collections.Array();
 
@@ -192,6 +230,9 @@ public partial class BalanceSweep : SceneTree
             "--script", "test/AutoPlay.cs", "--",
             $"linger:{linger:F0}", $"seed:{seed}",
         };
+
+        if (weapon.Length > 0)
+            args.Add($"weapon:{weapon}");
 
         if (arm != NoZone)
         {
@@ -236,7 +277,8 @@ public partial class BalanceSweep : SceneTree
             Number(line, "seconds"),
             Mathf.RoundToInt(Number(line, "banked")),
             Mathf.RoundToInt(Number(line, "lowestHp")),
-            Mathf.RoundToInt(Number(line, "peak")));
+            Mathf.RoundToInt(Number(line, "peak")),
+            Field(line, "weapon"));
     }
 
     private static string Field(string line, string key)
@@ -304,6 +346,7 @@ public partial class BalanceSweep : SceneTree
         }
 
         ReportArms(rows);
+        ReportWeapons(rows);
         ReportGrowth(rows);
 
         GD.Print("");
@@ -314,12 +357,30 @@ public partial class BalanceSweep : SceneTree
                      $"peak {row.Peak,4}  lowest HP {row.LowestHp,3}");
         }
 
-        GD.Print("");
-        GD.Print(reachesTarget
-            ? $"SWEEP OK — at least one run reached {SurvivalTarget:F0}s and walked out"
-            : $"SWEEP FAILED — nothing reached {SurvivalTarget:F0}s; the second half of the clock is fiction");
+        // A question nobody asked cannot be answered, and must not be failed.
+        //
+        // The verdict is about whether the second half of the clock is reachable,
+        // and a bot told to leave at 120 s will not reach 180 s however healthy it
+        // is. So `lingers:60,120` reported `SWEEP FAILED` every single time —
+        // exit code 1 on a table with nothing wrong in it, which is the shape of
+        // alarm that teaches whoever reads it next to ignore the verdict line.
+        float longest = 0.0f;
+        foreach (float linger in lingers)
+            longest = Mathf.Max(longest, linger);
 
-        Quit(reachesTarget ? 0 : 1);
+        bool asked = longest >= SurvivalTarget;
+
+        GD.Print("");
+
+        if (!asked)
+            GD.Print($"SWEEP OK — the longest linger asked for was {longest:F0}s, so the "
+                   + $"{SurvivalTarget:F0}s question was not put");
+        else
+            GD.Print(reachesTarget
+                ? $"SWEEP OK — at least one run reached {SurvivalTarget:F0}s and walked out"
+                : $"SWEEP FAILED — nothing reached {SurvivalTarget:F0}s; the second half of the clock is fiction");
+
+        Quit(!asked || reachesTarget ? 0 : 1);
     }
 
     /// Whether the deck was ever spent.
@@ -403,20 +464,69 @@ public partial class BalanceSweep : SceneTree
         Collect("tier 1", row => row.Zone && row.ZoneTier == 1);
         Collect("zone ?", row => row.Zone && row.ZoneTier < 0);
 
+        PrintGroups("arm", groups);
+    }
+
+    /// One row per weapon the bot actually carried.
+    ///
+    /// Grouped by what `AutoPlay` reported rather than by what the sweep asked
+    /// for, so a run that could not equip what it was given lands under the kit
+    /// it really used. Exactly the rule `zoneTier` exists to follow, and for
+    /// exactly the same reason: a fallback in the wrong column is a table that is
+    /// wrong in the way the flag was added to fix.
+    private static void ReportWeapons(System.Collections.Generic.List<Row> rows)
+    {
+        var seen = new System.Collections.Generic.List<string>();
+        foreach (Row row in rows)
+        {
+            if (row.Weapon.Length > 0 && !seen.Contains(row.Weapon))
+                seen.Add(row.Weapon);
+        }
+
+        // One weapon is the ordinary table, and it does not need a breakdown of
+        // itself.
+        if (seen.Count < 2)
+            return;
+
+        seen.Sort(System.StringComparer.Ordinal);
+
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (string name in seen)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (row.Weapon == name)
+                    picked.Add(row);
+            }
+
+            groups.Add((name, picked));
+        }
+
+        PrintGroups("weapon", groups);
+    }
+
+    /// The one table shape this file prints, so an arm and a weapon are read the
+    /// same way.
+    private static void PrintGroups(
+        string heading,
+        System.Collections.Generic.List<(string Label, System.Collections.Generic.List<Row> Rows)> groups)
+    {
         if (groups.Count < 2)
             return;
 
         GD.Print("");
-        GD.Print("arm      survived   median banked   median seconds   median lowest HP   worst peak");
+        GD.Print($"{heading,-16} survived   median banked   median seconds   median lowest HP   worst peak");
 
-        foreach ((string label, System.Collections.Generic.List<Row> arm) in groups)
+        foreach ((string label, System.Collections.Generic.List<Row> group) in groups)
         {
             int survived = 0, worstPeak = 0;
             var banked = new System.Collections.Generic.List<float>();
             var seconds = new System.Collections.Generic.List<float>();
             var lowest = new System.Collections.Generic.List<float>();
 
-            foreach (Row row in arm)
+            foreach (Row row in group)
             {
                 worstPeak = Mathf.Max(worstPeak, row.Peak);
                 lowest.Add(row.LowestHp);
@@ -428,7 +538,7 @@ public partial class BalanceSweep : SceneTree
                 }
             }
 
-            GD.Print($"{label,-8} {survived}/{arm.Count,-8}   {Median(banked),13}   " +
+            GD.Print($"{label,-16} {survived}/{group.Count,-8}   {Median(banked),13}   " +
                      $"{Median(seconds),14}   {Median(lowest),16}   {worstPeak,10}");
         }
     }

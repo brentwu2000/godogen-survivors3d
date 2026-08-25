@@ -733,18 +733,66 @@ Axe on its first run and reported the table otherwise clean.
 **A shared pair of fields whose meaning is per-case needs a per-case direction too**, and the
 direction is the half nobody writes down.
 
+### ✅ H4c — The table can be asked about a weapon
+
+`AutoPlay -- weapon:<file>` equips one before the run and reports it in the `SWEEP` line;
+`BalanceSweep -- weapons:a,b,c` makes it a dimension of the table. The reported name is **what the run
+actually carried**, never what was asked for — `zoneTier` bought that lesson in C3, where a fallback
+run landed in the column it had been asked for rather than the one it played.
+
+An empty entry is the starting kit and is the default, so every table this file has already printed
+keeps meaning what it meant.
+
+Six weapons, five layouts, lingers 60 and 120 — sixty runs:
+
+| weapon | survived | median banked | median lowest HP | worst peak |
+| :--- | ---: | ---: | ---: | ---: |
+| Scavenged Rifle *(free)* | 8/10 | 1327 | 70 | 160 |
+| Reaper Scythe | 8/10 | 1324 | 67 | 183 |
+| Service Rifle | 7/10 | 1215 | **93** | **145** |
+| Fire Axe | 6/10 | 1069 | 51 | 184 |
+| Marksman Rifle | 5/10 | 759 | **0** | 174 |
+| Pump Shotgun | 5/10 | 759 | 12 | 184 |
+
+**The domination is gone.** A 1400-credit Service Rifle now sits behind the free one on both headline
+numbers and decisively ahead on the two that describe pressure: 93 health where the starting rifle
+ends on 70, and a worst crowd of 145 against everything else's 160 to 184. It is the only weapon in
+the game that keeps the field below the cap.
+
+##### Two of these six rows are about the bot and not about the weapon
+
+Recorded before anything is tuned against them, because tuning against a driver that cannot use what
+a weapon sells is the Phase 16 mistake with new numbers.
+
+- **It never kites and never breaks line of sight.** It circles at a fixed radius, so range buys it
+  nothing at all — which is the entire pitch of the Marksman Rifle, and most of the Pump Shotgun's
+  case for closing. Those two rows measure "what happens when a weapon built around positioning is
+  held by something that does not position".
+- **Its linger is a flag, so it cannot spend safety.** The Service Rifle's advantage is that the run
+  is calmer, and a player converts calm into staying longer and banking more. The bot leaves at 60 or
+  120 seconds whatever its health is, so the one thing this weapon buys is the one thing the
+  measurement holds fixed. Its 93 health is real and its 1215 is an artefact of not being allowed to
+  use it.
+
+So the *shape* of the weapon table is fixed and probe-enforced, and the **pricing of the Service Rifle
+is still open**. What would answer it is a linger tier the bot chooses rather than is given — leave
+when health drops below some fraction — which is a different bot and a phase of its own.
+
+##### A verdict on a question nobody asked
+
+`lingers:60,120` reported `SWEEP FAILED — nothing reached 180s` on every run of it, because a bot told
+to leave at 120 s will not reach 180 s however well it is doing. Exit code 1 on a table with nothing
+wrong in it, which is the kind of alarm that teaches the next reader to skip the verdict line. It says
+the question was not put, and exits zero.
+
 ### H4 — Still open
 
-- **The balance table has never measured a weapon the player bought.** `AutoPlay` runs on a fresh
-  ephemeral profile, which means the starting kit, which means every balance number this project has
-  ever printed is about the Scavenged Rifle and the Combat Knife. The dominant build was never
-  something the sweep could have seen — H4b fixes the *shape* of the weapon table, and it is
-  probe-enforced, but the *pricing* is unverified until `AutoPlay` can be told what to carry. That is
-  a `weapon:` argument and a `weapons:` arm, the same shape as the `biome:` and `tier:` ones already
-  there.
+- **The Service Rifle's price is unverified**, and the reason is the bot rather than the weapon. See
+  H4c. It wants a linger the driver decides — leave when health drops below a fraction — so that a
+  calmer run can turn into a longer one.
 - **Ordnance and Retinue are trinket-only**, so three of the four slots cannot express them. See
-  H4a. The honest fix is more gear rather than different labels, and it wants the weapon arm above to
-  land first so the new pieces are priced against a table that means something.
+  H4a. The honest fix is more gear rather than different labels, and it is now priceable: the weapon
+  arm exists, so a new piece can be measured rather than argued about.
 - **The assessment recommends using `MaxReserve` for ammunition scarcity.** The owner asked for that
   cap removed, so it stays removed. The tension is real and is recorded rather than resolved.
 

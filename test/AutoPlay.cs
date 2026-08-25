@@ -58,6 +58,8 @@ public partial class AutoPlay : SceneTree
     /// instead. Falling back silently would put a tier-0 run in the tier-1 column,
     /// which is the same failure one level further down.
     private int _zoneTier = -1;
+    private string _weaponWanted = "";
+    private string _weaponCarried = "none";
     private bool _zoneCleared;
 
     /// The crate a cleared zone drops, which the bot has to actually pick up.
@@ -760,9 +762,41 @@ public partial class AutoPlay : SceneTree
             if (argument.StartsWith("tier:") && int.TryParse(argument[5..], out int tier))
                 _zoneTier = tier;
 
+            if (argument.StartsWith("weapon:"))
+                _weaponWanted = argument[7..];
+
             if (argument == "--zone")
                 _attemptZone = true;
         }
+
+        // What the bot carries into the run.
+        //
+        // **Every balance number this project has ever printed is about the
+        // Scavenged Rifle and the Combat Knife.** A play-test runs on a fresh
+        // ephemeral profile — deliberately, because practice moves the starting
+        // point and a number measured against whatever is on disk is not a
+        // number — and a fresh profile is the starting kit. So the table has
+        // never seen a weapon the player bought, and the dominant build H4b was
+        // written against was not something it could have shown.
+        //
+        // Equipped rather than bought. The shop is a separate question and its
+        // prices are not what this measures; what is wanted is the run a player
+        // has after they have paid, which is this one.
+        if (_weaponWanted.Length > 0)
+        {
+            var carried = GD.Load<WeaponResource>($"res://resources/weapons/{_weaponWanted}.tres");
+
+            if (carried == null)
+                GD.Print($"  no weapon file named {_weaponWanted} — carrying the starting kit");
+            else
+                _weapons?.Equip(0, carried);
+        }
+
+        // Read back rather than assumed, and reported in the `SWEEP` line, for
+        // the reason `zoneTier` is: a run that could not carry what it was asked
+        // to carry must not land in that weapon's column. C3 already paid for
+        // this lesson once with a fallback zone tier.
+        _weaponCarried = _weapons?.Weapon?.WeaponName.Replace(" ", "") ?? "none";
 
         foreach (string argument in OS.GetCmdlineArgs())
         {
@@ -1222,6 +1256,9 @@ public partial class AutoPlay : SceneTree
                  // wrong column and the table would be wrong in exactly the way
                  // the flag was added to fix.
                  $"zoneTier={(_zone?.Tier ?? -1)} " +
+
+                 // The weapon the run actually started with, on the same rule.
+                 $"weapon={_weaponCarried} " +
                  $"level={_growth?.Level ?? 0} picks={_picksTaken} " +
                  $"weaponLv={_weapons?.Level ?? 0} weaponMax={_weapons?.MaxLevel ?? 0} " +
                  $"ceilingAt={(_ceilingAt < 0.0f ? -1.0f : _ceilingAt):F0} " +
