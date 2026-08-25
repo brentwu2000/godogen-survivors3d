@@ -313,7 +313,7 @@ public partial class CarryProbe : SceneTree
         int intoBag = _player!.Backpack.TotalValue;
 
         GD.Print($"  {before} was left in the crate; {intoBag} arrived in an empty bag " +
-                 $"and {_crate.RemainingValue} stayed behind");
+                 $"and {_crate!.RemainingValue} stayed behind");
 
         // Conservation, not emptying. What came out plus what is still in there
         // has to equal what was there — which holds whether or not the bag had

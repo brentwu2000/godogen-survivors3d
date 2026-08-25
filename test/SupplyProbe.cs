@@ -100,11 +100,20 @@ public partial class SupplyProbe : SceneTree
     /// The thing under test is the schedule. A stage that invoked the spawn
     /// directly would pass just as happily against a director that never checks
     /// the time, which is the one way this feature can fail while looking whole.
+    ///
+    /// **Read from the plan, never from `SupplyDropsAt`.** That export is the
+    /// tuned centre of a band, and since H2 the run draws its actual times around
+    /// it — `_supplyAt`, published as `PlannedSupplyAt`. Reading the export means
+    /// jumping the clock to a time the director was never going to use: this stage
+    /// jumped to 0.59 against a run that had drawn 0.60, missed the second drop by
+    /// one hundredth of a run, and reported a correct director as broken. The
+    /// first drop passed on the same run only because that seed's jitter happened
+    /// to fall the other way, which is worse than failing.
     private bool? StageDropsLandOnSchedule(int tick)
     {
         int before = CrateCount();
 
-        float[] schedule = _director!.SupplyDropsAt;
+        float[] schedule = _director!.PlannedSupplyAt;
         if (schedule.Length == 0)
         {
             GD.PushError("  no supply drops are scheduled");
@@ -154,6 +163,16 @@ public partial class SupplyProbe : SceneTree
     ///
     /// So the property is not rarity. It is that what comes out can be *used*,
     /// and the only way to check that is to open one.
+    ///
+    /// **Forty of them, though, not one.** The first version opened a single cache
+    /// and required a strict majority of its rows to be spendable. That is a claim
+    /// about one draw and not about the table, and it passed for as long as the
+    /// director's RNG was a hard-coded constant — every run in the game rolled the
+    /// same cache, so the stage was re-asserting one lucky sequence. H2 seeded that
+    /// stream from the level, the very next roll came out two spendable and two
+    /// inert, and a probe that had never tested the loot table reported the loot
+    /// table as broken. `RollIntoForTesting` advances the container's own xorshift
+    /// without reseeding, so calling it repeatedly is a sample rather than a repeat.
     private bool? StageDropsAreSupplies(int tick)
     {
         LootContainer? cache = null;
@@ -169,30 +188,60 @@ public partial class SupplyProbe : SceneTree
             return false;
         }
 
-        // Rolled into a bag of its own rather than the player's, so the stage
-        // measures the cache's table and not whatever the run has been carrying.
-        var bag = new Inventory(200);
-        cache.RollIntoForTesting(bag);
+        const int Samples = 40;
 
-        int usable = 0, inert = 0;
-        var names = new System.Collections.Generic.List<string>();
+        int usableItems = 0, inertItems = 0, majorityCaches = 0;
+        var first = new System.Collections.Generic.List<string>();
 
-        for (int i = 0; i < bag.EntryCount; i++)
+        for (int s = 0; s < Samples; s++)
         {
-            ItemResource item = bag.ItemAt(i);
-            names.Add(item.ItemName);
+            // A bag of its own rather than the player's, so the stage measures the
+            // cache's table and not whatever the run has been carrying. Capacity
+            // well past a cache's seven rolls, or bulk would silently refuse the
+            // heaviest entries — which are the spendable ones.
+            var bag = new Inventory(400);
+            cache.RollIntoForTesting(bag);
 
-            if (item.IsUsable || item.IsThrowable)
-                usable++;
-            else
-                inert++;
+            int usable = 0, inert = 0;
+
+            for (int i = 0; i < bag.EntryCount; i++)
+            {
+                ItemResource item = bag.ItemAt(i);
+                int count = bag.CountAt(i);
+
+                // Counted per item, not per row. A stack of three boxes of rounds
+                // is three times the supply of one circuit board, and the inventory
+                // stacks it into one row — so counting rows prices the two the same
+                // and hides the exact property this stage is about.
+                if (item.IsUsable || item.IsThrowable)
+                    usable += count;
+                else
+                    inert += count;
+
+                if (s == 0)
+                    first.Add(count > 1 ? $"{item.ItemName} x{count}" : item.ItemName);
+            }
+
+            usableItems += usable;
+            inertItems += inert;
+
+            if (usable > inert)
+                majorityCaches++;
         }
 
-        GD.Print($"  a cache rolls {usable} spendable and {inert} inert: {string.Join(", ", names)}");
+        float share = usableItems / (float)Mathf.Max(1, usableItems + inertItems);
+        float carried = majorityCaches / (float)Samples;
 
-        // A majority, not merely a presence. One box of rounds among six trinkets
-        // is a treasure chest with a token gesture in it.
-        return usable > inert;
+        GD.Print($"  first cache: {string.Join(", ", first)}");
+        GD.Print($"  over {Samples} caches: {share * 100.0f:F0}% of items spendable, "
+               + $"{carried * 100.0f:F0}% of caches majority-spendable");
+
+        // Both, because either alone passes on a table this stage exists to refuse.
+        // A high item share with a low cache share is a table that occasionally
+        // dumps a pile of rounds and is otherwise trinkets — the treasure chest,
+        // wearing an average. A high cache share with a low item share is a table
+        // whose spendable entries always turn up and never in useful quantity.
+        return share > 0.5f && carried >= 0.7f;
     }
 
     /// The bug this probe was written for.
@@ -208,15 +257,29 @@ public partial class SupplyProbe : SceneTree
             _cratesBefore = _log!.Freeze(RunState.Running, 0, new int[4], new int[4],
                                          System.Array.Empty<string>()).CratesLooted;
 
-            // Under the player, so the search timer is the only thing between the
-            // probe and the answer.
-            _director!.SetElapsedForTesting(_director.RunSeconds * (_director.SupplyDropsAt[0] + 0.01f));
-            _director.TickForTesting();
+            // A bag big enough that "emptied" is a fact about the crate.
+            //
+            // A cache is seven rolls and the Drifter carries twenty bulk, so a
+            // heavy one does not fit — the player takes what they can, the crate
+            // keeps the rest, `Looted` never flips and `CratesLooted` never moves
+            // while `LootValue` climbs. That is the correct behaviour of a full
+            // bag and it is indistinguishable, from here, from the bug this stage
+            // was written to catch. It read as a pass for as long as stage one
+            // left exactly one cache on the field and that cache happened to fit.
+            // Through `ApplyGear`, which is the path a backpack is really sized
+            // by, rather than by reaching past it.
+            _player!.ApplyGear(0.0f, 0.0f, 0.0f, 400, 0);
 
+            // Stage one has already put both caches on the field. Stand on the
+            // first, so the stage does not depend on which of them was last.
             foreach (Node child in Crates())
             {
                 if (child is LootContainer crate && crate.Name.ToString().StartsWith("Supply"))
+                {
                     _player!.GlobalPosition = crate.GlobalPosition;
+                    GD.Print($"  standing on {crate.Name}");
+                    break;
+                }
             }
 
             return null;

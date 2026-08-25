@@ -1135,6 +1135,30 @@ A separate failure mode from the three above, and by now the commoner one. Every
   map away.
 - `ZoneProbe` counted an opening burst while the player's rifle was killing it. **Turn off what you
   are not measuring.**
+- `SupplyProbe` read `SupplyDropsAt` — the tuned *centre* of a band — where the director consumes
+  `PlannedSupplyAt`, the time this run actually drew. It jumped the clock to 0.59 against a run
+  scheduled at 0.60 and reported a correct director as broken. **The near miss is the lesson:** the
+  first drop passed on the same run because that seed's jitter fell the other way, so the stage was
+  half green and half red on one reading of one number.
+- `SupplyProbe`'s content stage opened **one** cache and required a majority of its rows to be
+  spendable. That is a claim about a draw, not about a table, and it was green for as long as the
+  director's RNG was a hard-coded constant — every run in the game rolled the same cache. H2 seeded
+  that stream from the level and the next roll came out 2-2, so a probe that had never tested the
+  loot table reported the loot table as broken. Forty samples now, counted **per item rather than per
+  row**: a stack of five rifle rounds and one circuit board are both one row, so counting rows priced
+  them the same. Measured 69% of items spendable, 75% of caches majority-spendable.
+- `SupplyProbe`'s late-crate stage stood on a cache and waited for it to empty, into a bag of twenty
+  bulk. A heavy cache does not fit: the player takes what they can, `Looted` never flips,
+  `CratesLooted` never moves and `LootValue` climbs anyway — which is the correct behaviour of a full
+  bag and is **indistinguishable from the bug the stage exists to catch**. It was green only because
+  the stage above it was broken in a way that left exactly one cache on the field.
+
+### The build gate's first command was not being run
+
+`dotnet build` reports 0 warnings when nothing recompiles, so the gate passed on a cached result. A
+`--no-incremental` build surfaced a `CS8602` in `CarryProbe` that had been there through every "0
+warnings, 0 errors" this file has ever recorded. Worth running the gate's first command
+non-incrementally when a phase closes.
 
 ### Where the balance stands
 
