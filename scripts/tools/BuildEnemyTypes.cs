@@ -11,6 +11,47 @@ public partial class BuildEnemyTypes : SceneTree
 {
     private const string OutputDir = "res://resources/enemies";
 
+
+    // --- Why nothing in this table dies to one shot any more ------------------
+    //
+    // **The starting rifle does 12 and the walker had 10.** So did the runner at
+    // 4, the spitter at 8 and the stalker at 8: four of the nine variants, and
+    // between them the whole of the early crowd, died to a graze. What that
+    // produces is a first minute with no reading in it — every arrival is one
+    // trigger pull whatever it is, so the roster's differences begin at the
+    // brute and the first ninety seconds of every run are the same.
+    //
+    // Every light variant now survives exactly one round from the starting
+    // weapon and dies to the second — 13 and 14 against a shot of 12.
+    //
+    // **The old spread was invisible, and that is the argument for flattening
+    // it.** Four, eight, eight and ten all round to one round against a rifle
+    // that does twelve, so the differences between the light variants existed in
+    // this table and not in the game. What separates them is what always
+    // separated them on screen: the runner is 4.6 m/s against the walker's 2.4,
+    // the spitter holds at eight metres and shoots, the stalker is the only thing
+    // in the crowd that is not an upright biped. Health was never carrying any of
+    // that; it was carrying "how fast does this die", and the answer was the same
+    // for all four.
+    //
+    // **Deliberately paired with the dual-wield change rather than measured
+    // against the old game.** Both slots firing was worth about ten per cent of
+    // output, so raising the crowd's health spends what the pair just bought
+    // instead of stacking on top of it. Against the single-weapon baseline this
+    // would be a much larger step than it is.
+    //
+    // **The heavy end does not move at all, and the first attempt at this moved
+    // it and was wrong.** The bloater went 25 to 27 and the brute 60 to 64 on the
+    // reasoning that a small raise is harmless. Neither was ever one-shot — three
+    // rounds and five — so it was difficulty for its own sake, and the bloater's
+    // two points broke something: a bloater's death blast does 25, so at 27 a
+    // bloater no longer kills the bloater standing next to it, and "a blast
+    // resolves one level deep" stopped having a level to resolve to.
+    //
+    // `EnemyTypeProbe` caught it in one run. The lesson is the ordinary one and
+    // it is worth the line: a number that was not the complaint should not move
+    // while the complaint is being fixed, because the coupling it is part of is
+    // never written down where the change is being made.
     public override void _Initialize() => SceneBuildUtil.Run(this, Build);
 
     private static bool Build()
@@ -47,7 +88,7 @@ public partial class BuildEnemyTypes : SceneTree
                 BakedBodyPath = "res://resources/bodies/walker.res",
                 SpriteLayer = 0,
                 DesignHeightMeters = 2.0f,
-                MaxHealth = 10.0f,
+                MaxHealth = 14.0f,
                 MoveSpeed = 2.4f,
                 ContactDamagePerSecond = 6.0f,
                 SpriteScale = 1.0f,
@@ -78,7 +119,7 @@ public partial class BuildEnemyTypes : SceneTree
                 BakedBodyPath = "res://resources/bodies/runner.res",
                 SpriteLayer = 1,
                 DesignHeightMeters = 1.8f,
-                MaxHealth = 4.0f,
+                MaxHealth = 13.0f,
                 MoveSpeed = 4.6f,
                 ContactDamagePerSecond = 4.0f,
                 SpriteScale = 0.9f,
@@ -134,7 +175,7 @@ public partial class BuildEnemyTypes : SceneTree
                 BakedBodyPath = "res://resources/bodies/spitter.res",
                 SpriteLayer = 4,
                 DesignHeightMeters = 2.0f,
-                MaxHealth = 8.0f,
+                MaxHealth = 13.0f,
                 MoveSpeed = 2.0f,
                 ContactDamagePerSecond = 0.0f,
                 SpriteScale = 1.0f,
@@ -206,7 +247,7 @@ public partial class BuildEnemyTypes : SceneTree
                 SpriteLayer = 6,
                 BakedBodyPath = "res://resources/bodies/stalker.res",
                 DesignHeightMeters = 1.3f,
-                MaxHealth = 8.0f,
+                MaxHealth = 13.0f,
                 MoveSpeed = 4.2f,
                 ContactDamagePerSecond = 7.0f,
 

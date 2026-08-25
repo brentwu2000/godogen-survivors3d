@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_cq475")
 TypeName = "runner"
-MaxHealth = 4.0
+MaxHealth = 13.0
 MoveSpeed = 4.6
 ContactDamagePerSecond = 4.0
 SpriteScale = 0.9

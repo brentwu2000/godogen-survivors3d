@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_xdag4")
 TypeName = "stalker"
-MaxHealth = 8.0
+MaxHealth = 13.0
 MoveSpeed = 4.2
 ContactDamagePerSecond = 7.0
 SpriteScale = 1.342

@@ -91,6 +91,7 @@ public partial class EnemyTypeProbe : SceneTree
             case 6: return RunStage(StageDrawnHeight, "each variant stands at its designed height");
             case 7: return RunStage(StageHitFlash, "a hit that does not kill lights the target, briefly");
             case 8: return RunStage(StageSolidHeight, "and stands at it as a solid body too");
+            case 9: return RunStage(StageNothingIsOneShot, "nothing in the roster dies to one round from the starting rifle");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -279,6 +280,67 @@ public partial class EnemyTypeProbe : SceneTree
         }
 
         return top < 0 ? 0.0f : (bottom - top + 1) / (float)sprite.GetHeight();
+    }
+
+    /// The starting weapon must not delete a variant in one trigger pull.
+    ///
+    /// **It used to delete four of the nine.** The scavenged rifle does 12, and
+    /// the walker had 10, the runner 4, the spitter 8 and the stalker 8 — between
+    /// them the whole of the early crowd. What that produces is a first minute
+    /// with no reading in it: every arrival is one round whatever it is, so the
+    /// roster's differences do not begin until the brute, and the opening ninety
+    /// seconds of every run in the game are the same ninety seconds.
+    ///
+    /// Read against the weapon rather than against a number typed in here, so
+    /// re-tuning the rifle cannot silently reintroduce it — a constant copied out
+    /// of the data is a claim about the data that stops being checked the moment
+    /// it is copied.
+    ///
+    /// The upper bound is the other half and it matters as much. "Nothing is
+    /// one-shot" is trivially satisfied by giving everything five hundred health,
+    /// and a crowd that takes eight rounds each is a different game rather than a
+    /// legible one. Six rounds is the ceiling for anything that arrives in
+    /// numbers; the brute, the bulwark and the boss are exempt because being a
+    /// wall is what they are for.
+    private bool? StageNothingIsOneShot(int tick)
+    {
+        var rifle = GD.Load<WeaponResource>("res://resources/weapons/scavenged_rifle.tres");
+        if (rifle == null)
+        {
+            GD.PushError("  the starting rifle did not load");
+            return false;
+        }
+
+        float shot = rifle.BaseDamage;
+        string[] walls = { "brute", "bulwark", "boss" };
+
+        bool ok = true;
+        var report = new System.Collections.Generic.List<string>();
+
+        foreach (EnemyTypeResource type in _horde!.Types)
+        {
+            int rounds = Mathf.CeilToInt(type.MaxHealth / shot);
+            report.Add($"{type.TypeName} {rounds}");
+
+            if (rounds < 2)
+            {
+                GD.PushError($"  {type.TypeName} dies to one round of {shot:F0} "
+                           + $"({type.MaxHealth:F0} health)");
+                ok = false;
+            }
+
+            if (rounds > 6 && System.Array.IndexOf(walls, type.TypeName) < 0)
+            {
+                GD.PushError($"  {type.TypeName} takes {rounds} rounds — that is a wall, "
+                           + "and it arrives in numbers");
+                ok = false;
+            }
+        }
+
+        GD.Print($"  rounds from the starting rifle ({shot:F0} damage): "
+               + string.Join(", ", report));
+
+        return ok;
     }
 
     private bool RunStage(System.Func<int, bool?> stage, string label)

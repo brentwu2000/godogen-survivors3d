@@ -5,4 +5,5 @@
 [resource]
 script = ExtResource("1_jm7tj")
 TypeName = "walker"
+MaxHealth = 14.0
 BakedBodyPath = "res://resources/bodies/walker.res"

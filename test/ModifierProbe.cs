@@ -139,8 +139,7 @@ public partial class ModifierProbe : SceneTree
 
         if (tick == 2)
         {
-            _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
-            _withoutPierce = 4 - _horde!.Pool.Count;
+            _withoutPierce = HurtByOneShot();
 
             Reset();
             Line(count: 4);
@@ -151,12 +150,44 @@ public partial class ModifierProbe : SceneTree
         if (tick < 4)
             return null;
 
-        _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
-        int withPierce = 4 - _horde!.Pool.Count;
+        int withPierce = HurtByOneShot();
 
         GD.Print($"  a line of 4: {_withoutPierce} hit without pierce, {withPierce} with +3");
         Reset();
         return withPierce > _withoutPierce;
+    }
+
+    /// How many of the line lost health to one shot.
+    ///
+    /// **Counted as damage taken, never as bodies removed.** This read
+    /// `4 - Pool.Count` — how many *died* — which is the same number only while
+    /// one round kills a walker, and it stopped being that the moment the roster
+    /// stopped dying to a graze. The stage then reported zero hits with and
+    /// without three points of penetration and failed a mechanic that was working
+    /// perfectly: a proxy for the thing being measured, holding until the day the
+    /// thing it stood in for changed.
+    private int HurtByOneShot()
+    {
+        int count = _horde!.Pool.Count;
+        var before = new float[count];
+        for (int i = 0; i < count; i++)
+            before[i] = _horde.Pool.Health[i];
+
+        _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
+
+        int hurt = 0;
+
+        // Anything that died was hit, and its slot is gone — so a shrunken pool
+        // is counted rather than indexed past.
+        hurt += count - _horde.Pool.Count;
+
+        for (int i = 0; i < _horde.Pool.Count && i < count; i++)
+        {
+            if (_horde.Pool.Health[i] < before[i])
+                hurt++;
+        }
+
+        return hurt;
     }
 
     private int _withoutPierce;

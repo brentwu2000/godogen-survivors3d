@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_dn47a")
 TypeName = "spitter"
-MaxHealth = 8.0
+MaxHealth = 13.0
 MoveSpeed = 2.0
 ContactDamagePerSecond = 0.0
 BakedBodyPath = "res://resources/bodies/spitter.res"
