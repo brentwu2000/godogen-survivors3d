@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_vp4tj")
 WeaponName = "Scavenged Rifle"
+Favours = 1
 BaseDamage = 12.0
 BaseAttackSpeed = 6.0
 BaseRange = 18.0

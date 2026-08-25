@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_e8snw")
 WeaponName = "Pump Shotgun"
+Favours = 2
 BaseDamage = 16.0
 BaseAttackSpeed = 1.4
 BaseRange = 13.0

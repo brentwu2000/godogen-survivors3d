@@ -58,6 +58,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Combat Knife",
+                Favours = GrowthLine.Retinue,
 
                 // The only Sidearm the table has until step 3 of WEAPONS.md, and
                 // a shelf with one option on it is not a choice — recorded rather
@@ -101,6 +102,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Fire Axe",
+                Favours = GrowthLine.Ordnance,
                 Trait = WeaponTrait.Cleave,
                 TraitAmount = 0.25f,
                 TraitCount = 0,
@@ -119,6 +121,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Hunting Bow",
+                Favours = GrowthLine.Gunnery,
                 Trait = WeaponTrait.Ricochet,
                 TraitAmount = 0.0f,
                 TraitCount = 1,
@@ -139,6 +142,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Scavenged Rifle",
+                Favours = GrowthLine.Gunnery,
                 Trait = WeaponTrait.Burst,
                 TraitAmount = 0.09f,
                 TraitCount = 1,
@@ -200,6 +204,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Service Rifle",
+                Favours = GrowthLine.Gunnery,
                 Trait = WeaponTrait.Burst,
                 TraitAmount = 0.07f,
                 TraitCount = 2,
@@ -231,6 +236,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Pump Shotgun",
+                Favours = GrowthLine.Ordnance,
                 Trait = WeaponTrait.Spread,
                 TraitAmount = 0.34f,
                 TraitCount = 8,
@@ -262,6 +268,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Marksman Rifle",
+                Favours = GrowthLine.Gunnery,
                 Trait = WeaponTrait.Charge,
                 TraitAmount = 3.5f,
                 TraitCount = 3,
@@ -288,6 +295,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Bolt Launcher",
+                Favours = GrowthLine.Ordnance,
                 Trait = WeaponTrait.Blast,
                 TraitAmount = 4.0f,
                 TraitCount = 0,
@@ -313,6 +321,7 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Reaper Scythe",
+                Favours = GrowthLine.Ordnance,
                 Trait = WeaponTrait.Cleave,
                 TraitAmount = 0.75f,
                 TraitCount = 0,

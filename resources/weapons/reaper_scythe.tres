@@ -6,6 +6,7 @@
 script = ExtResource("1_c7q01")
 WeaponName = "Reaper Scythe"
 Category = 1
+Favours = 2
 BaseDamage = 22.0
 BaseAttackSpeed = 1.3
 BaseRange = 3.4

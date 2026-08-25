@@ -7,6 +7,7 @@ script = ExtResource("1_ktodx")
 WeaponName = "Combat Knife"
 Category = 0
 Slot = 1
+Favours = 4
 BaseDamage = 6.0
 BaseAttackSpeed = 3.2
 BaseRange = 1.6

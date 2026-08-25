@@ -6,6 +6,7 @@
 script = ExtResource("1_enax8")
 WeaponName = "Hunting Bow"
 Category = 2
+Favours = 1
 BaseDamage = 22.0
 BaseRange = 14.0
 BaseReloadTime = 0.0

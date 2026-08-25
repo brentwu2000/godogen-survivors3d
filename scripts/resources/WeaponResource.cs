@@ -99,6 +99,25 @@ public partial class WeaponResource : Resource
     /// Which of the two slots this can be carried in. See `WeaponSlot`.
     [Export] public WeaponSlot Slot { get; set; } = WeaponSlot.Primary;
 
+    /// Which growth line carrying this pulls the deck toward, or None.
+    ///
+    /// **Gear has done this since H4a and a weapon is the larger commitment of
+    /// the two.** `RunGrowth.FavourLine` makes a line's cards likelier to be
+    /// offered by exactly the amount one pick of that line would, so a loadout
+    /// stops being a stat block and becomes the first two picks of a build.
+    ///
+    /// Named for what the weapon *does*, never for what would be convenient to
+    /// balance: a shotgun's cone is one hit becoming several, which is
+    /// Ordnance's definition, and a knife's bleed is damage that happens without
+    /// you, which is Retinue's. A lean the player cannot read off the weapon is
+    /// a lean that reads as the deck being unfair.
+    [Export] public GrowthLine Favours { get; set; } = GrowthLine.None;
+
+    /// How hard it pulls, before the slot's own halving. One is worth about one
+    /// pick of that line — deliberately the same currency `GearResource` uses, so
+    /// a player can add a loadout up without a second mental model.
+    [Export] public float FavourStrength { get; set; } = 1.0f;
+
     [Export] public float BaseDamage { get; set; } = 10.0f;
 
     /// Attacks per second.

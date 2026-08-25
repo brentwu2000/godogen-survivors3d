@@ -175,6 +175,84 @@ clearest way to make a laser feel different from a fast gun rather than just qui
 
 ---
 
+## The skills, and where they meet the weapons
+
+**Asked for by the owner on 2026-08-25:** finish this against the skill system rather than beside it.
+
+Right now they are two systems that do not speak. A growth card grants a number on `RunModifiers` and
+whatever is firing reads it; a weapon carries a trait and nothing in the deck knows the trait exists.
+Nowhere is *this weapon plus that card* worth more than the two of them added up — which is the same
+complaint the outside assessment made about the whole game and the same one H1 to H4 have been
+answering everywhere else.
+
+Three joins, smallest first.
+
+### One: a weapon leans the deck, exactly as a piece of gear does
+
+`GearResource.Favours` names a growth line and `RunGrowth.FavourLine` feeds it into the same term a
+pick feeds, so wearing two Ward pieces starts a run as though two Ward cards had already been taken.
+**A weapon does not do this, and it is the larger commitment of the two.**
+
+`WeaponResource.Favours`, on the machinery that already exists. **Primary at full strength, Sidearm at
+half** — the Sidearm is the smaller half of the loadout and should tilt the deck by less than the
+thing filling both hands.
+
+| Weapon | Line | Why that one |
+| :--- | :--- | :--- |
+| Scavenged / Service / Marksman Rifle | Gunnery | the weapon hits harder, faster or through more |
+| Hunting Bow | Gunnery | penetration and a ricochet are both "one shot reaches more" |
+| Pump Shotgun | Ordnance | a cone is one hit becoming several, which is the line's definition |
+| Bolt Launcher | Ordnance | it detonates where it connects |
+| Fire Axe / Reaper Scythe | Ordnance | cleave is the same sentence with a blade in it |
+| Combat Knife | Retinue | **bleed is damage that happens without you**, which is what the line is |
+
+The knife is the one worth arguing about, and the argument is the point: Retinue currently has one
+trinket and one new backpack and no weapon at all, so a player who wants things that fight on their
+own has almost nothing to commit with before a run. A bleeding sidearm is that, and it makes "knife
+plus orbiting blades" a build rather than two unrelated purchases.
+
+### Two: every line either applies a status or consumes one
+
+The reactions above name weapons as their sources. Half of those sources should be **cards**, or a
+reaction is something the shop sells and the run cannot reach — the failure H4a fixed for gear by
+letting the deck reach what the loadout did not buy.
+
+| Status | From a weapon | From the deck | From gear or an item |
+| :--- | :--- | :--- | :--- |
+| **Bleed** | knife, katana | **Orbit** — the ring cuts, so blades bleed | — |
+| **Burn** | — | **Ignite** | molotov |
+| **Chill** | hand emitter | **Chill** | Frost Cell |
+| **Shock** | arc lance, pulse rifle | **Chain** — it is already electricity in everything but name | — |
+
+That is two new behaviours on cards that exist — Orbit bleeds, Chain shocks — and no new card. Both
+are what the card already looks like; neither changes what it costs.
+
+**And the two lines with no status are not left out, they have the other job:**
+
+- **Gunnery is the consumer that hits hardest.** Crit and penetration make the shot that spends a
+  status bigger, so Gunnery is what turns a reaction from a trick into a build.
+- **Scavenging is what pays for it.** Reactions want consumables — a molotov to start a burn, a
+  medkit to survive standing in the crowd that is bleeding — and Scavenging is the line that keeps the
+  bag full.
+
+Written down because the tempting fix is to give all five lines a status, and five statuses is a
+system nobody can read in a fight.
+
+### Three: a weapon the deck cannot improve is a weapon nobody should carry
+
+The deck is twenty-two options and a run buys a handful. If a weapon's output is moved by only two or
+three of them, the player carrying it spends most of their level-ups on cards that do nothing for what
+is in their hands — and that is invisible, because the card still says +12% of something.
+
+**Probe stage, in `GrowthProbe`: every weapon in the table has at least five growth options that
+measurably change its damage over a fixed window.** Measured by firing it at a wall of brutes with the
+option applied and without, which is the shape `ModifierProbe` already uses. A weapon below the line
+is a weapon whose build does not exist yet.
+
+This is the stage that would have caught the melee problem two phases before the balance table did:
+cleave scales with area, pierce does nothing for it, crit does, fire rate does — count them and the
+gap shows up in the table rather than in a play-test.
+
 ## Balance, stated as the things that must stay true
 
 Written as assertions because that is what `WeaponProbe` will hold them to.
@@ -243,10 +321,24 @@ the next starts.
    against each other would report a trade where no choice is being made — and a new stage asserts
    neither shelf is empty and the starting kit is a legal pair. No numbers moved: step 1 measured the
    pair at 110% and the budget is a ceiling to hold rather than a target to tune toward.
-3. **The four Sidearms.** The slot is a real choice or it is a knife with extra steps.
-4. **The reactions**, one at a time, each with a probe stage that asserts the status is *spent* — the
+3. ~~**The weapon leans the deck.**~~ **Done.** `WeaponResource.Favours` on the machinery gear already
+   uses, applied in the same pass so `ClearFavour` cannot wipe the loadout's half of the lean.
+   Measured: Ordnance is 26% of cards offered carrying nothing, **32% with an Ordnance primary and 28%
+   with the same weapon as a sidearm** — the halving is visible rather than asserted, and
+   `GrowthProbe` now holds all three numbers plus "every weapon names a line".
+
+   It also found that `AutoPlay -- weapon:` was **only pretending to change the loadout**: it called
+   `Equip` and left the profile saying something else, which was invisible until a weapon started
+   leaning the deck and then every `weapon:` run in the sweep was tilted by whatever the *profile* was
+   carrying. A scythe and a service rifle came back with identical offers, which is the correct output
+   of a flag that changes nothing. It goes through the profile now, into the slot the weapon's own type
+   asks for.
+4. **Every line applies or consumes.** Orbit bleeds, Chain shocks. Two behaviours on cards that
+   already exist, and `GrowthProbe` gains the stage that counts how many options move each weapon.
+5. **The four Sidearms.** The slot is a real choice or it is a knife with extra steps.
+6. **The reactions**, one at a time, each with a probe stage that asserts the status is *spent* — the
    failure mode is a permanent multiplier, and it would read as the reaction working.
-5. **The three tech Primaries.** Last, because overheat and a held beam are new firing models rather
+7. **The three tech Primaries.** Last, because overheat and a held beam are new firing models rather
    than new numbers, and they should land on a table that already balances.
 
 **Step 1 before anything else, and stop there for a measurement.** Everything after it is priced

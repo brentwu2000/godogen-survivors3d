@@ -6,6 +6,7 @@
 script = ExtResource("1_cawff")
 WeaponName = "Fire Axe"
 Category = 1
+Favours = 2
 BaseDamage = 26.0
 BaseAttackSpeed = 0.85
 BaseRange = 3.0

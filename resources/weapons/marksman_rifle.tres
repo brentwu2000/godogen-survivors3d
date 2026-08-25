@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_dqgkc")
 WeaponName = "Marksman Rifle"
+Favours = 1
 BaseDamage = 34.0
 BaseAttackSpeed = 0.9
 BaseRange = 30.0

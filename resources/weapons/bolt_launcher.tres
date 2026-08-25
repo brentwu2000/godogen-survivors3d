@@ -6,6 +6,7 @@
 script = ExtResource("1_rofsn")
 WeaponName = "Bolt Launcher"
 Category = 2
+Favours = 2
 BaseDamage = 26.0
 BaseAttackSpeed = 1.1
 BaseRange = 24.0

@@ -5,6 +5,7 @@
 [resource]
 script = ExtResource("1_y2s3g")
 WeaponName = "Service Rifle"
+Favours = 1
 BaseDamage = 11.0
 BaseAttackSpeed = 7.0
 BaseRange = 16.0

@@ -1019,12 +1019,36 @@ public partial class AutoPlay : SceneTree
         // has after they have paid, which is this one.
         if (_weaponWanted.Length > 0)
         {
-            var carried = GD.Load<WeaponResource>($"res://resources/weapons/{_weaponWanted}.tres");
+            string path = $"res://resources/weapons/{_weaponWanted}.tres";
+            var carried = GD.Load<WeaponResource>(path);
 
             if (carried == null)
+            {
                 GD.Print($"  no weapon file named {_weaponWanted} — carrying the starting kit");
+            }
             else
-                _weapons?.Equip(0, carried);
+            {
+                // Through the profile, not straight into the slot.
+                //
+                // `Equip` alone puts the weapon in the player's hands and leaves
+                // the profile saying something else — which was invisible until a
+                // weapon started leaning the growth deck, and then every
+                // `weapon:` run in the sweep was tilted by whatever the *profile*
+                // was carrying. The scythe and the service rifle came back with
+                // identical offers, which is the correct output of a flag that
+                // was only pretending to change the loadout.
+                //
+                // Into the slot the weapon's own type asks for, so a Primary
+                // cannot land in the sidearm slot the way the shop refuses to put
+                // it there.
+                if (carried.Slot == WeaponSlot.Sidearm)
+                    _meta!.Profile.LoadoutSecondary = path;
+                else
+                    _meta!.Profile.LoadoutWeapon = path;
+
+                _meta.Profile.Grant(path);
+                _weapons?.Equip(carried.Slot == WeaponSlot.Sidearm ? 1 : 0, carried);
+            }
         }
 
         // Read back rather than assumed, and reported in the `SWEEP` line, for
@@ -1075,6 +1099,18 @@ public partial class AutoPlay : SceneTree
                 _meta.Profile.Grant(path);
             }
 
+        }
+
+        // One re-apply for the gear *and* the weapons, after both have been
+        // written into the profile.
+        //
+        // `ApplyGear` adds rather than assigns — health, armour, carry — so
+        // calling it once per flag would give a run wearing a Plate Carrier and
+        // carrying a rifle fifty health instead of twenty-five. It also clears
+        // the deck's lean at the top, so the weapon half of that lean has to be
+        // written before it runs rather than after.
+        if (_meta != null && (_gearWanted.Length > 0 || _weaponWanted.Length > 0))
+        {
             _player.Mods.Reset();
             _meta.ReapplyGearForTesting();
         }

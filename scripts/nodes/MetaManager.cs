@@ -68,6 +68,17 @@ public partial class MetaManager : Node
         EquipInto(0, Profile.LoadoutWeapon);
     }
 
+    /// Tilts the deck toward what a carried weapon is for.
+    private void FavourFrom(string path, float strength)
+    {
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        var weapon = GD.Load<WeaponResource>(path);
+        if (weapon != null)
+            _growth?.FavourLine(weapon.Favours, weapon.FavourStrength * strength);
+    }
+
     private void EquipInto(int slot, string path)
     {
         if (string.IsNullOrEmpty(path))
@@ -103,6 +114,19 @@ public partial class MetaManager : Node
         // twice inside one process, and a lean that accumulated would make the
         // second reading of the same loadout twice as committed as the first.
         _growth?.ClearFavour();
+
+        // The weapons lean it too, and in the same pass as the gear because
+        // `ClearFavour` runs at the top of this one — applied anywhere else, a
+        // re-equip in the base screen would wipe the loadout's half of the lean
+        // and leave the deck tilted by the armour alone.
+        //
+        // **Primary at full strength, Sidearm at half.** The sidearm is the
+        // smaller half of a pair and should move the deck by less than the thing
+        // filling both hands; equal weights would make a knife worth as much of
+        // a commitment as the rifle it is covering for.
+        FavourFrom(Profile.LoadoutWeapon, 1.0f);
+        FavourFrom(Profile.LoadoutSecondary, 0.5f);
+
         var ruleCaps = new System.Collections.Generic.Dictionary<GrowthOption, int>();
 
         foreach (string path in Profile.EquippedGear)

@@ -80,6 +80,7 @@ public partial class GrowthProbe : SceneTree
             case 4: return RunStage(StagePracticeIsSeparate, "practice does not move during a run");
             case 5: return RunStage(StageRunsCommit, "a run commits to a line rather than collecting fragments");
             case 6: return RunStage(StageGearShapesTheDeck, "what you wore decides what you are offered");
+            case 7: return RunStage(StageWeaponShapesTheDeck, "and so does what you are carrying");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -569,6 +570,85 @@ public partial class GrowthProbe : SceneTree
                        + "the loadout has locked the deck rather than leaning it");
             ok = false;
         }
+
+        _growth!.ClearFavour();
+        return ok;
+    }
+
+    /// A weapon leans the deck too, and by less in the sidearm slot.
+    ///
+    /// Gear has done this since H4a and a weapon is the larger commitment of the
+    /// two — it is the thing the whole run is spent using. Without it the shop
+    /// sells a build and the deck has never heard of it.
+    ///
+    /// Measured through the same `ShareOfCards` the stage above uses, so the two
+    /// are read on one scale. The favour applied is what `MetaManager` applies:
+    /// a Primary at its full strength and a Sidearm at half, which is the part
+    /// worth an assertion of its own — equal weights would make a knife as much
+    /// of a commitment as the rifle it is covering for, and nothing on screen
+    /// would say so.
+    private bool? StageWeaponShapesTheDeck(int tick)
+    {
+        const int Offers = 400;
+
+        float bare = ShareOfCards(GrowthLine.Ordnance, Offers, 0.0f);
+        float primary = ShareOfCards(GrowthLine.Ordnance, Offers, 1.0f);
+        float sidearm = ShareOfCards(GrowthLine.Ordnance, Offers, 0.5f);
+
+        GD.Print($"  Ordnance is {bare * 100.0f:F0}% of cards offered carrying nothing, "
+               + $"{primary * 100.0f:F0}% with an Ordnance primary, "
+               + $"{sidearm * 100.0f:F0}% with the same weapon as a sidearm");
+
+        bool ok = true;
+
+        if (primary < bare * 1.15f)
+        {
+            GD.PushError($"  an Ordnance primary moved Ordnance from {bare * 100.0f:F0}% to "
+                       + $"{primary * 100.0f:F0}% — the weapon is not shaping the deck");
+            ok = false;
+        }
+
+        // The halving is the claim, so it is checked rather than assumed. A
+        // sidearm that leaned as hard as a primary would make the smaller half of
+        // the loadout the one that decides the run.
+        if (sidearm >= primary)
+        {
+            GD.PushError($"  a sidearm leaned the deck as hard as a primary "
+                       + $"({sidearm * 100.0f:F0}% against {primary * 100.0f:F0}%)");
+            ok = false;
+        }
+
+        // And every weapon in the table names a line, or the shop sells a
+        // loadout the deck cannot answer. Read from the directory, because a
+        // hand-written list of a growing thing's members goes stale in the
+        // direction that hides the bug.
+        using var directory = DirAccess.Open("res://resources/weapons");
+        int silent = 0, total = 0;
+
+        if (directory != null)
+        {
+            foreach (string file in directory.GetFiles())
+            {
+                if (!file.EndsWith(".tres") && !file.EndsWith(".tres.remap"))
+                    continue;
+
+                var one = GD.Load<WeaponResource>(
+                    $"res://resources/weapons/{file.Replace(".remap", "")}");
+
+                if (one == null)
+                    continue;
+
+                total++;
+                if (one.Favours == GrowthLine.None)
+                {
+                    GD.PushError($"  {one.WeaponName} names no growth line");
+                    silent++;
+                }
+            }
+        }
+
+        GD.Print($"  {total - silent} of {total} weapons name a line");
+        ok &= silent == 0 && total > 0;
 
         _growth!.ClearFavour();
         return ok;
