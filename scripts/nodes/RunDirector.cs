@@ -39,6 +39,20 @@ public partial class RunDirector : Node3D
     /// only changes how fast the number climbs. Eight keeps the curve visible —
     /// four times the opening — while leaving the last stretch somewhere skill
     /// still moves the outcome.
+    ///
+    /// **4.0, and lowering it to 3.7 was tried and reverted.** Raising the four
+    /// light variants above one round put about forty per cent more health on the
+    /// ordinary crowd and cost about seventeen per cent of the median payout, so
+    /// giving some of it back through the rate looked obvious. Measured over the
+    /// same twelve layouts it made things *worse* — 1567 banked to 1462, and the
+    /// median run 115 s to 101 — which is coherent (fewer enemies is less
+    /// experience, a lower level and a weaker player, and under `linger:auto` a
+    /// weaker player leaves sooner) and is also well inside the noise of a
+    /// twelve-sample median whose runs span 39 to 171 seconds.
+    ///
+    /// So it is not evidence either way, and a behavioural change with no
+    /// evidence for it is worse in the codebase than the problem it did not
+    /// solve. The cost of the health change is recorded rather than paid off.
     [Export] public float EndSpawnRate { get; set; } = 4.0f;
 
     [Export] public float EndSpeedScale { get; set; } = 1.6f;
