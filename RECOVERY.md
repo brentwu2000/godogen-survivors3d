@@ -255,13 +255,59 @@ the Drifter, and every difference is at least fifteen per cent so it can be felt
 writes the Drifter's three numbers down rather than reading them from the resource — reading them
 would compare the table against itself and pass for any value at all.
 
+### ✅ D3c — Three survivors, and they are three runs
+
+The arm D3b asked for. `AutoPlay -- character:<name>`, `BalanceSweep -- characters:a,b,c`, reported as
+the survivor the run was **actually played as** — the rule `zoneTier` and `weapon` already follow.
+
+`CharacterProbe` asserts the design by reading the table: nothing beats the Drifter everywhere, every
+difference is at least fifteen per cent. That answers *is this a ladder* and cannot answer *do these
+produce different runs*, because a resource comparing favourably with another resource is not a run.
+
+Twelve layouts, `lingers:auto`, starting kit:
+
+| survivor | survived | median banked | median seconds | median lowest HP |
+| :--- | ---: | ---: | ---: | ---: |
+| Courier | 9/12 | **2092** | 121 | 50 |
+| Drifter | 10/12 | 1844 | 127 | 54 |
+| Warden | 10/12 | 1190 | **139** | **87** |
+
+**Three profiles, and each one is its own blurb.** The Courier banks the most, survives the least and
+leaves the earliest — gets in, takes everything, does not stay. The Warden banks two thirds of what
+the Courier does, stays the longest, and walks out on 87 health where the others finish near 50.
+The Drifter wins nothing outright and loses nothing badly, which is what a zero is for.
+
+Nothing dominates: the Courier owns the payout, the Warden owns the clock and the margin, and the
+survival rate is 9, 10 and 10.
+
+##### The Warden's margin is money it cannot spend
+
+87 health at the exit against everyone else's 50 is a surplus, and a surplus is only worth something
+if it converts. The Courier's does — thin health buys eight more bulk and it banks 76% more. The
+Warden's does not, because **its binding constraint is bulk and its advantage is health**: forty per
+cent more health buys nothing at all once fourteen bulk is full, which under `linger:auto` happens
+well before it is ever in danger.
+
+That is not a number to nudge. It is the same shape as the Service Rifle in H4c — an advantage the
+measurement cannot spend — except that here the thing holding it fixed is the survivor's own design
+rather than the driver's. Recorded rather than tuned.
+
+##### And the starting rifle's ceiling is reached in three runs out of four
+
+27 of 36 runs hit weapon level 8, which is the Scavenged Rifle's whole curve. Under the old fixed
+lingers a run rarely got there. It is the clearest argument yet that a longer curve is a real thing to
+buy — `README.md` has claimed since the shop existed that *what credits buy is not a bigger number but
+a longer curve*, and this is the first table that shows the short one running out.
+
 ### D3b — Still open
 
-- **No `BalanceSweep` character arm.** The original plan asked for one, and the probe answers the
-  design question ("is this a ladder?") rather than the empirical one ("do three survivors actually
-  produce different runs?"). The arm is the same shape as the zone and tier arms already in there.
 - **Three survivors is where cycling stops being obviously right**, the same note the biome list
-  carries at five. A fourth wants a list rather than a key.
+  carries at five. A fourth wants a list rather than a key — and `CHARACTERS.md` proposes four more.
+- **`CharacterBook.Order` is hand-written**, deliberately: directory order differs between the editor
+  and an exported build, and a roster whose numbering moved between the two would put the player in a
+  different survivor after an export. The cost is the failure mode this file keeps recording, so it
+  now warns about any `.tres` in the directory that the list does not name. The list still has to be
+  edited by hand; it just cannot be forgotten in silence.
 
 ## Half E — places, not one field with three tints
 

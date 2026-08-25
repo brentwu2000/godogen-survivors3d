@@ -275,6 +275,30 @@ player judges on those ninety seconds. It also sets the ceiling on the options i
 is built around, so what a loadout decides is **the shape of the deck**, not what
 gets drawn from it: the run is still different every time.
 
+### Who is going
+
+The decision made *before* the loadout, on `[C]` at the gate. None of the three abilities is damage or
+fire rate — those are what the shop already sells, and a survivor selling them again is a difficulty
+setting with a name on it. Every one is an existing `RunModifiers` field granted at the start of a
+run, so a survivor is a head start on a strategy the deck, the gear and the trinkets all speak to.
+
+| | | Opens after |
+| :--- | :--- | ---: |
+| **Drifter** | 100 health, 6.0 m/s, 20 bulk. No edges and no gaps — and it is what `Player` shipped with, to the digit, which is the whole reason the other two can exist safely | 0 |
+| **Courier** | 80 / 6.6 / **28**, a wider reach on a crate and 15% more for what it carries out. Gets in, takes everything, does not stay | 3 |
+| **Warden** | **140** / 5.3 / 14, a blade already turning and cold ground underfoot. Stands somewhere and makes the crowd come to it | 8 |
+
+**They measure as three different runs, not three difficulties.** Twelve layouts, `lingers:auto`,
+median: the Courier banks **2092** and leaves at 121 s on 50 health; the Drifter banks 1844 at 127 s;
+the Warden banks 1190, stays to **139 s** and walks out on **87**. Survival is 9, 10 and 10. Nothing
+dominates — the Courier owns the payout, the Warden owns the clock and the margin, the Drifter wins
+nothing outright and loses nothing badly.
+
+**The Warden's margin is money it cannot spend**, and that is recorded rather than tuned. Its binding
+constraint is bulk and its advantage is health, so forty per cent more health buys nothing once
+fourteen bulk is full — which happens long before it is ever in danger. The Courier's thin health
+converts, because what it bought was eight more bulk.
+
 Tiers open on extractions, not attempts. Dying repeatedly is not progress toward
 being ready for better equipment, and a gate counting runs would pay for exactly
 the loop everything else here discourages.

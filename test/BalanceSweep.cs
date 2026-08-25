@@ -94,11 +94,15 @@ public partial class BalanceSweep : SceneTree
         /// the expensive way.
         public readonly string Weapon;
 
+        /// Who played it, as `AutoPlay` reported it. Same rule as `Weapon`.
+        public readonly string Character;
+
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
-                   int banked, int lowestHp, int peak, string weapon)
+                   int banked, int lowestHp, int peak, string weapon, string character)
         {
             Weapon = weapon;
+            Character = character;
             Zone = zone;
             ZoneTier = zoneTier;
             Level = level;
@@ -141,6 +145,10 @@ public partial class BalanceSweep : SceneTree
         // One empty entry: whatever the profile equips, which is the starting kit.
         string[] weapons = { "" };
 
+        // One empty entry: whoever `GameSession` defaults to, which is the
+        // Drifter — the survivor every number in this file was tuned against.
+        string[] characters = { "" };
+
         foreach (string arg in OS.GetCmdlineUserArgs())
         {
             if (arg.StartsWith("seeds:") && int.TryParse(arg[6..], out int count))
@@ -179,6 +187,27 @@ public partial class BalanceSweep : SceneTree
                     weapons = parsed.ToArray();
             }
 
+            // Who plays it.
+            //
+            // `CharacterProbe` asks the design question — is the roster a ladder
+            // — by comparing the table against itself. Nothing has ever asked the
+            // empirical one: **do three survivors actually produce different
+            // runs?** D3b recorded that gap when the roster shipped. Named, not
+            // indexed, because `CharacterBook.Order` is hand-written.
+            if (arg.StartsWith("characters:"))
+            {
+                string[] named = arg[11..].Split(',');
+                var parsed = new System.Collections.Generic.List<string>();
+                foreach (string part in named)
+                {
+                    if (part.Length > 0)
+                        parsed.Add(part);
+                }
+
+                if (parsed.Count > 0)
+                    characters = parsed.ToArray();
+            }
+
             if (arg.StartsWith("lingers:"))
             {
                 string[] parts = arg[8..].Split(',');
@@ -204,9 +233,11 @@ public partial class BalanceSweep : SceneTree
 
         var rows = new System.Collections.Generic.List<Row>();
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
-                 $"{arms.Length} arm(s) x {weapons.Length} weapon(s) = " +
-                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length} runs");
+                 $"{arms.Length} arm(s) x {weapons.Length} weapon(s) x " +
+                 $"{characters.Length} survivor(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length} runs");
 
+        foreach (string character in characters)
         foreach (string weapon in weapons)
         {
             foreach (int arm in arms)
@@ -215,12 +246,13 @@ public partial class BalanceSweep : SceneTree
                 {
                     foreach (ulong seed in seeds)
                     {
-                        Row? row = RunOne(linger, seed, arm, weapon);
+                        Row? row = RunOne(linger, seed, arm, weapon, character);
                         if (row is { } value)
                             rows.Add(value);
                         else
                             GD.PushError($"  linger {linger:F0} seed {seed} arm {arm} "
-                                       + $"weapon {(weapon.Length > 0 ? weapon : "kit")}: no result");
+                                       + $"weapon {(weapon.Length > 0 ? weapon : "kit")} "
+                                       + $"as {(character.Length > 0 ? character : "default")}: no result");
                     }
                 }
             }
@@ -231,7 +263,7 @@ public partial class BalanceSweep : SceneTree
 
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
-    private static Row? RunOne(float linger, ulong seed, int arm, string weapon)
+    private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character)
     {
         var output = new Godot.Collections.Array();
 
@@ -244,6 +276,9 @@ public partial class BalanceSweep : SceneTree
 
         if (weapon.Length > 0)
             args.Add($"weapon:{weapon}");
+
+        if (character.Length > 0)
+            args.Add($"character:{character}");
 
         if (arm != NoZone)
         {
@@ -289,7 +324,8 @@ public partial class BalanceSweep : SceneTree
             Mathf.RoundToInt(Number(line, "banked")),
             Mathf.RoundToInt(Number(line, "lowestHp")),
             Mathf.RoundToInt(Number(line, "peak")),
-            Field(line, "weapon"));
+            Field(line, "weapon"),
+            Field(line, "character"));
     }
 
     private static string Field(string line, string key)
@@ -358,6 +394,7 @@ public partial class BalanceSweep : SceneTree
 
         ReportArms(rows);
         ReportWeapons(rows);
+        ReportCharacters(rows);
         ReportGrowth(rows);
 
         GD.Print("");
@@ -523,6 +560,45 @@ public partial class BalanceSweep : SceneTree
         }
 
         PrintGroups("weapon", groups);
+    }
+
+    /// One row per survivor the run was actually played as.
+    ///
+    /// `CharacterProbe` asserts the design — nothing is strictly better than the
+    /// Drifter, and every difference is at least fifteen per cent — by reading the
+    /// table. That answers "is this a ladder" and cannot answer "do these produce
+    /// different runs", because a resource comparing favourably with another
+    /// resource is not a run. This is the arm D3b asked for when the roster
+    /// shipped.
+    private static void ReportCharacters(System.Collections.Generic.List<Row> rows)
+    {
+        var seen = new System.Collections.Generic.List<string>();
+        foreach (Row row in rows)
+        {
+            if (row.Character.Length > 0 && !seen.Contains(row.Character))
+                seen.Add(row.Character);
+        }
+
+        if (seen.Count < 2)
+            return;
+
+        seen.Sort(System.StringComparer.Ordinal);
+
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (string name in seen)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (row.Character == name)
+                    picked.Add(row);
+            }
+
+            groups.Add((name, picked));
+        }
+
+        PrintGroups("survivor", groups);
     }
 
     /// The one table shape this file prints, so an arm and a weapon are read the

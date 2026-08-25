@@ -157,6 +157,24 @@ public partial class AutoPlay : SceneTree
             // of it living there rather than on a node.
             if (arg.StartsWith("biome:") && int.TryParse(arg[6..], out int biome))
                 GameSession.Biome = biome;
+
+            // Who is going. Set here for the same reason the biome is: `Player`
+            // reads `GameSession.Character` in its own `_Ready` to build the body
+            // and apply the numbers, so anything written after the scene enters
+            // the tree is a survivor the run has already started without.
+            //
+            // By name rather than by index. `CharacterBook.Order` is hand-written
+            // and an index into it is not a thing anybody types correctly twice.
+            if (arg.StartsWith("character:"))
+            {
+                string wanted = arg[10..];
+                int at = CharacterBook.IndexOf(wanted);
+
+                if (at < 0)
+                    GD.Print($"  no survivor named {wanted} — playing the default");
+                else
+                    GameSession.Character = at;
+            }
         }
 
         var scene = GD.Load<PackedScene>("res://scenes/Main.tscn")?.Instantiate();
@@ -1358,6 +1376,11 @@ public partial class AutoPlay : SceneTree
 
                  // The weapon the run actually started with, on the same rule.
                  $"weapon={_weaponCarried} " +
+
+                 // And who played it. Read back from the book rather than echoed
+                 // from the flag, so a name that did not resolve lands in the
+                 // Drifter's column where the run actually happened.
+                 $"character={CharacterBook.Load(GameSession.Character).CharacterName.Replace(" ", "")} " +
 
                  // When the gun first had nothing left, or -1 for never.
                  //
