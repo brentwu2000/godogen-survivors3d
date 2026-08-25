@@ -58,6 +58,11 @@ public partial class BuildWeapons : SceneTree
             new()
             {
                 WeaponName = "Combat Knife",
+
+                // The only Sidearm the table has until step 3 of WEAPONS.md, and
+                // a shelf with one option on it is not a choice — recorded rather
+                // than hidden, because the shop will show it as one.
+                Slot = WeaponSlot.Sidearm,
                 Trait = WeaponTrait.Bleed,
                 TraitAmount = 4.0f,
                 TraitCount = 3,

@@ -77,6 +77,7 @@ public partial class WeaponProbe : SceneTree
             case 1: return RunStage(StageMelee, "melee arc");
             case 2: return RunStage(StageBow, "bow projectile");
             case 3: return RunStage(StageNothingDominates, "no weapon beats a sibling everywhere");
+            case 4: return RunStage(StageEverySlotIsStocked, "both shelves have something on them");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -160,7 +161,17 @@ public partial class WeaponProbe : SceneTree
             for (int j = i + 1; j < table.Count; j++)
             {
                 WeaponResource a = table[i], b = table[j];
-                if (a.Category != b.Category)
+
+                // Same slot *and* same category.
+                //
+                // Category was the whole grouping while a loadout was one weapon,
+                // and it still carries the reason it was chosen: a knife's 1.6 m
+                // against a rifle's 20 is not a comparison. Slot is the half that
+                // arrived with the pair — a Primary and a Sidearm are not
+                // alternatives, they are both carried, so they never compete and
+                // scoring them against each other would report a trade where
+                // there is no choice being made.
+                if (a.Category != b.Category || a.Slot != b.Slot)
                     continue;
 
                 pairs++;
@@ -189,8 +200,56 @@ public partial class WeaponProbe : SceneTree
             }
         }
 
-        GD.Print($"  {table.Count} weapons, {pairs} same-category pairs, each a trade");
+        GD.Print($"  {table.Count} weapons, {pairs} same-slot same-category pairs, each a trade");
         return ok;
+    }
+
+    /// Neither shelf is empty, and the starting kit is a legal pair.
+    ///
+    /// A slot type nothing occupies is a slot type that does not exist, and it
+    /// would fail silently: the shop would simply never offer a sidearm, the
+    /// player would carry one weapon in a game built around two, and every
+    /// number above would still pass. The starting kit is checked with it
+    /// because that is the pair every player begins with and the one a fresh
+    /// profile cannot get wrong.
+    private bool? StageEverySlotIsStocked(int tick)
+    {
+        using var directory = DirAccess.Open("res://resources/weapons");
+        if (directory == null)
+        {
+            GD.PushError("  cannot open res://resources/weapons");
+            return false;
+        }
+
+        int primaries = 0, sidearms = 0;
+
+        foreach (string file in directory.GetFiles())
+        {
+            if (!file.EndsWith(".tres") && !file.EndsWith(".tres.remap"))
+                continue;
+
+            var one = GD.Load<WeaponResource>(
+                $"res://resources/weapons/{file.Replace(".remap", "")}");
+
+            if (one == null)
+                continue;
+
+            if (one.Slot == WeaponSlot.Sidearm)
+                sidearms++;
+            else
+                primaries++;
+        }
+
+        var kitPrimary = GD.Load<WeaponResource>("res://resources/weapons/scavenged_rifle.tres");
+        var kitSidearm = GD.Load<WeaponResource>("res://resources/weapons/combat_knife.tres");
+
+        bool kitIsAPair = kitPrimary is { Slot: WeaponSlot.Primary }
+                          && kitSidearm is { Slot: WeaponSlot.Sidearm };
+
+        GD.Print($"  {primaries} primaries, {sidearms} sidearms; the starting kit is one of each "
+               + $"= {kitIsAPair}");
+
+        return primaries > 0 && sidearms > 0 && kitIsAPair;
     }
 
     /// The two weapons as comparable numbers, higher being better.

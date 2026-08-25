@@ -234,9 +234,15 @@ the next starts.
    rifle's numbers is the wrong answer to a question with two. `LiveSlots` as the control variable,
    `WeaponIn`/`AmmoIn`/`FiringIn` for the readings, and a HUD line per slot with the held one marked.
    Sweep clean at 45 probes, and the measurement is in the budget section above.
-2. **Slot types.** `WeaponResource.Slot`, the shop split into two shelves, the dominance stage moved
-   from category to slot type, and the nine existing weapons assigned. Tune to the budget step 1
-   measured.
+2. ~~**Slot types.**~~ **Done.** `WeaponSlot` on the resource, and the shop reads it instead of
+   guessing: `IsMelee` was the proxy that decided where a bought weapon went, and it is wrong in the
+   case this design is about — a fire axe is melee and takes both hands. Asking for a Primary as a
+   sidearm is refused with a reason rather than silently honoured, because a loadout holding two
+   Primaries is the dominance the slot exists to prevent. The dominance stage groups by slot **and**
+   category — a Primary and a Sidearm are both carried, so they never compete and scoring them
+   against each other would report a trade where no choice is being made — and a new stage asserts
+   neither shelf is empty and the starting kit is a legal pair. No numbers moved: step 1 measured the
+   pair at 110% and the budget is a ceiling to hold rather than a target to tune toward.
 3. **The four Sidearms.** The slot is a real choice or it is a knife with extra steps.
 4. **The reactions**, one at a time, each with a probe stage that asserts the status is *spent* — the
    failure mode is a permanent multiplier, and it would read as the reaction working.

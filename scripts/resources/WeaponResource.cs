@@ -15,6 +15,28 @@ public enum WeaponCategory
 /// difficulty settings for one weapon. The player's choice at the shop is
 /// supposed to be "which way do I want to fight", and it cannot be while the
 /// answer to every question is the same shot with a different number on it.
+/// Which hand a weapon occupies, and therefore which of the two slots it can go
+/// in.
+///
+/// **Both slots fire, so without this the correct loadout is the two highest
+/// outputs in the shop** — which is the dominance `WeaponProbe` was given a stage
+/// to prevent, arriving one level up. A Primary takes two hands and a Sidearm
+/// one, so a pair is always one of each and "carry two heavies" is not a
+/// sentence the loadout screen can express.
+///
+/// It replaces `IsMelee` as the thing that decided where a bought weapon went.
+/// That was a proxy and it was wrong in exactly the case this design cares
+/// about: a fire axe is melee and is not a sidearm.
+public enum WeaponSlot
+{
+    /// Two hands. The build's damage and the decision.
+    Primary,
+
+    /// One hand. Small, always working, and there to cover what the primary
+    /// cannot — a reload, an empty reserve, or something already touching you.
+    Sidearm,
+}
+
 public enum WeaponTrait
 {
     None,
@@ -73,6 +95,9 @@ public partial class WeaponResource : Resource
 {
     [Export] public string WeaponName { get; set; } = "";
     [Export] public WeaponCategory Category { get; set; } = WeaponCategory.Firearm;
+
+    /// Which of the two slots this can be carried in. See `WeaponSlot`.
+    [Export] public WeaponSlot Slot { get; set; } = WeaponSlot.Primary;
 
     [Export] public float BaseDamage { get; set; } = 10.0f;
 

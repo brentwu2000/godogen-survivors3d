@@ -257,6 +257,18 @@ public partial class BaseScreen : Control
             return;
         }
 
+        var wanted = GD.Load<WeaponResource>(entry.Path);
+
+        // A two-handed weapon cannot be a sidearm, and saying so is better than
+        // quietly putting it there: the slot exists so that a pair is one of each,
+        // and a loadout holding two Primaries is the dominance this whole design
+        // is built to refuse.
+        if (wanted != null && wanted.Slot != WeaponSlot.Sidearm)
+        {
+            _message = $"{entry.Name} takes both hands";
+            return;
+        }
+
         if (!TryBuy(entry))
             return;
 
@@ -331,10 +343,10 @@ public partial class BaseScreen : Control
         if (weapon == null)
             return;
 
-        // Melee goes to the sidearm slot and everything else to the primary.
-        // Two rifles and no fallback is a loadout that ends the moment the
-        // reserve does, and nothing on this screen warns about that.
-        if (weapon.IsMelee)
+        // Where it goes is a fact about the weapon now, not a guess from its
+        // category. `IsMelee` was the proxy and it was wrong in the case this
+        // design is about: a fire axe is melee and is a two-handed Primary.
+        if (weapon.Slot == WeaponSlot.Sidearm)
             _profile.LoadoutSecondary = entry.Path;
         else
             _profile.LoadoutWeapon = entry.Path;
