@@ -1382,6 +1382,13 @@ public partial class AutoPlay : SceneTree
                  // Drifter's column where the run actually happened.
                  $"character={CharacterBook.Load(GameSession.Character).CharacterName.Replace(" ", "")} " +
 
+                 // How this run's crowd arrived: the share drawn, and how many
+                 // knots actually landed. Both, because a share of 0.30 that sent
+                 // zero knots is a feature that is configured and does nothing —
+                 // the failure this project has found in a shockwave nobody could
+                 // see and a touch layer nobody had ever executed.
+                 $"knotShare={_director.PlannedKnotShare:F2} knots={_director.KnotsSent} " +
+
                  // When the gun first had nothing left, or -1 for never.
                  //
                  // Tracked since the reserve was tuned and printed only in the

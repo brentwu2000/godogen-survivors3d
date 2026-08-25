@@ -302,6 +302,20 @@ public partial class RunDirector : Node3D
 
         CheckSupplyDrops();
 
+        SpawnTick(step);
+
+        if (Elapsed >= RunSeconds)
+            End(RunState.TimedOut, SafeBoxValue);
+    }
+
+    /// The ambient arrivals for one step.
+    ///
+    /// Its own method so a probe can drive it. `TickForTesting` runs the *events*
+    /// — pads, boss, surge, supply — and ran nothing here, which is correct for
+    /// what it was written for and meant a probe asking about the spawn loop got
+    /// a field of zero enemies and no error.
+    private void SpawnTick(float step)
+    {
         if (_horde != null)
         {
             _horde.SpeedScale = Mathf.Lerp(1.0f, EndSpeedScale, Intensity);
@@ -325,14 +339,23 @@ public partial class RunDirector : Node3D
             while (_spawnCredit >= 1.0f && _horde.Pool.Count < MaxLiveEnemies)
             {
                 _spawnCredit -= 1.0f;
+
+                // Some of this run's arrivals come as a knot rather than as one
+                // more body from one more bearing. See `_knotShare`.
+                if (_knotShare > 0.0f && NextFloat() < _knotShare)
+                {
+                    SpawnAKnot();
+                    continue;
+                }
+
                 if (!_horde.SpawnByIntensity(SpawnPoint()))
                     break;   // pool full; drop the credit rather than spinning
             }
         }
-
-        if (Elapsed >= RunSeconds)
-            End(RunState.TimedOut, SafeBoxValue);
     }
+
+    /// Drives one step of the ambient arrivals, on the path the game uses.
+    public void SpawnTickForTesting(float step) => SpawnTick(step);
 
     /// One boss, once, well outside the ring the ordinary spawns use — it has to
     /// be seen coming, and at its speed that is most of the encounter.
@@ -529,6 +552,31 @@ public partial class RunDirector : Node3D
     /// and death in between as noise.
     public void SetElapsedForTesting(float seconds) => Elapsed = seconds;
 
+    /// Forces this run's delivery shape, so a probe can hold one against the
+    /// other. The draw itself is checked separately, over many seeds.
+    public void SetKnotShareForTesting(float share)
+    {
+        _knotShare = share;
+        _knotsSent = 0;
+
+        // Credit too, or a probe comparing two delivery shapes over the same
+        // window starts the second one holding whatever the first left banked —
+        // which is two different experiments wearing one comparison.
+        _spawnCredit = 0.0f;
+    }
+
+    /// Re-draws the schedule from a given seed, without a scene.
+    ///
+    /// The draw is the thing worth checking across sixty seeds rather than on
+    /// one — "did this run knot" is a coin, and "do some runs knot and some not"
+    /// is the design. Standing up sixty scenes to ask that would take minutes;
+    /// this asks the director alone, on the same code path a real run uses.
+    public void PlanForTesting(ulong seed)
+    {
+        _rng = seed == 0 ? 0x9E3779B97F4A7C15UL : seed;
+        PlanTheRun();
+    }
+
     /// Runs one director decision without stepping physics.
     ///
     /// For probes checking something the director does *on a schedule* — the
@@ -576,10 +624,99 @@ public partial class RunDirector : Node3D
             ? (NextFloat() < 0.5f ? _bossAt - 0.12f : _bossAt + 0.14f)
             : -1.0f;
 
+        // Whether this run's crowd arrives in knots, and how much of it does.
+        //
+        // A third of runs, at a share between a fifth and a half. Three states
+        // rather than a dial the player has to estimate: a run is scattered, or
+        // it knots occasionally, or it knots often — and the difference between
+        // the first and the last is what an Ordnance build is hoping for.
+        //
+        // Not announced. The surge is announced because it is one moment that
+        // wants a decision in the seconds before it lands; this is the texture of
+        // the whole run and the player reads it by looking at what is walking
+        // toward them, which is the correct place to read it from.
+        _knotShare = NextFloat() < 0.34f ? 0.14f + NextFloat() * 0.18f : 0.0f;
+
         GD.Print($"run plan: boss {_bossAt:F2}, supplies "
                + string.Join("/", System.Array.ConvertAll(_supplyAt, f => f.ToString("F2")))
-               + (_surgeAt > 0.0f ? $", surge {_surgeAt:F2}" : ", no surge"));
+               + (_surgeAt > 0.0f ? $", surge {_surgeAt:F2}" : ", no surge")
+               + (_knotShare > 0.0f ? $", knots {_knotShare:P0}" : ", scattered"));
     }
+
+    /// Several bodies at one point, arriving as a mass.
+    ///
+    /// **This is a delivery shape, not an event.** The surge is the event: one
+    /// announced wave, once, from a bearing the player can turn away from or fire
+    /// into. A knot is what a run's *ordinary* arrivals look like, some runs and
+    /// not others — the same number of enemies over the same clock, shaped
+    /// differently.
+    ///
+    /// Which is the whole point of it. The assessment that started Half H said
+    /// the game rewards being fast, carrying more, dealing more area damage and
+    /// waiting longer, and that replayability stays poor until different runs make
+    /// one of those goals wrong. A knot run makes area damage *right* and precise
+    /// single-target fire wrong; a scattered run does the reverse. Neither is
+    /// harder, and a player who bought into Ordnance and drew a scattered run has
+    /// had a decision go against them — which is what H1 does with the map and H3
+    /// does with the deck, applied to the thing that arrives.
+    ///
+    /// Tight rather than merely nearby. The horde separates bodies within 15 m, so
+    /// a knot loosens as it walks and a spread of 2.2 m is what still reads as one
+    /// mass by the time it arrives. It is deliberately *not* the surge's 0.9-radian
+    /// wedge over eight metres of range, which is a direction rather than an
+    /// object.
+    private void SpawnAKnot()
+    {
+        Vector3 around = _player?.GlobalPosition ?? Vector3.Zero;
+        float angle = NextFloat() * Mathf.Tau;
+        float distance = Mathf.Lerp(SpawnDistanceMin, SpawnDistanceMax, NextFloat());
+
+        var centre = new Vector3(
+            around.X + Mathf.Cos(angle) * distance, 0.0f,
+            around.Z + Mathf.Sin(angle) * distance);
+
+        int size = KnotMin + (int)(NextFloat() * (KnotMax - KnotMin + 1));
+
+        for (int i = 0; i < size && _horde!.Pool.Count < MaxLiveEnemies; i++)
+        {
+            // Spent against the same credit the ordinary path spends, so a knot
+            // run does not simply receive more enemies than a scattered one. The
+            // first body is the credit already taken by the caller; the rest are
+            // drawn forward, and the loop above will be that much shorter later.
+            if (i > 0)
+                _spawnCredit -= 1.0f;
+
+            float spread = 2.2f;
+            var at = new Vector3(
+                Mathf.Clamp(centre.X + (NextFloat() - 0.5f) * spread, -ArenaExtent, ArenaExtent),
+                0.0f,
+                Mathf.Clamp(centre.Z + (NextFloat() - 0.5f) * spread, -ArenaExtent, ArenaExtent));
+
+            if (!_horde.SpawnByIntensity(at))
+                break;
+        }
+
+        _knotsSent++;
+    }
+
+    /// How many bodies a knot holds.
+    ///
+    /// Four is the floor because three arriving together is indistinguishable
+    /// from three arriving separately by luck, and the shape has to be legible or
+    /// it is not a decision anyone can read. Seven is the ceiling because a knot
+    /// is a thing to deal with rather than a wave to survive — that is the surge,
+    /// which sends fourteen and up.
+    [Export] public int KnotMin { get; set; } = 4;
+    [Export] public int KnotMax { get; set; } = 5;
+
+    /// The share of this run's ordinary arrivals that come as a knot, drawn once
+    /// in `PlanTheRun`. Zero on a run that does not do this at all.
+    private float _knotShare;
+    private int _knotsSent;
+
+    /// What this run drew, for the readout and the sweep. Zero means scattered.
+    public float PlannedKnotShare => _knotShare;
+    public int KnotsSent => _knotsSent;
 
     /// One wave, from one bearing, announced.
     ///

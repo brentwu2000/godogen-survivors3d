@@ -211,13 +211,80 @@ variant genuinely stands shorter than it is long — the runner is tipped twenty
 of body occupies 1.71 m of vertical space. A loose tolerance would have worked and would have been a
 band wide enough to hide a real error.
 
-### D2c — Still open in the horde
+### ✅ D2d — Something that arrives in a knot
 
-- **Something that arrives in a knot rather than as individuals.** The fourth candidate from the
-  original list, and the only one untouched. It is a spawner change rather than a body.
-- **The brute, the bloater and the boss are now half the size they have been drawing at.** That is
-  the correction above, and it is a real change to what a run looks and feels like at every
-  intensity. It has not been re-measured against the balance table.
+The fourth candidate from the original list and the last one untouched. It is a spawner change, as
+that note said, and no new body.
+
+**A delivery shape, not an event.** The surge is the event — one announced wave, once, from a bearing
+the player can turn away from or fire into. A knot is what a run's *ordinary* arrivals look like, on
+some runs and not others: the same number of enemies over the same clock, shaped differently. Four to
+five bodies inside 2.2 m rather than one more from one more bearing.
+
+Drawn in `PlanTheRun` like everything else H2 put on the seed: **a third of runs knot**, at a share
+between 14% and 32% of their arrivals. Not announced, because it is the texture of the whole run
+rather than a moment that wants a decision in the seconds before it lands — the player reads it by
+looking at what is walking toward them, which is where it should be read from.
+
+Tight rather than merely nearby. The horde separates bodies within 15 m, so a knot loosens as it
+walks and 2.2 m is what still arrives as one mass. Deliberately not the surge's 0.9-radian wedge over
+eight metres of range, which is a *direction* rather than an object.
+
+**Credit is spent, not added.** A knot draws its bodies forward out of the same spawn credit the
+scattered path spends, so the loop is that much shorter afterwards and a knot run does not simply
+receive more enemies. `knotShare` and `knots` both go in the `SWEEP` line, because a share of 0.24 that
+sent zero knots is a feature that is configured and does nothing — the shape of the shockwave nobody
+could see and the touch layer nobody had ever executed.
+
+##### It was tuned down, and the measurement that did it is the interesting part
+
+First numbers were four to seven bodies at a share up to 50%. On the seed that drew it, the run went
+from 2870 banked to **1787**, with the crowd going from a peak of 108 to the 160 cap. Same total
+arrivals: six bodies at once are much harder to clear than six over six seconds, because damage is
+applied over time and a standing crowd is what is left over.
+
+That is a real mechanism and a 38% payout drop is not a texture. **At four to five inside a 14–32%
+share the same seed banks 2940 against the scattered 2870** — the shape is there, 68 knots landed, and
+it costs a build that cannot answer it approximately nothing.
+
+##### Whether it *rewards* an answer is unmeasured, and the tool for it does not exist
+
+A knot should be what an Ordnance build is hoping for. That cannot be checked here: area damage in
+this game comes from the growth deck and from gear, and `AutoPlay` can be told a weapon and a survivor
+and neither of those. The one area *weapon* is the Bolt Launcher, which the bot cannot use at all — a
+five-round magazine at 1.1 shots a second banked 150 on the knot seed and **zero** on the scattered
+one, so it measures the driver rather than the shape.
+
+So the knot is neutral for a build that ignores it, which is the half worth having first, and
+"positive for a build that answers it" needs a `gear:` or a deck-line argument. Written down rather
+than assumed, because the assumption is exactly what would make this a difficulty spike wearing the
+word texture.
+
+##### `KnotProbe`, and the two things it found while being written
+
+Three stages, one per way this goes quietly wrong: the draw varies and stays in its band (16 of 60
+runs, shares 0.14–0.32); a knot arrives as a *mass* — measured on the field at **1.22 m** from the
+middle of five bodies, against the 26 m ring an ordinary arrival is drawn from; and a knot run
+receives no more than a scattered one over the same clock.
+
+**`TickForTesting` runs the events and not the spawn loop.** Pads, boss, surge and supply, which is
+exactly right for what it was written for — and a probe that asked it about arrivals got a field of
+zero enemies and no error at all. The spawn block is its own `SpawnTick(step)` now, called by the game
+and by the probe, so the two cannot drift.
+
+**And the first version of the credit stage compared two different experiments.** It read ×1.19 —
+inside its band and five per cent from the edge — because the second window started holding whatever
+credit the first had banked. `SetKnotShareForTesting` clears the credit as well now, and the honest
+number is **×1.03**: thirty scattered against thirty-one in knots, where the one is the last knot of
+the window landing whole. A stage that passes by six per cent is a stage that will fail for a reason
+nobody can find later.
+
+### D2c — Still open in the horde
+- ~~**The brute, the bloater and the boss are now half the size they have been drawing at**, and it
+  has not been re-measured.~~ **Measured.** Every table taken from H4b onward is post-correction —
+  the weapon arm, the survivor arm and `lingers:auto` all ran against the current sizes, and 12
+  layouts come home 9 to 10 times out of 12 with the 180 s target met. There is no separate
+  re-measurement to do; those tables *are* the new baseline.
 
 ### ✅ D3 — Three survivors, and none of them is a difficulty setting
 
@@ -501,9 +568,10 @@ plane of repeating cover where crossing fifty metres feels like standing still.
   having. It is the only supernatural note the environment has been given room for.
 - **No biome has authored glTF landmarks of its own.** The city and the lab use procedural `PropKind`
   scenery for their skyline, which works and is not the same as a modelled beacon.
-- **The three existing biomes now spawn from 14.7 m rather than 12 m.** That is the camera floor
-  biting on all of them, including the rail yard, which had 0.3 m of clearance. It makes the opening
-  seconds fractionally easier everywhere and it has not been re-measured against the balance table.
+- ~~**The three existing biomes now spawn from 14.7 m rather than 12 m**, and it has not been
+  re-measured.~~ **Measured**, by the same tables that closed the size correction above: everything
+  from H4b onward ran against the current ring. Same note applies — the new tables are the baseline
+  rather than something to compare a baseline against.
 
 **The laboratory.** Cover is server racks, benches, specimen tanks, and containment doors torn off
 their frames. It is the first *interior*: the sky is not the light source, the room is. That is what

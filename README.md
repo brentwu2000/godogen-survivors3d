@@ -60,6 +60,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/FlowFieldProbe.cs` | yes | An enemy behind the long wall routes around it instead of into it |
 | `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, and every proficiency curve |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
+| `test/KnotProbe.cs` | yes | Some runs knot and some do not, a knot lands as a mass rather than a spread, and a knot run receives no more bodies than a scattered one |
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
 | `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not, and throwing is its own verb |
@@ -146,9 +147,26 @@ movie frame renders before `_Process` and `CameraRig`'s lerp has not run yet.
 
 ## The loop
 
-A run is 300 s. The horde spawns at 2/s and ramps to 8/s while its speed scales to 1.6x, **up to 160
-alive at once**. The extraction pad opens at 15% of the clock and needs a 5 s hold, cancelled by
-stepping out.
+A run is 300 s. The ambient horde ramps while its speed scales to 1.6x, **up to 160 alive at once**;
+the dangerous places are the ones the player walks into rather than the clock. The extraction pad
+opens at 15% of the clock and needs a 5 s hold, cancelled by stepping out.
+
+**A run has a schedule, not a timetable.** Pads, both supply caches and the boss are drawn per seed,
+in bands deliberately narrow around the numbers the sweep tuned — the boss near 0.40 because runs end
+between 83 and 142 seconds, the first cache near 0.25 because the bag is full at 60 s and empty at
+120 s. None of that tuning is discarded; the player simply cannot set a watch by it. A player four
+runs in used to know the whole thing, and a timetable is not a decision.
+
+Two things vary the shape rather than the times:
+
+- **A surge**, in somewhat over half of runs: one announced wave from a single bearing. A wedge rather
+  than a ring, because a ring is the ordinary spawn pattern with more of it while a wedge is a
+  *direction* — something to turn away from or fire into. A run without one is not an easier run with
+  something missing; it is a run in which holding a grenade back for it was wrong.
+- **Knots**, in about a third of runs: 14–32% of the ordinary arrivals come as four or five bodies
+  inside 2.2 m instead of one more from one more bearing. Same total over the same clock, delivered as
+  a mass. It is not announced, because it is the texture of the whole run and the place to read it is
+  what is walking toward you.
 
 The top of that ramp used to be 12/s. A maxed weapon clears roughly three a second against the late
 roster, so the field is already growing without bound at six — every rate above it only changed how
