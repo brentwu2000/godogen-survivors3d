@@ -135,13 +135,22 @@ public partial class BuildWeapons : SceneTree
             // it. Twelve rounds and a reserve is the substitute.
             //
             // **Ninety in reserve was not a limiter.** A hundred and two rounds
-            // at 2.2 a second is forty-six seconds of continuous fire, and the
-            // run it was measured in lasted a hundred and forty-two — so the
-            // number that was supposed to be the cost never once bound. Forty-two
-            // does: it runs out inside a single bad minute, which is when the
-            // reach is worth having and therefore when losing it is a decision
-            // rather than an inconvenience. The bot's own median duration is what
-            // priced it, not arithmetic about magazines.
+            // at 2.2 a second is forty-six seconds of continuous fire, inside a
+            // run whose median was well past two minutes — so the number written
+            // down as the cost of carrying range never once bound.
+            //
+            // Fifty-four does. Measured on the build where this weapon actually
+            // fires: the pistol's median run is 83 seconds and its reserve is
+            // twenty-four seconds of trigger, so it runs out inside a single bad
+            // minute — which is when the reach is worth having, and therefore
+            // when losing it is a decision rather than an inconvenience. It lands
+            // at 104% of the knife pair, which is inside the budget with room.
+            //
+            // The bot's own median duration is what priced it, not arithmetic
+            // about magazines. Note the first attempt at this cut moved the mark
+            // *and* the reserve in one pass — one experiment, two variables — and
+            // the mark turned out to be doing nothing at all, because the sidearm
+            // was firing the primary's weapon. See WEAPONS.md.
             new()
             {
                 WeaponName = "Sidearm Pistol",
@@ -165,19 +174,22 @@ public partial class BuildWeapons : SceneTree
                 // Combat Knife, and those are very different numbers.
                 //
                 // **This number was cut to 12% and put back, and the round trip
-                // is the useful part.** At 20% with 90 in reserve the pair banked
-                // 2264 against the knife pair's 1567 — 144% of the shelf's
-                // incumbent, against a budget written as "about 115%". Both the
-                // mark and the reserve were cut in the same pass, which is one
-                // experiment with two variables, and the answer came back 1457:
-                // 93%, the worst-surviving weapon on its own shelf, and no way to
-                // say which cut did it.
+                // is how the slot bug was found.** Cutting it changed nothing —
+                // twelve seeded runs came back byte-identical, which a
+                // deterministic simulation cannot do if the value reaches
+                // anything. The mark was not firing, because `Fire` read the
+                // *active* slot's weapon and this one sits in the second.
                 //
-                // Taken separately, the reserve is the whole correction — see the
-                // note above it. The mark is the *signature*, and a signature
+                // So the 144% that triggered the cut was never about the mark. It
+                // was about a Scavenged Rifle being fired twice, and the reserve
+                // — which `TickSlot` does read from the right slot — was the only
+                // half of that measurement that meant anything.
+                //
+                // Left at twenty. The mark is the *signature*, and a signature
                 // trimmed to make a budget is how a shelf of four weapons becomes
-                // four stat lines. So it pays in ammunition instead, which is the
-                // trade the weapon was written to make.
+                // four stat lines; the weapon pays in ammunition instead, which is
+                // the trade it was written to make. Measured on the fixed build it
+                // lands at 104% of the knife pair.
                 Trait = WeaponTrait.Mark,
                 TraitAmount = 0.20f,
                 TraitCount = 3,

@@ -122,6 +122,62 @@ that lets the handler tick and fire on its own rather than driving `ForceFire`: 
 bow in slot 1, target at 9 m where only slot 1 can reach. Under the bug the primary's reach came out of
 the sidearm.
 
+### What a pair is actually worth, measured for the first time
+
+`lingers:auto slots:both`, twelve layouts, on the build where the second slot fires its own weapon:
+
+| firing | survived | median banked | median seconds | median lowest HP |
+| :--- | ---: | ---: | ---: | ---: |
+| one weapon | 10/12 | 1132 | 68 | 58 |
+| **two weapons** | 9/12 | **1464** | 96 | 58 |
+
+**A pair is 129% of one weapon.** Not the 110% step 1 recorded, and not the 138% the same arm reported
+an hour earlier on the broken build — fixing the slot made the pair *weaker*, which is exactly right:
+the second slot used to fire a Scavenged Rifle at 12 damage and 18 metres, and now it fires a Combat
+Knife at 6 and 1.6. Survival fell with it, 11/12 to 9/12.
+
+So the ceiling is still breached, by 14 points rather than 23.
+
+**The real cost of the bug is not this number.** The game has been tuned for four phases against a
+sidearm that was a second rifle: every figure set since step 1 — spawn curve, elite rates, the boss,
+the knot share — was chosen against a player whose small hand hit for twice as much at ten times the
+reach. Correcting the sidearm does not correct those, and moving a weapon's damage would not either.
+
+### And the shelf, measured for the first time as four different weapons
+
+`lingers:auto`, the same twelve layouts, the Primary held at the Scavenged Rifle:
+
+| Sidearm | survived | median banked | median seconds | median lowest HP | vs the knife |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Combat Knife | 9/12 | 1464 | 96 | 58 | — |
+| Sidearm Pistol | 9/12 | 1529 | 83 | 56 | 104% |
+| Hand Emitter | 10/12 | 1578 | 133 | 60 | 108% |
+| Katana | 11/12 | 1612 | 157 | 61 | 110% |
+
+**All four inside 110%, and the budget rule is met by the shelf rather than enforced onto it.** That
+is the first time this file has been able to say so, because it is the first measurement in which the
+four arms were four weapons.
+
+The shapes are what make it a choice, and they are not the shapes the numbers alone would predict:
+
+- **The Katana buys time.** Longest runs by a wide margin, best survival, most health left. Reach and a
+  heavier wound on a blade means fewer things arrive at contact, and under `linger:auto` a bot that is
+  not losing does not leave.
+- **The Hand Emitter buys the same thing more cheaply** — 133 seconds and 10/12 for a weapon that does
+  five damage. It is the clearest evidence in the file that the slow is worth what it was priced at:
+  nothing in its stat line explains that row.
+- **The Sidearm Pistol buys speed instead.** The *shortest* runs on the shelf, 83 seconds, and it still
+  banks more than the knife — it converts reach into credits per second rather than into safety, and it
+  finishes on the lowest health of the four. That is a genuinely different way to play the slot and it
+  was not designed in; it fell out of measuring it.
+- The knife remains the floor, which is what a starting weapon should be.
+
+**The 180-second clock is reachable, and which sidearm you carry decides it.** This arm passes its own
+verdict; the `slots:both` arm above fails it, and the difference between them is that one is the
+starting kit and the other has something on the shelf. That is a better answer than the clock being
+fiction, and it is worth more than the budget number: the second half of the run is content the player
+*unlocks by shopping*, which is what the shop is for.
+
 ### Re-measured at step 5, and the budget had already moved
 
 Same instrument, same twelve layouts, `lingers:auto`. **Taken before the slot bug above was found, so
@@ -207,7 +263,7 @@ All four exist. Numbers as shipped rather than as planned, because two of them m
 | :--- | :--- | ---: | ---: | ---: | :--- |
 | Combat Knife | blade | 6 | 3.2/s | 1.6 | **bleeds** 4/s for 3 s; rewards touching many things once |
 | Katana | blade | 9 | 2.4/s | 2.4 | **bleeds** 7/s for 2 s, further, no cleave |
-| Sidearm Pistol | firearm | 7 | 2.2/s | 14 | **marks** for +20% / 3 s; 12 rounds, 90 in reserve |
+| Sidearm Pistol | firearm | 7 | 2.2/s | 14 | **marks** for +20% / 3 s; 12 rounds, 42 in reserve |
 | Hand Emitter | firearm | 5 | 2.8/s | 8 | **chills** 45% for 2 s; no magazine |
 
 **The Hand Emitter is a Firearm, not a `Tech` category.** Category here says how a weapon *resolves*
