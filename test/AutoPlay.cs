@@ -568,6 +568,28 @@ public partial class AutoPlay : SceneTree
         if (_weapons is { Weapon.MagazineSize: > 0 })
             _lowestReserve = Mathf.Min(_lowestReserve, _weapons.Reserve);
 
+        // Both hands, and separately.
+        //
+        // `IsDry` means "the one in hand", which is the Primary — so `dryAt` has
+        // always been a fact about the rifle, and a Sidearm that spent two thirds
+        // of a run empty reported nothing at all. That is the same slot-0 blind
+        // spot the firing bug lived in, and it matters here for the same reason:
+        // the number the sweep prints is the number a weapon gets tuned against.
+        //
+        // It is exactly the question the Sidearm Pistol needed answered — its
+        // reserve was cut on a measurement taken while it was not firing, and
+        // there was no column that could say whether the cut ever bound.
+        if (_weapons != null)
+        {
+            for (int slot = 0; slot < _weapons.SlotCount; slot++)
+            {
+                if (!_weapons.IsDryIn(slot) || _drySlotAt[slot] >= 0.0f)
+                    continue;
+
+                _drySlotAt[slot] = _director.Elapsed;
+            }
+        }
+
         if (_weapons?.IsDry == true)
         {
             _everDry = true;
@@ -873,6 +895,10 @@ public partial class AutoPlay : SceneTree
     private string? _pickHeld;
     private bool _everDry;
     private float _dryAt = -1.0f;
+
+    /// When each slot first ran out, or -1 for one that never did. Indexed the
+    /// way the handler indexes: 0 is the Primary, 1 the Sidearm.
+    private readonly float[] _drySlotAt = { -1.0f, -1.0f };
     private int _lowestReserve = int.MaxValue;
 
     /// Circles instead of searching during the linger. The two behaviours answer
@@ -1059,38 +1085,55 @@ public partial class AutoPlay : SceneTree
         // Equipped rather than bought. The shop is a separate question and its
         // prices are not what this measures; what is wanted is the run a player
         // has after they have paid, which is this one.
-        if (_weaponWanted.Length > 0)
+        // **A pair, not a weapon.** `weapon:fire_axe+sidearm_pistol` carries both;
+        // `weapon:katana` still carries one and leaves the other half as the
+        // starting kit, so every table already printed keeps meaning what it
+        // meant.
+        //
+        // The flag took one name, and that quietly decided what every sidearm
+        // measurement was allowed to say. The Sidearm Pistol exists to cover a
+        // *melee* primary — its own note says "the loadout that has nothing at all
+        // for a spitter holding at eight metres" — and it was only ever measured
+        // beside a Scavenged Rifle, which reaches 18 m and makes a ranged sidearm
+        // redundant by construction. It read 73% of the free knife, and no amount
+        // of tuning the weapon would have fixed a question about the other hand.
+        //
+        // WEAPONS.md's third balance assertion is "no pair is the answer
+        // everywhere: four Sidearms times eleven Primaries is forty-four
+        // loadouts". Until this the instrument could not put one of the
+        // forty-four on the field.
+        foreach (string name in _weaponWanted.Split('+', System.StringSplitOptions.RemoveEmptyEntries))
         {
-            string path = $"res://resources/weapons/{_weaponWanted}.tres";
+            string path = $"res://resources/weapons/{name}.tres";
             var carried = GD.Load<WeaponResource>(path);
 
             if (carried == null)
             {
-                GD.Print($"  no weapon file named {_weaponWanted} — carrying the starting kit");
+                GD.Print($"  no weapon file named {name} — leaving that hand as the starting kit");
+                continue;
             }
-            else
-            {
-                // Through the profile, not straight into the slot.
-                //
-                // `Equip` alone puts the weapon in the player's hands and leaves
-                // the profile saying something else — which was invisible until a
-                // weapon started leaning the growth deck, and then every
-                // `weapon:` run in the sweep was tilted by whatever the *profile*
-                // was carrying. The scythe and the service rifle came back with
-                // identical offers, which is the correct output of a flag that
-                // was only pretending to change the loadout.
-                //
-                // Into the slot the weapon's own type asks for, so a Primary
-                // cannot land in the sidearm slot the way the shop refuses to put
-                // it there.
-                if (carried.Slot == WeaponSlot.Sidearm)
-                    _meta!.Profile.LoadoutSecondary = path;
-                else
-                    _meta!.Profile.LoadoutWeapon = path;
 
-                _meta.Profile.Grant(path);
-                _weapons?.Equip(carried.Slot == WeaponSlot.Sidearm ? 1 : 0, carried);
-            }
+            // Through the profile, not straight into the slot.
+            //
+            // `Equip` alone puts the weapon in the player's hands and leaves
+            // the profile saying something else — which was invisible until a
+            // weapon started leaning the growth deck, and then every
+            // `weapon:` run in the sweep was tilted by whatever the *profile*
+            // was carrying. The scythe and the service rifle came back with
+            // identical offers, which is the correct output of a flag that
+            // was only pretending to change the loadout.
+            //
+            // Into the slot the weapon's own type asks for, so a Primary
+            // cannot land in the sidearm slot the way the shop refuses to put
+            // it there. That is also what makes the pair syntax order-free:
+            // `axe+pistol` and `pistol+axe` are the same loadout.
+            if (carried.Slot == WeaponSlot.Sidearm)
+                _meta!.Profile.LoadoutSecondary = path;
+            else
+                _meta!.Profile.LoadoutWeapon = path;
+
+            _meta.Profile.Grant(path);
+            _weapons?.Equip(carried.Slot == WeaponSlot.Sidearm ? 1 : 0, carried);
         }
 
         // Read back rather than assumed, and reported in the `SWEEP` line, for
@@ -1729,6 +1772,7 @@ public partial class AutoPlay : SceneTree
                  // one the design has already neutralised, which is a finding
                  // rather than a guess only once it is a number.
                  $"dryAt={_dryAt:F0} " +
+                 $"dryPrimary={_drySlotAt[0]:F0} drySidearm={_drySlotAt[1]:F0} " +
                  $"level={_growth?.Level ?? 0} picks={_picksTaken} " +
                  $"weaponLv={_weapons?.Level ?? 0} weaponMax={_weapons?.MaxLevel ?? 0} " +
                  $"ceilingAt={(_ceilingAt < 0.0f ? -1.0f : _ceilingAt):F0} " +

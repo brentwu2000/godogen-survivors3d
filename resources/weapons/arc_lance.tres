@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_n5oy4"]
+
+[resource]
+script = ExtResource("1_n5oy4")
+WeaponName = "Arc Lance"
+Category = 4
+FiringModel = 2
+Favours = 1
+BaseDamage = 3.2
+BaseAttackSpeed = 10.0
+BaseRange = 12.0
+MagazineSize = 0
+Knockback = 0.05
+Tier = 3
+Price = 2000
+MaxLevel = 14
+TierStartBonus = 2

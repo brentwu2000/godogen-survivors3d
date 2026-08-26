@@ -134,17 +134,25 @@ public partial class BuildWeapons : SceneTree
             // has already closed, and a weapon that connects at 14 m does not have
             // it. Twelve rounds and a reserve is the substitute.
             //
-            // **Ninety in reserve was not a limiter.** A hundred and two rounds
-            // at 2.2 a second is forty-six seconds of continuous fire, inside a
-            // run whose median was well past two minutes — so the number written
-            // down as the cost of carrying range never once bound.
+            // **Ninety, cut to forty-two, and put back — the cut was made against
+            // a measurement of a weapon that was not firing.** At the time this
+            // slot fired the *primary's* weapon, so the 144% that justified the
+            // cut was a Scavenged Rifle counted twice, and the only part of that
+            // reading which meant anything was the reserve, because `TickSlot`
+            // takes ammunition from the correct slot.
             //
-            // Fifty-four does. Measured on the build where this weapon actually
-            // fires: the pistol's median run is 83 seconds and its reserve is
-            // twenty-four seconds of trigger, so it runs out inside a single bad
-            // minute — which is when the reach is worth having, and therefore
-            // when losing it is a decision rather than an inconvenience. It lands
-            // at 104% of the knife pair, which is inside the budget with room.
+            // Measured properly once it fired, the forty-two was not a limiter
+            // either — it was an absence. `drySidearm` says this weapon ran out
+            // at 32 to 42 seconds in every run sampled, inside runs of 43 to 160
+            // seconds: seventy-two and seventy-eight per cent of the two long ones
+            // spent carrying nothing in the small hand. It banked 73% of what the
+            // free Combat Knife banks, which is not a weapon anybody should pay
+            // eight hundred credits for.
+            //
+            // A limiter has to bind late enough that the weapon existed. Ninety
+            // is about fifty-eight seconds of trigger against a median run near a
+            // hundred, so it still runs out — and it runs out in the second half,
+            // where the reach was worth having and losing it is a decision.
             //
             // The bot's own median duration is what priced it, not arithmetic
             // about magazines. Note the first attempt at this cut moved the mark
@@ -204,7 +212,7 @@ public partial class BuildWeapons : SceneTree
                 BaseSpreadDegrees = 5.0f,
                 BaseReloadTime = 1.6f,
                 MagazineSize = 12,
-                StartingReserve = 42,
+                StartingReserve = 90,
                 Penetration = 1,
                 Knockback = 0.06f,
             },
@@ -252,9 +260,28 @@ public partial class BuildWeapons : SceneTree
                 // seconds because that is about one walker's approach across the
                 // gap this thing opens, so a hit buys distance rather than
                 // buying the fight.
+                // Three seconds, not two, and the damage stays at five.
+                //
+                // **It finished runs on less health than the free knife**, 51
+                // against 59, on a weapon whose entire claim is keeping things
+                // off you — 89% of the knife's banked and 9/12 survival against
+                // 11/12. A slow that leaves the player worse off than no slow is
+                // not priced low, it is not working.
+                //
+                // Correct pathing is what exposed it: enemies now route tightly
+                // instead of detouring around walls that were not there, so more
+                // of them arrive and they arrive together. Two seconds of 45% on
+                // one body is a rounding error against a crowd that is closing in
+                // order; three seconds is one body removed from the fight for
+                // long enough to matter.
+                //
+                // The duration rather than the damage, because five damage *is*
+                // the weapon — it is the only thing on the shelf whose job is not
+                // to kill, and buying its way to parity with a bigger number
+                // would make it a worse pistol instead of a better emitter.
                 Trait = WeaponTrait.Chill,
                 TraitAmount = 0.45f,
-                TraitCount = 2,
+                TraitCount = 3,
 
                 // Firearm because it is hitscan, not because it is a gun. The
                 // three tech Primaries in step 7 are what a `Tech` category would
@@ -293,6 +320,63 @@ public partial class BuildWeapons : SceneTree
                 SwingArcDegrees = 45.0f,
                 MagazineSize = 0,
                 Knockback = 1.8f,
+            },
+
+            // No magazine and no reserve: sustained fire is paid for in heat.
+            // It shoots harder and faster than the service rifle until the bar
+            // fills, then falls completely silent until it has vented to the
+            // safe line. The rhythm is therefore a property of the weapon, not
+            // an ammunition scarcity that can be erased by a larger backpack.
+            new()
+            {
+                WeaponName = "Pulse Rifle",
+                Favours = GrowthLine.Gunnery,
+                Trait = WeaponTrait.Shock,
+                TraitAmount = 3.0f,
+                Category = WeaponCategory.Tech,
+                FiringModel = WeaponFiringModel.Overheat,
+                HeatPerShot = 0.14f,
+                HeatCoolPerSecond = 0.2f,
+                HeatResumeFraction = 0.35f,
+                Tier = 3,
+                Price = 2100,
+                MaxLevel = 14,
+                TierStartBonus = 2,
+                BaseDamage = 15.0f,
+                BaseAttackSpeed = 8.0f,
+                BaseRange = 20.0f,
+                BaseSpreadDegrees = 5.0f,
+                MagazineSize = 0,
+                StartingReserve = 0,
+                Penetration = 1,
+                Knockback = 0.15f,
+            },
+
+            // A held line rather than a sequence of trigger pulls. Damage is a
+            // small tenth-second tick, so leaving the lance on one body is a
+            // continuous choice; dwelling long enough charges that body with
+            // Shock for a chilled follow-up to conduct.
+            new()
+            {
+                WeaponName = "Arc Lance",
+                Favours = GrowthLine.Gunnery,
+                Category = WeaponCategory.Tech,
+                FiringModel = WeaponFiringModel.Beam,
+                BeamTickSeconds = 0.1f,
+                BeamShockDwell = 0.75f,
+                ShockSeconds = 3.0f,
+                Tier = 3,
+                Price = 2000,
+                MaxLevel = 14,
+                TierStartBonus = 2,
+                BaseDamage = 3.2f,
+                BaseAttackSpeed = 10.0f,
+                BaseRange = 12.0f,
+                BaseSpreadDegrees = 0.0f,
+                MagazineSize = 0,
+                StartingReserve = 0,
+                Penetration = 1,
+                Knockback = 0.05f,
             },
 
             // Long melee: one heavy chop that shoves what it hits.

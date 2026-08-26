@@ -390,7 +390,9 @@ public partial class BalanceSweep : SceneTree
         // The exit code is ignored on purpose: a death is a failure for the
         // play-test and a data point for this, and treating it as an error here
         // would throw away exactly the rows the table exists to show.
-        OS.Execute(OS.GetExecutablePath(), args.ToArray(), output, readStderr: true);
+        int exit = OS.Execute(OS.GetExecutablePath(), args.ToArray(), output, readStderr: true);
+
+        string last = "";
 
         foreach (Variant line in output)
         {
@@ -398,9 +400,26 @@ public partial class BalanceSweep : SceneTree
             {
                 if (text.Contains("SWEEP "))
                     return Parse(text, linger, seed, arm != NoZone);
+
+                if (text.Trim().Length > 0)
+                    last = text.Trim();
             }
         }
 
+        // Why, not just that.
+        //
+        // A missing row used to be reported as "no result" and nothing else, so a
+        // sweep that quietly dropped eight of forty-eight runs looked like a
+        // sweep with smaller samples — and the medians were taken over whatever
+        // survived. That is the worst shape a measurement can fail in: it still
+        // prints a number, and the number is about a subset nobody chose.
+        //
+        // The child's exit code separates the two cases that matter. A crash and
+        // a run that finished without ever printing its `SWEEP` line are different
+        // bugs, and the last thing it managed to say is usually enough to tell
+        // which.
+        GD.PushError($"  child exited {exit} without a SWEEP line; last output: "
+                   + (last.Length > 0 ? last : "(nothing)"));
         return null;
     }
 

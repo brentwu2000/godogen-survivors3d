@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_rv66y"]
+
+[resource]
+script = ExtResource("1_rv66y")
+WeaponName = "Pulse Rifle"
+Category = 4
+FiringModel = 1
+HeatPerShot = 0.14
+HeatCoolPerSecond = 0.2
+Favours = 1
+BaseDamage = 15.0
+BaseAttackSpeed = 8.0
+BaseRange = 20.0
+BaseSpreadDegrees = 5.0
+MagazineSize = 0
+Knockback = 0.15
+Trait = 10
+TraitAmount = 3.0
+Tier = 3
+Price = 2100
+MaxLevel = 14
+TierStartBonus = 2

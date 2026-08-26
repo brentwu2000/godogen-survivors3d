@@ -178,6 +178,50 @@ starting kit and the other has something on the shelf. That is a better answer t
 fiction, and it is worth more than the budget number: the second half of the run is content the player
 *unlocks by shopping*, which is what the shop is for.
 
+### The pathing fix moved all of it again, and then the shelf answered a different question
+
+Correcting `FlowField.BlockBox` changed how enemies route, so the table above was re-taken. It moved a
+long way — the Sidearm Pistol from 104% to **73%**, the Hand Emitter from 108% to 89%, the Katana from
+110% to **120%**. Enemies now arrive together instead of detouring around walls that were not there,
+and a blade in the small hand is worth more when things reach contact.
+
+Two things were then tried against the pistol at 73%, and **both worked mechanically and neither moved
+the number**, which is the useful part:
+
+- **Its reserve went back from 42 to 90.** `drySidearm` — a new column, because `dryAt` had always
+  reported the *active* slot and so had never once described a Sidearm — said the pistol ran out at 32
+  to 42 seconds inside runs of 43 to 160. Two of four spent over seventy per cent of the run carrying
+  nothing. At 90 it never runs dry in most runs. Banked went 1079 → 1109. **Ammunition was not the
+  problem**, though a weapon that vanishes a third of the way in was a real defect either way.
+- **The Hand Emitter's chill went from 2 s to 3 s.** Banked flat at 1319; survival 9/12 → 11/12.
+
+**The pistol was being asked the wrong question.** Its own note says it covers a *melee* primary — "the
+loadout that has nothing at all for a spitter holding at eight metres" — and every measurement ever
+taken of it paired it with a Scavenged Rifle reaching 18 m, which makes a ranged Sidearm redundant by
+construction. `weapon:` took one name, so the instrument could not put a pair on the field at all;
+`weapon:fire_axe+sidearm_pistol` now does, routed by each weapon's own `Slot`.
+
+Beside a Fire Axe instead:
+
+| pair | survived | median banked | vs the knife pair |
+| :--- | ---: | ---: | ---: |
+| FireAxe + Sidearm Pistol | 11/12 | 983 | **133%** |
+| FireAxe + Hand Emitter | 11/12 | 757 | 102% |
+| FireAxe + Katana | 6/8 | 590 | *(partial — see below)* |
+| FireAxe + Combat Knife | 8/9 | 542 | — |
+
+**73% beside a rifle, 133% beside an axe.** That is balance assertion 3 — "no pair is the answer
+everywhere" — measured rather than asserted, for the first time since it was written down. The pistol
+is not weak; it is the answer to a question the instrument had never been able to ask.
+
+Two caveats, both load-bearing:
+
+- **The knife and katana rows are partial**, 9 and 8 of 12. The missing runs are a *crash*, not a slow
+  run — see the known defect in `README.md`. Both are double-melee loadouts, which is what triggers it.
+  So the 133% is a ratio against an incomplete baseline and should be re-taken once that is fixed.
+- **Every axe pair banks far less than every rifle pair** — 542 to 983 against 1079 to 1779. That is
+  the melee gap this whole file opens with, and two weapons firing has not closed it.
+
 ### Re-measured at step 5, and the budget had already moved
 
 Same instrument, same twelve layouts, `lingers:auto`. **Taken before the slot bug above was found, so

@@ -1304,6 +1304,26 @@ Everything the player looks at has had a pass, the numbers behind it are recorde
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
 
+- **The player body crashes the process when the carry changes often enough.** Reproducible, and it is
+  in the baked-body path rather than in anything the balance work touched:
+
+  ```
+  godot --headless --fixed-fps 60 --script test/AutoPlay.cs -- \
+        linger:auto seed:3246279323 "weapon:fire_axe+katana"
+  # FATAL: Condition "gchandle.is_released()" is true   mono_object_disposed_baseref
+  #   BakedBody.Build   Player.CreateBody   Player.CarryChanged   Player._PhysicsProcess
+  ```
+
+  Five of the twelve sweep layouts on `fire_axe+katana`, and some on `fire_axe+combat_knife` — the two
+  loadouts where *both* weapons are melee, so the held silhouette flips between `Longarm` and `Blade`
+  and `CarryChanged` rebuilds the mesh each time. `CreateBody` re-loads the bake and `Append` allocates
+  several `Godot.Collections.Array` and a fresh `ArrayMesh` per rebuild; the fatal is a `RefCounted`
+  finalising against a released handle. Caching the built mesh per `Carry` would remove the fuel — there
+  are about five of them for a whole run — but `BakedBody.cs` and `Player.cs` are being edited by the
+  model track as this is written, so it is recorded rather than restructured.
+
+  It is not a test-only problem: the stack is `Player._PhysicsProcess`, so a player swapping between a
+  heavy melee weapon and a blade can hit it.
 - **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
   115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
   later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by
