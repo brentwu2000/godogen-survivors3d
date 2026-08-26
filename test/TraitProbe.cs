@@ -89,6 +89,8 @@ public partial class TraitProbe : SceneTree
             case 12: return RunStage(StageCookOff, "a blast cooks off burn once, and spends it");
             case 13: return RunStage(StageConduct, "chain leaves shock, and a chilled hit conducts it once");
             case 14: return RunStage(StageSidearmFiresItself, "the second slot fires its own weapon, not the first one's");
+            case 15: return RunStage(StageOverheat, "the pulse rifle locks hot and resumes only below its safe line");
+            case 16: return RunStage(StageBeam, "the arc lance holds a beam and shocks only after dwelling");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -324,10 +326,14 @@ public partial class TraitProbe : SceneTree
             }
 
             found++;
-            summary.Add($"{weapon.WeaponName}={weapon.Trait}");
+            summary.Add($"{weapon.WeaponName}=" +
+                        (weapon.FiringModel != WeaponFiringModel.Standard
+                            ? weapon.FiringModel.ToString()
+                            : weapon.Trait.ToString()));
             seen.Add(weapon.Trait);
 
-            if (weapon.Trait == WeaponTrait.None)
+            if (weapon.Trait == WeaponTrait.None
+                && weapon.FiringModel == WeaponFiringModel.Standard)
             {
                 GD.PushError($"  {weapon.WeaponName} has no trait — it is only a number");
                 ok = false;
@@ -512,8 +518,24 @@ public partial class TraitProbe : SceneTree
 
     private int _ammoBefore;
 
+    /// The tick a status weapon's effect must be gone by, from the weapon's own
+    /// card rather than from a number typed beside it.
+    ///
+    /// Every stage here that asserts a status is *spent* has to wait for the card
+    /// to run out, and the obvious way to write that wait is to read the card,
+    /// convert to ticks, and type the answer. Then the card changes and the stage
+    /// fails while naming the trait — which is a test reporting a balance
+    /// decision as a bug in the mechanic it happens to sit next to.
+    ///
+    /// A second and a half of margin, because these run at 60 Hz against a
+    /// duration in whole seconds and the tick the status is applied on is not the
+    /// tick the stage started counting from.
+    private static int ExpiryTick(WeaponResource weapon) =>
+        Mathf.RoundToInt((weapon.TraitCount + 1.5f) * 60.0f);
+
     private float _speedBefore;
     private float _speedChilled;
+    private float _hordeSpeed = 1.0f;
 
     /// The emitter's shot has to take speed off the body it hit, and the body has
     /// to get it back.
@@ -546,9 +568,28 @@ public partial class TraitProbe : SceneTree
             _weapons.SetProficiency(WeaponCategory.Firearm, 99);
             _horde!.Pool.Clear();
 
-            // A walker, inside the emitter's 8 m and well outside the 0.7 m
-            // contact radius it would stop at. It closes about 2.4 m a second, so
-            // three seconds of walking from here still leaves it moving.
+            // The horde crawls for the length of this stage, and that is what
+            // keeps the reading honest rather than what weakens it.
+            //
+            // Everything measured here is a *ratio* — chilled speed against
+            // unchilled, recovered against unchilled — and `SpeedScale` divides
+            // out of all three. What it does change is how much ground the walker
+            // covers before the last reading, and that matters enormously: a body
+            // inside `ContactRadius` has its velocity zeroed, so it reports 0.00
+            // and the stage says "the chill never wore off" about a walker that
+            // simply arrived.
+            //
+            // That is not hypothetical. The wait here is derived from the card,
+            // the card went from two seconds to three, and 7.5 m at 2.4 m/s is
+            // exactly enough to reach the player in the extra time — so a correct
+            // weapon change turned this stage red and blamed the trait. The
+            // stage's own comment had warned about contact and then left the
+            // margin as a distance that only worked for one duration.
+            _hordeSpeed = _horde.SpeedScale;
+            _horde.SpeedScale = 0.2f;
+
+            // Inside the emitter's 8 m, and now unable to cross the gap however
+            // long the card gets.
             _horde.Spawn(_player!.GlobalPosition + new Vector3(7.5f, 0.0f, 0.0f), 0);
             return null;
         }
@@ -568,8 +609,15 @@ public partial class TraitProbe : SceneTree
             return null;
         }
 
-        // Two seconds on the card plus a margin, at 60 Hz.
-        if (tick < 145)
+        // The card's own duration plus a margin, at 60 Hz.
+        //
+        // **Read off the resource, not typed.** This was `tick < 145`, which is
+        // two seconds and change — correct for a card that said two, and silently
+        // wrong the moment the emitter's chill went to three. The stage read
+        // `TraitCount` for the assertion and hardcoded the same number for the
+        // timing, so it went red on a weapon change that was working exactly as
+        // intended, and it named the trait rather than the clock.
+        if (tick < ExpiryTick(emitter))
             return null;
 
         float recovered = _horde!.Pool.Count > 0 ? _horde.Pool.Velocity[0].Length() : 0.0f;
@@ -582,10 +630,20 @@ public partial class TraitProbe : SceneTree
         bool slowed = Mathf.Abs(taken - emitter.TraitAmount) < 0.05f;
         bool spent = recovered > _speedBefore * 0.95f;
 
+        _horde.SpeedScale = _hordeSpeed;
+
         if (!slowed)
             GD.PushError($"  chill took {taken:P0}, the card says {emitter.TraitAmount:P0}");
+
         if (!spent)
-            GD.PushError("  the chill never wore off — a permanent slow, not a status");
+        {
+            // Named apart, because a body that reached the player reports zero
+            // and so does a chill that never ended, and they are opposite bugs.
+            GD.PushError(recovered <= 0.01f
+                ? "  the walker is not moving at all — it reached contact, so this is the stage's "
+                + "geometry rather than the chill. Widen the gap or slow the horde further."
+                : "  the chill never wore off — a permanent slow, not a status");
+        }
 
         return _speedBefore > 0.0f && slowed && spent;
     }
@@ -651,8 +709,8 @@ public partial class TraitProbe : SceneTree
             return null;
         }
 
-        // Three seconds on the card plus a margin.
-        if (tick < 200)
+        // The card's own duration plus a margin. See `ExpiryTick`.
+        if (tick < ExpiryTick(pistol))
             return null;
 
         float after = _horde!.Pool.Health[0];
@@ -1008,4 +1066,127 @@ public partial class TraitProbe : SceneTree
     }
 
     private float _beforeAuto;
+
+    private int _pulseShots;
+    private int _pulseShotsWhileLocked;
+    private bool _pulseWasHot;
+
+    private bool? StageOverheat(int tick)
+    {
+        var pulse = GD.Load<WeaponResource>("res://resources/weapons/pulse_rifle.tres");
+        if (pulse == null)
+            return false;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _weapons!.Equip(0, pulse);
+            _weapons.SetProficiency(WeaponCategory.Tech, 0);
+            _weapons.LiveSlots = 1;
+            _weapons.HoldFire = false;
+            _pulseShots = 0;
+            _pulseShotsWhileLocked = -1;
+            _pulseWasHot = false;
+            _weapons.Fired += (weapon, _, _) =>
+            {
+                if (weapon.WeaponName == pulse.WeaponName)
+                    _pulseShots++;
+            };
+
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(8.0f, 0.0f, 0.0f), 2);
+            if (_horde.Pool.Count > 0)
+                _horde.Pool.Health[0] = 100_000.0f;
+            return null;
+        }
+
+        if (_weapons!.OverheatedIn(0))
+        {
+            _pulseWasHot = true;
+            if (_pulseShotsWhileLocked < 0)
+                _pulseShotsWhileLocked = _pulseShots;
+            else if (_pulseShots != _pulseShotsWhileLocked)
+            {
+                GD.PushError("  the pulse rifle fired while its overheat lock was active");
+                return false;
+            }
+        }
+
+        if (tick < 300)
+            return null;
+
+        _weapons.HoldFire = true;
+        bool resumed = _pulseWasHot && _pulseShots > _pulseShotsWhileLocked;
+        bool noAmmo = pulse.MagazineSize == 0
+                      && _weapons.AmmoIn(0) == 0
+                      && _weapons.ReserveIn(0) == 0;
+
+        GD.Print($"  {_pulseShotsWhileLocked} shots to lock, {_pulseShots} after vent cycle, " +
+                 $"heat {_weapons.HeatIn(0):P0}, ammo {_weapons.AmmoIn(0)}/{_weapons.ReserveIn(0)}");
+
+        if (!resumed)
+            GD.PushError("  the pulse rifle never resumed after cooling below its safe line");
+        if (!noAmmo)
+            GD.PushError("  the pulse rifle paid for firing with ammunition instead of heat");
+
+        return resumed && noAmmo;
+    }
+
+    private float _beamStartHealth;
+    private float _beamEarlyDamage;
+    private bool _beamEarlyShockFree;
+    private int _beamTicks;
+
+    private bool? StageBeam(int tick)
+    {
+        var lance = GD.Load<WeaponResource>("res://resources/weapons/arc_lance.tres");
+        if (lance == null)
+            return false;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _weapons!.Equip(0, lance);
+            _weapons.SetProficiency(WeaponCategory.Tech, 0);
+            _weapons.LiveSlots = 1;
+            _weapons.HoldFire = false;
+            _beamTicks = 0;
+            _weapons.Fired += (weapon, _, _) =>
+            {
+                if (weapon.WeaponName == lance.WeaponName)
+                    _beamTicks++;
+            };
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(8.0f, 0.0f, 0.0f), 2);
+            if (_horde.Pool.Count == 0)
+                return false;
+            _horde.Pool.Health[0] = 100_000.0f;
+            _beamStartHealth = _horde.Pool.Health[0];
+            return null;
+        }
+
+        if (tick == 30)
+        {
+            _beamEarlyDamage = _beamStartHealth - _horde!.Pool.Health[0];
+            _beamEarlyShockFree = _horde.Pool.ShockRemaining[0] <= 0.0f;
+        }
+
+        if (tick < 60)
+            return null;
+
+        _weapons!.HoldFire = true;
+        float totalDamage = _beamStartHealth - _horde!.Pool.Health[0];
+        bool continuous = _beamTicks >= 7 && totalDamage > _beamEarlyDamage;
+        bool dwelled = _beamEarlyShockFree && _horde.Pool.ShockRemaining[0] > 0.0f;
+        bool noAmmo = lance.MagazineSize == 0 && _weapons.AmmoIn(0) == 0;
+
+        GD.Print($"  {_beamTicks} beam ticks dealt {totalDamage:F1}; at 0.5s " +
+                 $"damage {_beamEarlyDamage:F1}, shock={(!_beamEarlyShockFree)}; " +
+                 $"at 1.0s shock {_horde.Pool.ShockRemaining[0]:F1}s");
+
+        if (!continuous)
+            GD.PushError("  the arc lance resolved like isolated shots instead of a held beam");
+        if (!dwelled)
+            GD.PushError("  beam shock did not wait for continuous dwell on one target");
+
+        return continuous && dwelled && noAmmo;
+    }
 }

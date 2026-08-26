@@ -41,11 +41,36 @@ So:
 
 Written first because four of the five are why this is a phase and not an afternoon.
 
-### 1. The default font has no Chinese glyphs
+### 1. The default font has no Chinese glyphs — measured, not assumed
 
-Godot's built-in font is a Noto Sans subset covering Latin, Greek and Cyrillic. Every Han character
-renders as a blank box. **Nothing in the plan below matters until a font is on screen**, which is why
-it is step 1 rather than step 4.
+`test/FontProbe.cs` asks the engine for the 69 distinct characters the UI is already known to need —
+the fittings, the verbs, the settings row — rather than a lorem-ipsum sample. A font that covers a
+random Han sample and misses 繁 fails on the one screen this work exists for.
+
+| Asked | Covers | One Han = |
+| :--- | :--- | ---: |
+| project default | **0 of 69** | — |
+| Noto Sans Mono CJK TC · Sarasa Mono TC · Source Han Mono TC | 0 of 69 *(not installed here)* | — |
+| **MingLiU · PMingLiU · MS Gothic** | **all 69** | **2.00 Latin cells** |
+| Microsoft JhengHei · Microsoft YaHei · Noto Sans CJK TC | all 69 | 1.03 Latin cells |
+| system fallback, shipping nothing | 0 of 69 | — |
+
+Three things fall out of that table, and two of them change the plan:
+
+- **The premise holds.** The engine default draws none of it. Nothing below matters until a font is on
+  screen, which is why it is step 1 rather than step 4.
+- **A monospace CJK face is exactly 2.00 Latin cells wide**, not approximately. That makes option A
+  below arithmetic rather than a fudge: a padding helper that counts wide characters as two is *exact*,
+  and the columns cannot drift. The proportional face at 1.03 confirms the other half — with it, no
+  amount of counting keeps a column straight.
+- **"Ship nothing and let the OS sort it out" is dead.** A generic request with `AllowSystemFallback`
+  reports no coverage *on a machine that has three CJK families installed*, because the fallback
+  resolves during text shaping rather than when a font is asked what it holds. So it cannot be checked
+  ahead of time — and for this project a glyph that is a box on someone else's machine and undetectable
+  on ours is the exact failure the build gate exists to prevent. `SystemFont` stays out.
+
+The named Windows families are not an answer either: the export target is Android, and MingLiU is not
+there. They are only evidence that the monospace path exists.
 
 This would be the **first third-party binary asset in the repository**. Everything the player currently
 sees is generated: audio is synthesised from recipes by `BuildAudio`, the ground texture by
@@ -77,8 +102,13 @@ they cost very differently:
 | **B. Real layout** | replace the pages with `GridContainer`/`HBoxContainer` columns | large — every page in `BaseScreen`, `DebriefScreen`, `Hud` | frees the font choice entirely, and is where the UI ends up eventually anyway |
 
 **This is the one decision in the plan that is taste rather than fact, and it wants the owner.** A is
-the recommendation: it keeps the terminal look the base was built around, it is one phase rather than
+the recommendation, and the measurement above strengthens it: a monospace CJK glyph came back at
+exactly 2.00 Latin cells, so the padding is arithmetic rather than an approximation that drifts by a
+pixel per column. It keeps the terminal look the base was built around, it is one phase rather than
 three, and B stays available afterwards because the string table lands either way.
+
+**Neither answer is blocked by the font choice**, which is why step 1 can proceed before this is
+settled: a monospace CJK face serves both, so picking one forecloses nothing.
 
 ### 3. Every string is interpolated at its call site
 
@@ -192,11 +222,23 @@ screen nobody screenshots" and "the build stops".
 
 Each step is playable before the next starts and closes against a probe, per the project's rule.
 
-1. **A Chinese character on screen.** Source an OFL face, wire it into the project theme, render one
-   hardcoded string. No translation, no table, no settings. **This is first because it is the only step
-   that can fail for reasons outside the plan** — licence, glyph coverage, monospace availability — and
-   finding that out after 320 strings have been extracted is the expensive order.
-   *Probe:* the font resource loads and reports a glyph for a known Han code point.
+1. **A Chinese character on screen.** ~~Source an OFL face~~ — *survey done, see constraint 1.*
+   `test/FontProbe.cs` exists and holds the premise: while no UI font is shipped it asserts the engine
+   default cannot draw the language, and the day a font *is* declared in `gui/theme/custom_font` it
+   becomes the coverage gate step 4 needs, asserting the shipped face draws every character the UI can
+   produce. One probe across the transition rather than two.
+
+   What is left of this step is acquiring the face itself. **It needs an OFL monospace CJK file, and
+   this machine has none** — the three candidate families came back uninstalled, and the ones that did
+   answer are Windows-bundled and cannot ship. So this is the step that needs either a download or a
+   file from the owner:
+
+   - **Noto Sans Mono CJK TC** (SIL OFL 1.1) — the safe default, Google/Adobe, matches Noto elsewhere.
+   - **Sarasa Mono TC** (SIL OFL 1.1) — Iosevka Latin over Source Han Sans, and the Latin half is
+     narrower, which suits a terminal-styled UI.
+
+   Either is fine; both are OFL, so attribution in the repo and nothing else.
+   *Probe:* `FontProbe` flips from "no UI font shipped" to the coverage gate on its own.
 2. **The string table, English only.** Every user-visible literal becomes a key; `tr()` at the call
    site; the CSV has one locale. Nothing on screen changes, which is the point — a step that changes
    the words *and* the mechanism cannot be reviewed.
