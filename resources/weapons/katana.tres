@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_gqw8p"]
+
+[resource]
+script = ExtResource("1_gqw8p")
+WeaponName = "Katana"
+Category = 0
+Slot = 1
+Favours = 4
+BaseDamage = 9.0
+BaseAttackSpeed = 2.4
+BaseRange = 2.4
+MagazineSize = 0
+Knockback = 0.12
+Trait = 2
+TraitAmount = 7.0
+TraitCount = 2
+Tier = 2
+Price = 650
+MaxLevel = 12
+TierStartBonus = 1

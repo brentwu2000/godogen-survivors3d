@@ -87,6 +87,85 @@ That matters most for the Sidearm Pistol below, which is the one with range — 
 at 14 m rather than 1.6 does not have the knife's natural limiter and is the most likely thing in this
 plan to break the number that was just measured.
 
+### Every number above and below this line was taken while the sidearm was firing the primary
+
+**`WeaponHandler.Fire` took a slot and then ignored it.** It read `Weapon`, which is
+`_slots[_active].Weapon`, so from the moment step 1 turned the second slot on, that slot has been
+firing the *first slot's weapon* — its damage, its trait, its category, its penetration, its
+knockback — on the sidearm's own cooldown and out of the sidearm's own magazine.
+
+`TickSlot` was right about everything else. It reads `slot.Weapon` for the schedule, the ammo, the
+reload, the level and the aim range, so the sidearm ran dry on its own reserve, reloaded on its own
+timer, aimed to its own reach, and every readout in the game agreed with itself. One line was wrong
+and nothing downstream of it disagreed.
+
+**No probe could have caught it.** `ForceFire` fires `_slots[_active]`, and every stage in
+`TraitProbe` and `WeaponProbe` equips into slot 0 — so the second slot's firing path was the one path
+no test had ever executed. It was found from the balance table instead, by the mark being changed from
+20% to 12% and twelve seeded runs coming back *byte-identical*: a deterministic simulation cannot do
+that if the number is reaching anything.
+
+What it invalidates:
+
+- **"+10.2% for a pair" (the table above) was the Scavenged Rifle fired twice**, not a rifle and a
+  knife. The budget rule, the 115% ceiling and everything measured against them are about a game where
+  the sidearm slot is a second magazine for the primary.
+- **Three of the four Sidearms measured today were the same weapon.** The Katana came back "flat" and
+  the Hand Emitter "+18%" because both were Scavenged Rifles; what actually differed between the arms
+  was magazine size, reserve, reload, reach and the growth-deck lean, which `TickSlot` did honour.
+- **`Charge` had the same bug**, from the same cause: `IsCharged` answered for the active slot and was
+  also what the shot consulted, so a Marksman Rifle charging in the second slot — the case the trait's
+  own comment sells it on — handed its 3.5x to whatever the first slot fired next.
+
+`TraitProbe.StageSidearmFiresItself` is the stage that closes it, and it is the only one in the file
+that lets the handler tick and fire on its own rather than driving `ForceFire`: a knife in slot 0 and a
+bow in slot 1, target at 9 m where only slot 1 can reach. Under the bug the primary's reach came out of
+the sidearm.
+
+### Re-measured at step 5, and the budget had already moved
+
+Same instrument, same twelve layouts, `lingers:auto`. **Taken before the slot bug above was found, so
+the "two weapons" arm is one weapon firing twice** — kept because the drift it shows is real and is
+about the run, not about which weapon fired:
+
+| firing | survived | median banked | median seconds | median lowest HP |
+| :--- | ---: | ---: | ---: | ---: |
+| one weapon | 10/12 | 1132 | 68 | 59 |
+| two weapons (rifle + knife) | 11/12 | 1567 | 110 | 60 |
+
+**The pair is 138% of one weapon, not the 110% step 1 recorded, and no Sidearm caused it.** Both arms
+fell — solo from 1703 to 1132, the pair from 1877 to 1567 — and the *ratio* went up because the run
+that loses a weapon loses proportionally more of it. Four phases of tuning happened in between, the
+health change among them, and none of them re-took this number. So the "115% ceiling" was being
+enforced against a baseline that had stopped existing, and the starting kit was over it before
+anything was added.
+
+The rule that still survives is the one the ceiling was anchored to: **the knife's contribution is the
+reference.** Read that way, against `ScavengedRifle+CombatKnife` at 1567 — and read knowing that in
+every row the thing actually being fired in the second slot was a Scavenged Rifle:
+
+| Sidearm | survived | median banked | median seconds | vs the knife pair |
+| :--- | ---: | ---: | ---: | ---: |
+| Combat Knife | 11/12 | 1567 | 110 | — |
+| Katana | 10/12 | 1606 | 135 | 102% |
+| Hand Emitter | 11/12 | 1847 | 157 | 118% |
+| Sidearm Pistol *(20% mark, 90 reserve)* | 10/12 | 2264 | 142 | **144%** |
+| Sidearm Pistol *(20% mark, 42 reserve)* | 9/12 | 1457 | 97 | 93% |
+| Sidearm Pistol *(12% mark, 42 reserve)* | 9/12 | 1457 | 97 | 93% |
+
+**The last two rows are the same run.** Identical on every seed, every second, every credit — a 67%
+change to the trait moved nothing, because the trait was never firing. That is what exposed the slot
+bug, and it is worth keeping the rows for: two arms differing only in a number that should matter, and
+coming back bit-identical, is the signature of a value that is not reaching the code.
+
+The reserve did move it, from 2264 to 1457, because `TickSlot` reads ammunition from the correct slot.
+So the one thing these rows do measure honestly is **uptime**: a sidearm firing 102 rounds is worth a
+great deal more than one firing 54, whatever it is firing.
+
+**A denominator that moves is the other finding.** Every future Sidearm gets compared against the
+knife pair on the build it ships on, not against 1877, and the solo arm gets re-taken with it —
+`lingers:auto slots:both` is twenty-four runs and it is the only thing that keeps the ratio honest.
+
 ### Melee is above firearms on damage, and that is the trade being bought
 
 The owner's ordering, made specific: **melee Primaries carry about 125% of a firearm Primary's
@@ -101,8 +180,8 @@ today, "it never runs out", is not.
 
 ## The table
 
-Nine weapons exist. The plan keeps all nine, moves them into slots, and adds five — two Sidearms the
-game has never had, and three high-tech Primaries.
+Thirteen weapons exist. The original nine remain; three Sidearms and the War Hammer have landed, with
+the Arc Lance and Pulse Rifle still to come.
 
 ### Primaries
 
@@ -110,7 +189,7 @@ game has never had, and three high-tech Primaries.
 | :--- | :--- | ---: | ---: | ---: | :--- |
 | Fire Axe | heavy melee | very high | slow | 3.0 | one chop, hardest shove in the game |
 | Reaper Scythe | heavy melee | high | medium | 3.4 | 160° sweep, three quarters carries through |
-| **War Hammer** *(new)* | heavy melee | highest | slowest | 2.8 | **shatters** the chilled; knocks a line down |
+| War Hammer | heavy melee | 38 | 0.55/s | 2.8 | **shatters** the chilled; narrowest line, hardest shove |
 | Scavenged Rifle | firearm | low | fast | 18 | the baseline everything is read against |
 | Service Rifle | firearm | low | fastest | 16 | never stops: biggest magazine and reserve |
 | Pump Shotgun | firearm | medium | slow | 13 | damage is a *distance*, eight pellets |
@@ -122,12 +201,26 @@ game has never had, and three high-tech Primaries.
 
 ### Sidearms
 
+All four exist. Numbers as shipped rather than as planned, because two of them moved:
+
 | | Class | Damage | Rate | Reach | Signature |
 | :--- | :--- | ---: | ---: | ---: | :--- |
-| Combat Knife | blade | very low | very fast | 1.6 | **bleeds**; rewards touching many things once |
-| **Katana** *(new)* | blade | low | fast | 2.4 | **bleeds** harder and reaches further; no cleave |
-| **Sidearm Pistol** *(new)* | firearm | low | medium | 14 | the only ranged Sidearm; **marks** what it hits |
-| **Hand Emitter** *(new)* | tech | very low | fast | 8 | **chills**; the cheapest way to open a reaction |
+| Combat Knife | blade | 6 | 3.2/s | 1.6 | **bleeds** 4/s for 3 s; rewards touching many things once |
+| Katana | blade | 9 | 2.4/s | 2.4 | **bleeds** 7/s for 2 s, further, no cleave |
+| Sidearm Pistol | firearm | 7 | 2.2/s | 14 | **marks** for +20% / 3 s; 12 rounds, 90 in reserve |
+| Hand Emitter | firearm | 5 | 2.8/s | 8 | **chills** 45% for 2 s; no magazine |
+
+**The Hand Emitter is a Firearm, not a `Tech` category.** Category here says how a weapon *resolves*
+and which proficiency track it feeds, and this one resolves like a pistol. A `Tech` category is what
+step 7 is for — overheat and a held beam are firing models, and adding the category early would mean
+`Profile`, `RunRecord`, `BodyMeshLibrary`, `SoundDirector` and `EffectDirector` all growing a fifth
+case for a weapon that behaves like the fourth.
+
+**The Sidearm Pistol carried a burst first, and that was the wrong trait.** A burst makes the weapon
+holding it hit harder, which is a Primary's job; written that way the shelf was a knife, a bigger
+knife, and a worse rifle. The mark makes the weapon in the *other* hand hit harder, and it is the only
+thing on the shelf whose worth cannot be stated without naming the Primary: 20% of a Fire Axe and 20%
+of a Combat Knife are very different numbers.
 
 **The bow charges and that stays.** `WeaponTrait.Charge` already multiplies a shot by 3.5 after three
 seconds idle and already ticks for a *holstered* weapon, which was built for exactly this: carry the
@@ -172,6 +265,14 @@ Three properties this set has on purpose:
 **Shock is the one new status** and it belongs to the tech weapons. It exists because Conduct needs an
 applier that is neither bleed nor chill, and because a beam that leaves something crackling is the
 clearest way to make a laser feel different from a fast gun rather than just quieter.
+
+**Two of the four appliers exist after step 5, and neither of them waits on a reaction.** Bleed and
+chill both do their job on their own — one is damage the moment it lands, the other is distance the
+moment it lands — so Shatter and Spread are additions to weapons that already work rather than the
+thing that makes them work. That is the test step 4 set for shock and shock failed: a status nothing
+consumes is a feature that is configured and does nothing. Mark is a third status and deliberately
+**not** a reaction applier, because a mark that only one Primary could cash in would be the same trap
+with a different name.
 
 ---
 
@@ -262,8 +363,10 @@ Written as assertions because that is what `WeaponProbe` will hold them to.
    Service Rifle at thirteen axes to nothing and the Fire Axe at eight to nothing; slot type is the
    correct grouping once category stops deciding what competes with what.
 2. **A pair lands within 100–120% of one of today's weapons.** The budget above. This is the number
-   that decides whether the last twenty phases of tuning survive, and it wants a `BalanceSweep` arm of
-   its own — `weapon:` becomes `weapon:primary+sidearm`.
+   that decides whether the last twenty phases of tuning survive. It does not need a new arm after all:
+   `weapons:` already varies the Sidearm on its own, because `AutoPlay` puts a weapon in the slot its
+   own `WeaponSlot` asks for — so `weapons:combat_knife,katana,sidearm_pistol,hand_emitter` holds the
+   Primary constant and moves only the half being priced. Measured for the four in the table below.
 3. **No pair is the answer everywhere.** Four Sidearms times eleven Primaries is forty-four loadouts;
    the claim is not that they are equal but that the best one differs by biome, by knot share and by
    growth line. The tools to check that all exist now — `gear:`, `lines:`, `weapons:`, `characters:`,
@@ -344,14 +447,86 @@ the next starts.
    could see, the touch layer nobody had executed. Bleed did not have that problem: it is damage on its
    own the moment it lands.
 
-   Still to do here: the `GrowthProbe` stage that counts how many growth options measurably move each
-   weapon's output. It is the stage that would have caught the melee gap two phases before the balance
-   table did.
-5. **The four Sidearms.** The slot is a real choice or it is a knife with extra steps.
+   `test/DeckMatrix.cs` now fires every weapon against every growth option rather than keeping a second
+   list of which modifiers ought to work — that list already exists inside `WeaponHandler`, and the copy
+   in a test is the one that goes stale in the direction that hides the bug. At 3 stacks over a
+   four-second trial the thinnest row is the Bolt Launcher at 4/22 and the richest are the Katana and
+   starting rifle at 8/22; every melee weapon lands at 7 or 8. It requires the shared attack floor of
+   four and refuses a row below half the richest one, which catches the old melee gap without pretending
+   health, armour, search or fortune should change a weapon's damage. `RunKit.ResetForTesting` rewinds
+   the orbit and pulse clocks between trials — resetting only `RunModifiers` made whether Orbit
+   registered depend on which weapon was measured before it.
+
+   **There is no melee gap left**, and the reason is that the deck trades rather than favours: `Area`
+   and `Knockback` are the blades', `Pierce` and `FireRate` are the firearms'. The row worth watching is
+   the Bolt Launcher, at half the best — no `Area`, because a blast radius does not scale with it, and
+   no `Pierce`, which its own trait forces to 1.
+
+   **A window of ninety ticks reported the Fire Axe as immune to `FireRate`.** Its swing is 1.176 s, so
+   a second and a half fits two swings at any rate the deck can buy. Four seconds is the shortest window
+   in which the slowest weapon in the table lands a different *count* of attacks, and that is what set
+   it. Worth knowing before trusting a number this thing prints.
+
+   **It is its own script and it is on the sweep's skip list**, beside `BalanceSweep`. 276 trials is a
+   quarter of an hour, which is a balance instrument's runtime rather than a probe's, and it answers a
+   question that only moves when the content does. Run it when a weapon is added, when a growth option
+   is added, and when a trait changes what a weapon consumes.
+5. ~~**The four Sidearms.**~~ **Done.** The shelf is Bleed, Bleed, Mark, Chill across 1.6 m to 14 m,
+   and the two new traits are the two on the whole table that are worth nothing measured alone. That
+   is the point of them: both slots fire, so a shelf of four weapons each scored on its own damage is
+   a shelf with one correct answer on it.
+
+   **Two per-body statuses, on the same machinery bleed uses.** `EnemyPool.Chill` and `EnemyPool.Mark`
+   with their own clocks, refreshing rather than stacking, clamped in `Horde` at 60% and 50% so a typo
+   in a `.tres` is a weak weapon rather than a stun-lock. `RunModifiers.Chill` already existed and is a
+   *different thing* — a gradient of sticky ground around the player. This one is a mark left on a
+   body and it travels with the body, which is the whole weapon; the two multiply rather than replace.
+
+   **`ApplyBleed` became `ApplyOnHit` and moved behind the kill check.** The pool swap-removes, so a
+   killing hit left the index pointing at whoever had been last, and the status landed on a body chosen
+   by array order. Bleed had this since it was written and got away with it — 4 damage a second lands
+   on *somebody* either way. A mark does not: it lands on the wrong target and the player watches the
+   wrong enemy fail to die faster.
+
+   **Chill got the colour block's last free float.** A slow is the one status that has to be legible on
+   the body rather than deduced from it: bleed announces itself by killing and a mark by the next hit
+   landing harder, but a body walking at 55% looks exactly like a body walking away, and the two
+   seconds it matters in are far too short to work it out by watching. The block is now full — flash,
+   two elite channels, chill — and a fifth per-instance value needs a channel rather than a packing.
+
+   **And it found that the second slot had never fired its own weapon** — see the section above, which
+   is the largest single thing this phase produced and which retroactively empties every balance table
+   taken since step 1. The fix is one line; the stage that would have caught it is
+   `StageSidearmFiresItself`, and it exists because no probe in this project had ever let the weapon
+   handler fire on its own.
+
+   `TraitProbe` grew two stages and both assert the status is **spent**, which is the failure mode the
+   reactions section names: 45% taken and 45% returned after two seconds, +20% on a `Horde.Damage` call
+   that is not a weapon at all and +0% after three. `WeaponProbe`'s shelf stage now counts the shelf,
+   counts its *distinct signatures* (three, not four — the knife and the katana share Bleed on purpose)
+   and requires one Sidearm that reaches 8 m, which is a spitter's range rather than a number picked to
+   make today's shelf pass.
 6. **The reactions**, one at a time, each with a probe stage that asserts the status is *spent* — the
    failure mode is a permanent multiplier, and it would read as the reaction working.
-7. **The three tech Primaries.** Last, because overheat and a held beam are new firing models rather
-   than new numbers, and they should land on a table that already balances.
+   **Shatter and Spread are done.** A Cleave, Spread or Blast impact consumes Chill and adds a burst
+   equal to `impact x chill x 1.5`; the Hand Emitter's 45% therefore turns a 26-damage axe hit into
+   43.5, and the next axe hit is 26 again. A Cleave sweep consumes one Bleed source and transfers that
+   wound to every *other* body in the same arc; the source is excluded so "spread" cannot secretly
+   mean "copy forever". Both consumers live on the common hit paths, including the Bolt Launcher's
+   projectile collision, and `TraitProbe` drives the real applier and consumer weapons for both.
+
+   **Cook off and Conduct are done too.** A body standing in a fire Hazard carries a 0.20-second Burn
+   tag refreshed by the ground without taking a second copy of the DPS. Any shared blast path consumes
+   it for a 2.4 m burst worth 1.5 seconds of that fire; the same blast cannot cook it twice. Chain now
+   leaves three seconds of Shock. A hit on a target carrying both Shock and Chill spends Shock and
+   conducts 40% of the triggering hit to each of two neighbours, one level deep. The future tech
+   weapons gain a second Shock source; the reaction already has a working non-weapon source and
+   consumer rather than waiting configured-but-inert for step 7.
+7. **The three new Primaries.** **War Hammer done:** 38 damage at 0.55/s through a 45-degree, 2.8 m
+   line with 1.8 knockback. It is the native `Shatter` trait, and pays for the hardest single impact
+   with the slowest and narrowest swing; `WeaponProbe` finds all twelve same-slot/category pairs are
+   trades. Arc Lance and Pulse Rifle remain, last because overheat and a held beam are new firing
+   models rather than new numbers, and they should land on a table that already balances.
 
 **Step 1 before anything else, and stop there for a measurement.** Everything after it is priced
 against a number this project does not have yet: what two weapons firing is actually worth. Guessing

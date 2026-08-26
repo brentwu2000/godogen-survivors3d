@@ -90,6 +90,7 @@ public partial class Player : CharacterBody3D
     private Sprite3D _sprite = null!;
     private CameraRig? _rig;
     private SoloBody? _body;
+    private Node3D? _detailedModel;
     private WeaponHandler? _weapons;
 
     /// The silhouette the body was last built with, and the shader to rebuild
@@ -155,6 +156,7 @@ public partial class Player : CharacterBody3D
         _body.Node.QueueFree();
 
         _body = new SoloBody(_bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
+        _body.Node.Visible = _detailedModel == null;
 
         parent.AddChild(_body.Node);
     }
@@ -175,6 +177,7 @@ public partial class Player : CharacterBody3D
         _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
         ApplyCharacter();
+        InstallCharacterModel();
 
         _rig = GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
@@ -194,6 +197,7 @@ public partial class Player : CharacterBody3D
             {
                 _bodyShader = bodyShader;
                 _body = new SoloBody(bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
+                _body.Node.Visible = _detailedModel == null;
 
                 // Added to the parent, not to the player. The transform inside a
                 // MultiMesh is world space, so a node parented to a moving player
@@ -526,6 +530,37 @@ public partial class Player : CharacterBody3D
         Mods.SearchRadiusBonus += who.SearchRadiusBonus;
     }
 
+    /// Loads the authored silhouette belonging to the selected survivor, if one
+    /// has been baked for them.
+    ///
+    /// **Asked for, not assumed.** `GD.Load` on a path that is not there is not a
+    /// null return — it is two engine `ERROR` lines and a stack trace, on every
+    /// startup, for a file the game is designed to work without. The roster is
+    /// baked by `art-src/models/build_roster.py` and the procedural `SoloBody` is
+    /// the fallback by design, so a missing model is an ordinary state and has to
+    /// be quiet. It was not: forty-five probes carried a red pair of lines each
+    /// and stayed green, which is how a real error learns to look like scenery.
+    private void InstallCharacterModel()
+    {
+        CharacterResource who = CharacterBook.Load(GameSession.Character);
+        string slug = who.CharacterName.ToLowerInvariant();
+        string path = $"res://assets/models/survivors/{slug}.glb";
+        if (!ResourceLoader.Exists(path))
+            return;
+
+        var scene = GD.Load<PackedScene>(path);
+        if (scene == null)
+        {
+            GD.PushWarning($"Player: character model missing for {who.CharacterName}");
+            return;
+        }
+
+        _detailedModel = scene.Instantiate<Node3D>();
+        _detailedModel.Name = "DetailedModel";
+        _detailedModel.Scale = Vector3.One * 1.28f;
+        AddChild(_detailedModel);
+    }
+
     public void AddMaxHealth(float amount)
     {
         MaxHealth += amount;
@@ -754,6 +789,8 @@ public partial class Player : CharacterBody3D
         float yaw = Mathf.Atan2(-Facing.X, -Facing.Y);
 
         _body.Update(GlobalPosition, yaw, flatVelocity.Length(), delta, HurtFlash);
+        if (_detailedModel != null)
+            _detailedModel.Rotation = new Vector3(0.0f, yaw, 0.0f);
         HurtFlash = Mathf.Max(0.0f, HurtFlash - FlashFade * delta);
     }
 

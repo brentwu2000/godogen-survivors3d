@@ -61,6 +61,12 @@ public partial class AutoPlay : SceneTree
     private int _zoneTier = -1;
     private string _weaponWanted = "";
     private string _weaponCarried = "none";
+
+    /// A weapon's name with the spaces out, or `none`. The `SWEEP` line is
+    /// whitespace-separated, so a name with a space in it splits into two fields
+    /// and every column after it shifts by one.
+    private static string Named(WeaponResource? weapon) =>
+        weapon == null ? "none" : weapon.WeaponName.Replace(" ", "");
     private bool _soloWeapon;
     private string _gearWanted = "";
     private string _gearWorn = "kit";
@@ -1058,7 +1064,18 @@ public partial class AutoPlay : SceneTree
         if (_soloWeapon && _weapons != null)
             _weapons.LiveSlots = 1;
 
-        _weaponCarried = _weapons?.Weapon?.WeaponName.Replace(" ", "") ?? "none";
+        // **The pair, not the active slot.** `Weapon` means "the one in hand",
+        // which is the Primary — so every `weapon:` run naming a Sidearm reported
+        // the Scavenged Rifle, and four arms carrying four different Sidearms
+        // came back under one identical label. `BalanceSweep.ReportWeapons`
+        // suppresses a breakdown of a single name, so the four-way comparison the
+        // Sidearm shelf was built to be measured by printed nothing at all and
+        // looked like a table that had simply chosen not to say much.
+        //
+        // Exactly the failure the `zoneTier` note above is about, arriving in the
+        // column next door: the read-back has to describe the run, and a loadout
+        // is two things now.
+        _weaponCarried = $"{Named(_weapons?.WeaponIn(0))}+{Named(_weapons?.WeaponIn(1))}";
 
         // What it is wearing.
         //

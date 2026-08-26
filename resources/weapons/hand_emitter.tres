@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_067wx"]
+
+[resource]
+script = ExtResource("1_067wx")
+WeaponName = "Hand Emitter"
+Slot = 1
+Favours = 3
+BaseDamage = 5.0
+BaseAttackSpeed = 2.8
+BaseRange = 8.0
+BaseSpreadDegrees = 2.0
+MagazineSize = 0
+Knockback = 0.02
+Trait = 8
+TraitAmount = 0.45
+TraitCount = 2
+Tier = 2
+Price = 700
+MaxLevel = 10
+TierStartBonus = 1

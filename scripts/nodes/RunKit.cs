@@ -444,4 +444,21 @@ public partial class RunKit : Node3D
 
     /// How many blades are drawn right now. Only a probe asks.
     public int BladeCount => _bladeMesh?.VisibleInstanceCount ?? 0;
+
+    /// Restores the independent kit clocks between measurement trials.
+    ///
+    /// Resetting RunModifiers removes the cards, but it cannot rewind these
+    /// clocks. Without this hook a short trial inherits part of the previous
+    /// trial's orbit or pulse interval, so whether a card appears to deal damage
+    /// depends on which weapon happened to be measured before it.
+    public void ResetForTesting()
+    {
+        _spin = 0.0f;
+        _lastBite = 0.0f;
+        _sinceBite = 0.0f;
+        _sincePulse = 0.0f;
+
+        if (_bladeMesh != null)
+            _bladeMesh.VisibleInstanceCount = 0;
+    }
 }

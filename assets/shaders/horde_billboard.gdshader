@@ -45,6 +45,16 @@ varying flat float v_flash;
 // shot can show both at once.
 varying flat vec2 v_elite;
 
+// How hard this one is slowed, 0..1, on the colour block's alpha — the only
+// channel of the four that was still free.
+//
+// A slow is the one status a player has to be able to see rather than deduce.
+// Bleed announces itself by killing; a mark announces itself by the next hit
+// landing harder. A body walking at 40% looks exactly like a body that happens
+// to be walking away from you, and the two-second window it matters in is far
+// too short to work out which by watching.
+varying flat float v_chill;
+
 void vertex() {
     // INSTANCE_CUSTOM.x: 1.0 mirrors the sprite. One drawn facing, mirrored at
     // runtime — generators cannot reliably draw a specific direction anyway.
@@ -56,6 +66,7 @@ void vertex() {
     v_layer = INSTANCE_CUSTOM.w;
     v_flash = COLOR.r * flash_enabled;
     v_elite = COLOR.gb * flash_enabled;
+    v_chill = COLOR.a * flash_enabled;
 
     float spin = INSTANCE_CUSTOM.z;
     if (spin != 0.0) {
@@ -123,5 +134,23 @@ void fragment() {
     vec3 mark = vec3(0.0, v_elite.x, v_elite.y);
     float lum = dot(texel.rgb, vec3(0.299, 0.587, 0.114));
     vec3 marked = texel.rgb * (1.0 + mark * 2.2 * (1.0 - lum)) + mark * 0.07;
-    ALBEDO = mix(marked, vec3(1.0), v_flash * 0.72);
+
+    // Frost: drained toward grey, then pulled toward a cold blue.
+    //
+    // Two steps rather than a straight mix to a colour, because the elite tint
+    // already owns hue on this sprite and a chilled armoured brute has to still
+    // read as armoured. Desaturating first is what makes room: it takes the
+    // *strength* out of whatever colour the body is wearing without replacing
+    // it, so the blue that follows lands on all of them the same way and the
+    // elite's own hue survives underneath at reduced volume.
+    //
+    // Capped well under 1.0 for the same reason the hit flash is: a body erased
+    // to flat blue reads as a missing texture, and the worst moment for that is
+    // an emitter sweeping a dozen of them at once.
+    float frost = clamp(v_chill, 0.0, 1.0) * 0.8;
+    float chilled_lum = dot(marked, vec3(0.299, 0.587, 0.114));
+    vec3 drained = mix(marked, vec3(chilled_lum), frost * 0.75);
+    vec3 cold = mix(drained, drained * vec3(0.62, 0.86, 1.25) + vec3(0.02, 0.05, 0.10), frost);
+
+    ALBEDO = mix(cold, vec3(1.0), v_flash * 0.72);
 }

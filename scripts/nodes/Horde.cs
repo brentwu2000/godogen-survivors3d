@@ -485,7 +485,10 @@ public partial class Horde : Node3D
             // for as long as the fire burned. What tells the player they are
             // burning is the fire drawn over them.
             if (dps > 0.0f)
+            {
+                ApplyBurn(i, dps, 0.20f);
                 Damage(i, dps * delta, Vector2.Zero, allowBlast: true, flash: false);
+            }
         }
 
         for (int i = 0; i < _hazardDecals.Length; i++)
@@ -649,6 +652,43 @@ public partial class Horde : Node3D
             Damage(i, Pool.Bleed[i] * step, Vector2.Zero, allowBlast: false, flash: false);
         }
 
+        // Chill and mark, both of which expire and neither of which damages.
+        //
+        // Forwards and over the whole pool, unlike the bleed above: nothing here
+        // can kill, so no index moves underneath the loop, and both statuses have
+        // to keep counting down on an enemy far enough away that the movement
+        // loop is only stepping it every fourth tick. A timer that ran on the
+        // stride would make a slow last four times as long at the back of the
+        // arena, which is the one place the player cannot see it wear off.
+        //
+        // **Zeroed on expiry rather than left to be ignored.** The strength is
+        // read by the mover and by `Damage`, and both would otherwise have to
+        // remember to check the clock as well as the value — two call sites, one
+        // of which is the hot loop, and the bug it produces is a permanent slow.
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (Pool.ChillRemaining[i] > 0.0f && (Pool.ChillRemaining[i] -= step) <= 0.0f)
+            {
+                Pool.ChillRemaining[i] = 0.0f;
+                Pool.Chill[i] = 0.0f;
+            }
+
+            if (Pool.BurnRemaining[i] > 0.0f && (Pool.BurnRemaining[i] -= step) <= 0.0f)
+            {
+                Pool.BurnRemaining[i] = 0.0f;
+                Pool.Burn[i] = 0.0f;
+            }
+
+            if (Pool.ShockRemaining[i] > 0.0f && (Pool.ShockRemaining[i] -= step) <= 0.0f)
+                Pool.ShockRemaining[i] = 0.0f;
+
+            if (Pool.MarkRemaining[i] > 0.0f && (Pool.MarkRemaining[i] -= step) <= 0.0f)
+            {
+                Pool.MarkRemaining[i] = 0.0f;
+                Pool.Mark[i] = 0.0f;
+            }
+        }
+
         StepEmerge(step);
 
         if (_player == null || Pool.Count == 0)
@@ -733,6 +773,15 @@ public partial class Horde : Node3D
                 float strength = 1.0f - Mathf.Clamp(toPlayer / Mathf.Max(0.01f, ChillRadius), 0.0f, 1.0f);
                 velocity *= 1.0f - chilled.Mods.Chill * strength;
             }
+
+            // And the chill this one is carrying, which is a different thing from
+            // the field above and multiplies with it rather than replacing it.
+            // Standing in a chilled ring while shot by an emitter should be worse
+            // than either, and multiplication is what keeps it worse without ever
+            // reaching a stop — two 50% slows leave a quarter of the speed, not
+            // nothing, so a body under every slow in the game is still walking.
+            if (Pool.Chill[i] > 0.0f)
+                velocity *= 1.0f - Pool.Chill[i];
 
             if (near)
                 velocity += Separation(i, position) * SeparationStrength;
@@ -1033,7 +1082,12 @@ public partial class Horde : Node3D
 
         EnemyTypeResource type = Types[Pool.Type[index]];
 
-        Pool.Health[index] -= amount * Elites.DamageScale(Pool.Elite[index]);
+        // The mark multiplies whatever arrives, including a bleed tick and
+        // including the blast off a dying bloater. Anything narrower would be a
+        // rule about which damage counts, and the player would have to learn it
+        // from a number that failed to move.
+        Pool.Health[index] -= amount * Elites.DamageScale(Pool.Elite[index])
+                            * (1.0f + Pool.Mark[index]);
         if (Pool.Health[index] > 0.0f)
         {
             // The only confirmation a shot landed on something that lived. A
@@ -1080,6 +1134,111 @@ public partial class Horde : Node3D
 
         Pool.Bleed[index] = Mathf.Max(Pool.Bleed[index], damagePerSecond);
         Pool.BleedRemaining[index] = Mathf.Max(Pool.BleedRemaining[index], seconds);
+    }
+
+    /// Spends and returns one wound for the Spread reaction.
+    public (float DamagePerSecond, float Seconds) ConsumeBleed(int index)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return (0.0f, 0.0f);
+
+        float damage = Pool.Bleed[index];
+        float seconds = Pool.BleedRemaining[index];
+        Pool.Bleed[index] = 0.0f;
+        Pool.BleedRemaining[index] = 0.0f;
+        return (damage, seconds);
+    }
+
+    /// The hardest a single source may slow a body. Well short of a stop: a
+    /// weapon that can hold something still is not a slow, it is a stun, and a
+    /// horde game where one Sidearm can park the wave has one answer to every
+    /// question the wave was asking.
+    public const float MaxChill = 0.6f;
+
+    /// Takes a fraction of a body's speed away for a while. Refreshes rather
+    /// than stacks, on the same grounds as the wound above — two emitters should
+    /// be twice the coverage, not twice the slow on one target — and clamps,
+    /// because the fraction arrives from a `.tres` file and a typo there is the
+    /// difference between a slow and a freeze.
+    public void ApplyChill(int index, float fraction, float seconds)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return;
+
+        Pool.Chill[index] = Mathf.Max(Pool.Chill[index], Mathf.Clamp(fraction, 0.0f, MaxChill));
+        Pool.ChillRemaining[index] = Mathf.Max(Pool.ChillRemaining[index], seconds);
+    }
+
+    /// Spends and returns the chill carried by one body.
+    ///
+    /// A reaction must consume its setup or it is just a permanent multiplier
+    /// with a story attached. Keeping the clear beside the read makes it
+    /// impossible for a caller to take the bonus and forget the cost.
+    public float ConsumeChill(int index)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return 0.0f;
+
+        float fraction = Pool.Chill[index];
+        Pool.Chill[index] = 0.0f;
+        Pool.ChillRemaining[index] = 0.0f;
+        return fraction;
+    }
+
+    public void ApplyBurn(int index, float damagePerSecond, float seconds)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return;
+
+        Pool.Burn[index] = Mathf.Max(Pool.Burn[index], damagePerSecond);
+        Pool.BurnRemaining[index] = Mathf.Max(Pool.BurnRemaining[index], seconds);
+    }
+
+    public float ConsumeBurn(int index)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return 0.0f;
+
+        float damagePerSecond = Pool.Burn[index];
+        Pool.Burn[index] = 0.0f;
+        Pool.BurnRemaining[index] = 0.0f;
+        return damagePerSecond;
+    }
+
+    public void ApplyShock(int index, float seconds)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return;
+
+        Pool.ShockRemaining[index] = Mathf.Max(Pool.ShockRemaining[index], seconds);
+    }
+
+    public bool ConsumeShock(int index)
+    {
+        if (index < 0 || index >= Pool.Count || Pool.ShockRemaining[index] <= 0.0f)
+            return false;
+
+        Pool.ShockRemaining[index] = 0.0f;
+        return true;
+    }
+
+    /// The most a mark may add. A mark is meant to be worth about what one extra
+    /// hit in the pair is worth; past this it starts being cheaper to shoot the
+    /// sidearm than the primary, which inverts the roles the slot exists for.
+    public const float MaxMark = 0.5f;
+
+    /// Leaves a target taking more from everything for a while. Refreshes rather
+    /// than stacks for the same reason bleed does, and the clamp is the guard
+    /// that keeps this from becoming the permanent multiplier the design notes
+    /// warn about — the timer is the other half, and it runs in
+    /// `_PhysicsProcess` where nothing can forget to call it.
+    public void ApplyMark(int index, float fraction, float seconds)
+    {
+        if (index < 0 || index >= Pool.Count)
+            return;
+
+        Pool.Mark[index] = Mathf.Max(Pool.Mark[index], Mathf.Clamp(fraction, 0.0f, MaxMark));
+        Pool.MarkRemaining[index] = Mathf.Max(Pool.MarkRemaining[index], seconds);
     }
 
     /// The nearest enemy to a point that is not `except`. For a ricochet picking
@@ -1153,6 +1312,26 @@ public partial class Horde : Node3D
         return best;
     }
 
+    public int NearestExceptTwo(Vector3 point, float radius, int exceptA, int exceptB)
+    {
+        int best = -1;
+        float bestSqr = radius * radius;
+        for (int i = 0; i < Pool.Count; i++)
+        {
+            if (i == exceptA || i == exceptB)
+                continue;
+
+            float d = FlatDistanceSquared(Pool.Position[i], point);
+            if (d < bestSqr)
+            {
+                bestSqr = d;
+                best = i;
+            }
+        }
+
+        return best;
+    }
+
     /// A thrown charge going off. Enemies only, for the same reason the burning
     /// ground is: the player chose where it lands, and a grenade that can also
     /// kill them is a mistake generator on a map that is constantly pushing them
@@ -1165,6 +1344,7 @@ public partial class Horde : Node3D
     {
         int killed = 0;
         Exploded?.Invoke(center);
+        int cooked = CollectCookOffs(center, radius);
 
         for (int i = Pool.Count - 1; i >= 0; i--)
         {
@@ -1178,6 +1358,7 @@ public partial class Horde : Node3D
                 killed++;
         }
 
+        ResolveCookOffs(cooked);
         return killed;
     }
 
@@ -1227,6 +1408,7 @@ public partial class Horde : Node3D
     public void Blast(Vector3 center, float radius, float damage)
     {
         Exploded?.Invoke(center);
+        int cooked = CollectCookOffs(center, radius);
 
         if (_player is Player player)
         {
@@ -1241,6 +1423,46 @@ public partial class Horde : Node3D
         {
             if (FlatDistanceSquared(Pool.Position[i], center) < radius * radius)
                 Damage(i, damage, Vector2.Zero, allowBlast: false);
+        }
+
+        ResolveCookOffs(cooked);
+    }
+
+    private const float CookOffRadius = 2.4f;
+    private const float CookOffDamageSeconds = 1.5f;
+    private readonly Vector3[] _cookOffCenters = new Vector3[256];
+    private readonly float[] _cookOffDamage = new float[256];
+
+    private int CollectCookOffs(Vector3 center, float radius)
+    {
+        int count = 0;
+        float radiusSqr = radius * radius;
+        for (int i = 0; i < Pool.Count && count < _cookOffCenters.Length; i++)
+        {
+            if (FlatDistanceSquared(Pool.Position[i], center) >= radiusSqr || Pool.Burn[i] <= 0.0f)
+                continue;
+
+            _cookOffCenters[count] = Pool.Position[i];
+            _cookOffDamage[count] = ConsumeBurn(i) * CookOffDamageSeconds;
+            count++;
+        }
+
+        return count;
+    }
+
+    private void ResolveCookOffs(int count)
+    {
+        for (int n = 0; n < count; n++)
+        {
+            Vector3 center = _cookOffCenters[n];
+            float damage = _cookOffDamage[n];
+            Exploded?.Invoke(center);
+
+            for (int i = Pool.Count - 1; i >= 0; i--)
+            {
+                if (FlatDistanceSquared(Pool.Position[i], center) < CookOffRadius * CookOffRadius)
+                    Damage(i, damage, Vector2.Zero, allowBlast: false, flash: true);
+            }
         }
     }
 

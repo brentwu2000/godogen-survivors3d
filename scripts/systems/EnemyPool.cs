@@ -75,6 +75,29 @@ public sealed class EnemyPool
     public readonly float[] Bleed;
     public readonly float[] BleedRemaining;
 
+    /// How much of this one's speed is taken away, 0 to 1, and for how long.
+    ///
+    /// **Not the same thing as `RunModifiers.Chill`, which is a gradient around
+    /// the player.** That one is ground the player stands on; this one is a mark
+    /// left on a body, and it travels with the body. A weapon that slows what it
+    /// touches has to be the second kind or the Hand Emitter would be an aura
+    /// card wearing a weapon's name.
+    public readonly float[] Chill;
+    public readonly float[] ChillRemaining;
+    public readonly float[] Burn;
+    public readonly float[] BurnRemaining;
+    public readonly float[] ShockRemaining;
+
+    /// Extra damage this one takes from *every* source while the mark lasts, as
+    /// a fraction, and how long is left of it.
+    ///
+    /// Every source on purpose. A mark that only the marking weapon could cash
+    /// in would be a damage bonus with a delay, and the whole reason the Sidearm
+    /// Pistol applies it is that the *other* hand collects — a sidearm's job is
+    /// to make the primary better, not to out-damage it.
+    public readonly float[] Mark;
+    public readonly float[] MarkRemaining;
+
     /// Which elite modifier this one carries, or None. A byte on the same
     /// structure-of-arrays as everything else rather than a subclass: an elite is
     /// an ordinary enemy with one rule bent, and a hundred of them must cost what
@@ -98,6 +121,13 @@ public sealed class EnemyPool
         HitFlash = new float[capacity];
         Bleed = new float[capacity];
         BleedRemaining = new float[capacity];
+        Chill = new float[capacity];
+        ChillRemaining = new float[capacity];
+        Burn = new float[capacity];
+        BurnRemaining = new float[capacity];
+        ShockRemaining = new float[capacity];
+        Mark = new float[capacity];
+        MarkRemaining = new float[capacity];
         Elite = new byte[capacity];
     }
 
@@ -119,6 +149,13 @@ public sealed class EnemyPool
         HitFlash[i] = 0.0f;
         Bleed[i] = 0.0f;
         BleedRemaining[i] = 0.0f;
+        Chill[i] = 0.0f;
+        ChillRemaining[i] = 0.0f;
+        Burn[i] = 0.0f;
+        BurnRemaining[i] = 0.0f;
+        ShockRemaining[i] = 0.0f;
+        Mark[i] = 0.0f;
+        MarkRemaining[i] = 0.0f;
         Elite[i] = 0;
         return true;
     }
@@ -149,6 +186,13 @@ public sealed class EnemyPool
             HitFlash[index] = HitFlash[last];
             Bleed[index] = Bleed[last];
             BleedRemaining[index] = BleedRemaining[last];
+            Chill[index] = Chill[last];
+            ChillRemaining[index] = ChillRemaining[last];
+            Burn[index] = Burn[last];
+            BurnRemaining[index] = BurnRemaining[last];
+            ShockRemaining[index] = ShockRemaining[last];
+            Mark[index] = Mark[last];
+            MarkRemaining[index] = MarkRemaining[last];
             Elite[index] = Elite[last];
         }
     }

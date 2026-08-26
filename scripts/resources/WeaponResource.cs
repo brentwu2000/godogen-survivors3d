@@ -83,6 +83,30 @@ public enum WeaponTrait
     /// and detonated at the end of its flight would put the blast behind the
     /// crowd, which is both wrong and impossible to aim.
     Blast,
+
+    /// Hits take TraitAmount of the target's speed away for TraitCount seconds.
+    ///
+    /// The only trait that does no damage at all, and that is the point of it: a
+    /// Sidearm covers what the other hand cannot do, and what a heavy Primary
+    /// cannot do is connect with something still moving. Applied to the *body*
+    /// and travelling with it, not to the ground — see `EnemyPool.Chill`, which
+    /// says why that distinction is the whole weapon.
+    Chill,
+
+    /// Hits leave the target taking TraitAmount more damage from everything for
+    /// TraitCount seconds.
+    ///
+    /// The other trait worth nothing on its own, and deliberately: a mark is
+    /// worth exactly what the weapon in the *other* hand does while it lasts. So
+    /// the Sidearm Pistol is worth least beside a knife and most beside the
+    /// slowest, hardest Primary in the game, which is the first time a loadout
+    /// has priced its two halves against each other rather than added them up.
+    Mark,
+
+    /// A heavy impact whose signature is consuming Chill. Unlike Cleave this
+    /// does not carry through a crowd; it pays for the reaction with the
+    /// narrowest, slowest swing on the shelf.
+    Shatter,
 }
 
 /// Weapon stats as data, so balance lives in .tres files rather than in code.

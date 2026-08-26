@@ -24,6 +24,19 @@ $skip = @(
     'Display', 'Fresh', 'BotDrive', 'ModelReport',
     'AutoPlay', 'BalanceSweep', 'HordePerf',
 
+    # DeckMatrix fires every weapon under every growth option — 276 trials of
+    # four seconds — and takes about a quarter of an hour. It is a balance
+    # instrument on the same footing as BalanceSweep, and it lives here for the
+    # same reason: a sweep somebody stops running because it takes twenty minutes
+    # is worth less than a sweep that runs.
+    #
+    # It answers a question that only changes when the *content* changes, so run
+    # it when a weapon is added, a growth option is added, or a trait changes what
+    # a weapon consumes. WEAPONS.md says so too, which is the second place to
+    # forget it — hence this note being specific about the trigger rather than
+    # just saying "slow".
+    'DeckMatrix',
+
     # TouchProbe runs headless perfectly well and has been on this list since
     # before there was a reason written down for it. Left alone: taking a name
     # off a skip list is how a sweep starts hanging, and finding out why costs

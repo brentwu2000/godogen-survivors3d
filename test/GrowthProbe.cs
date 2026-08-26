@@ -13,6 +13,7 @@ public partial class GrowthProbe : SceneTree
     private Player? _player;
     private WeaponHandler? _weapons;
     private RunGrowth? _growth;
+    private RunKit? _kit;
 
     private int _stage;
     private int _stageTick;
@@ -51,11 +52,12 @@ public partial class GrowthProbe : SceneTree
             _player = scene.GetNodeOrNull<Player>("Player");
             _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
             _growth = scene.GetNodeOrNull<RunGrowth>("RunGrowth");
+            _kit = scene.GetNodeOrNull<RunKit>("RunKit");
 
-            if (_horde == null || _player == null || _weapons == null || _growth == null)
+            if (_horde == null || _player == null || _weapons == null || _growth == null || _kit == null)
             {
                 GD.PushError($"PROBE FAILED — horde={_horde != null} player={_player != null} " +
-                             $"weapons={_weapons != null} growth={_growth != null}");
+                             $"weapons={_weapons != null} growth={_growth != null} kit={_kit != null}");
                 Quit(1);
                 return true;
             }

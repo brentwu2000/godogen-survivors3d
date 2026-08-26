@@ -82,6 +82,13 @@ public partial class TraitProbe : SceneTree
             case 5: return RunStage(StageSpread, "the shotgun is a distance, not a damage number");
             case 6: return RunStage(StageCharge, "waiting is worth something, and firing spends it");
             case 7: return RunStage(StageBlast, "the bolt detonates where it connects");
+            case 8: return RunStage(StageChill, "the emitter takes speed away, and gives it back");
+            case 9: return RunStage(StageMark, "a marked body takes more from everything, until it does not");
+            case 10: return RunStage(StageShatter, "a heavy hit shatters chill and spends it");
+            case 11: return RunStage(StageSpreadReaction, "a cleave spends one wound and spreads it across the sweep");
+            case 12: return RunStage(StageCookOff, "a blast cooks off burn once, and spends it");
+            case 13: return RunStage(StageConduct, "chain leaves shock, and a chilled hit conducts it once");
+            case 14: return RunStage(StageSidearmFiresItself, "the second slot fires its own weapon, not the first one's");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -504,4 +511,501 @@ public partial class TraitProbe : SceneTree
     }
 
     private int _ammoBefore;
+
+    private float _speedBefore;
+    private float _speedChilled;
+
+    /// The emitter's shot has to take speed off the body it hit, and the body has
+    /// to get it back.
+    ///
+    /// Read off `Pool.Velocity` rather than off distance covered, and that choice
+    /// is the whole reason this stage is short. Distance is the honest-looking
+    /// measurement and it is contaminated three ways: the flow field re-routes
+    /// around props, the separation force pushes neighbours apart, and anything
+    /// that reaches `ContactRadius` has its velocity zeroed and stops looking
+    /// slowed at all — it looks *stopped*, which passes a naive check for the
+    /// wrong reason. Velocity is what the chill actually multiplies, so it is
+    /// what is asserted.
+    ///
+    /// **The recovery half is the important half.** A chill that never expires is
+    /// a permanent slow, it looks exactly like a chill that works, and the design
+    /// notes name it as the failure mode a reaction-shaped status has. So the
+    /// stage runs past the two seconds on the card and requires the speed back.
+    private bool? StageChill(int tick)
+    {
+        var emitter = GD.Load<WeaponResource>("res://resources/weapons/hand_emitter.tres");
+        if (emitter == null)
+        {
+            GD.PushError("  hand_emitter.tres did not load — run BuildWeapons.cs");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _weapons!.Equip(0, emitter);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 99);
+            _horde!.Pool.Clear();
+
+            // A walker, inside the emitter's 8 m and well outside the 0.7 m
+            // contact radius it would stop at. It closes about 2.4 m a second, so
+            // three seconds of walking from here still leaves it moving.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(7.5f, 0.0f, 0.0f), 0);
+            return null;
+        }
+
+        // Two ticks for the mover to give it a velocity at all — it spawns at
+        // rest, and a baseline of zero would make any later reading a "slow".
+        if (tick == 3)
+        {
+            _speedBefore = _horde!.Pool.Count > 0 ? _horde.Pool.Velocity[0].Length() : 0.0f;
+            _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
+            return null;
+        }
+
+        if (tick == 5)
+        {
+            _speedChilled = _horde!.Pool.Count > 0 ? _horde.Pool.Velocity[0].Length() : 0.0f;
+            return null;
+        }
+
+        // Two seconds on the card plus a margin, at 60 Hz.
+        if (tick < 145)
+            return null;
+
+        float recovered = _horde!.Pool.Count > 0 ? _horde.Pool.Velocity[0].Length() : 0.0f;
+        float taken = _speedBefore > 0.0f ? 1.0f - _speedChilled / _speedBefore : 0.0f;
+
+        GD.Print($"  walker at {_speedBefore:F2} m/s -> {_speedChilled:F2} chilled " +
+                 $"({taken:P0} taken, card says {emitter.TraitAmount:P0}) -> " +
+                 $"{recovered:F2} after {emitter.TraitCount} s");
+
+        bool slowed = Mathf.Abs(taken - emitter.TraitAmount) < 0.05f;
+        bool spent = recovered > _speedBefore * 0.95f;
+
+        if (!slowed)
+            GD.PushError($"  chill took {taken:P0}, the card says {emitter.TraitAmount:P0}");
+        if (!spent)
+            GD.PushError("  the chill never wore off — a permanent slow, not a status");
+
+        return _speedBefore > 0.0f && slowed && spent;
+    }
+
+    private float _plainHit;
+    private float _markedHit;
+
+    /// A mark makes the *next* thing to land hurt more, whatever fires it.
+    ///
+    /// The follow-up damage is applied by calling `Horde.Damage` directly rather
+    /// than by firing a second weapon, and that is deliberate: the claim is "more
+    /// from every source", so the cleanest evidence is a source that is not a
+    /// weapon at all. Firing a rifle for the second reading would put spread, a
+    /// crit roll and a second trait between the mark and the number, and a stage
+    /// that goes red for one of those reads as the mark being broken.
+    ///
+    /// The pistol still applies the mark through the real firing path, which is
+    /// the half that could actually be miswired.
+    private bool? StageMark(int tick)
+    {
+        var pistol = GD.Load<WeaponResource>("res://resources/weapons/sidearm_pistol.tres");
+        if (pistol == null)
+        {
+            GD.PushError("  sidearm_pistol.tres did not load — run BuildWeapons.cs");
+            return false;
+        }
+
+        const float Probe = 10.0f;
+
+        if (tick == 1)
+        {
+            _weapons!.Equip(0, pistol);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 99);
+            _horde!.Pool.Clear();
+
+            // A brute, for the reason the bleed stage uses one: four separate
+            // hits land here and none of them may kill, or the reading becomes a
+            // health value belonging to whoever swap-filled the slot.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(7.0f, 0.0f, 0.0f), 2);
+            return null;
+        }
+
+        // Unmarked baseline.
+        if (tick == 2)
+        {
+            float before = _horde!.Pool.Health[0];
+            _horde.Damage(0, Probe, Vector2.Zero);
+            _plainHit = before - _horde.Pool.Health[0];
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            _weapons!.ForceFire(new Vector2(1.0f, 0.0f));
+            return null;
+        }
+
+        if (tick == 5)
+        {
+            float before = _horde!.Pool.Health[0];
+            _horde.Damage(0, Probe, Vector2.Zero);
+            _markedHit = before - _horde.Pool.Health[0];
+            return null;
+        }
+
+        // Three seconds on the card plus a margin.
+        if (tick < 200)
+            return null;
+
+        float after = _horde!.Pool.Health[0];
+        _horde.Damage(0, Probe, Vector2.Zero);
+        float expiredHit = after - _horde.Pool.Health[0];
+
+        float lift = _plainHit > 0.0f ? _markedHit / _plainHit - 1.0f : 0.0f;
+
+        GD.Print($"  {Probe:F0} damage lands as {_plainHit:F1} plain, {_markedHit:F1} marked " +
+                 $"({lift:P0}, card says {pistol.TraitAmount:P0}), " +
+                 $"{expiredHit:F1} after {pistol.TraitCount} s");
+
+        bool lifted = Mathf.Abs(lift - pistol.TraitAmount) < 0.02f;
+        bool spent = Mathf.IsEqualApprox(expiredHit, _plainHit);
+
+        if (!lifted)
+            GD.PushError($"  the mark added {lift:P0}, the card says {pistol.TraitAmount:P0}");
+        if (!spent)
+            GD.PushError("  the mark outlived its own timer — a permanent multiplier");
+
+        return _plainHit > 0.0f && lifted && spent;
+    }
+
+    /// A reaction is the pair, so apply with the emitter and consume with the
+    /// axe through their real firing paths. The second axe hit must lose the
+    /// bonus: that is the assertion that this is stored setup, not a permanent
+    /// multiplier on every heavy hit after it.
+    private bool? StageShatter(int tick)
+    {
+        var emitter = GD.Load<WeaponResource>("res://resources/weapons/hand_emitter.tres");
+        var axe = GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres");
+        if (emitter == null || axe == null)
+        {
+            GD.PushError("  shatter weapons did not load — run BuildWeapons.cs");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(1.2f, 0.0f, 0.0f), 2);
+            _weapons!.Equip(0, emitter);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 0);
+            _weapons.ForceFire(Vector2.Right);
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            _weapons!.Equip(0, axe);
+            _weapons.SetProficiency(WeaponCategory.MeleeLong, 0);
+            float before = _horde!.Pool.Health[0];
+            _weapons.ForceFire(Vector2.Right);
+            _markedHit = before - _horde.Pool.Health[0];
+            return null;
+        }
+
+        if (tick == 5)
+        {
+            float before = _horde!.Pool.Health[0];
+            _weapons!.ForceFire(Vector2.Right);
+            _plainHit = before - _horde.Pool.Health[0];
+            return null;
+        }
+
+        if (tick < 7)
+            return null;
+
+        float expected = axe.BaseDamage * (1.0f + emitter.TraitAmount * 1.5f);
+        bool burst = Mathf.Abs(_markedHit - expected) < 0.2f;
+        bool spent = Mathf.Abs(_plainHit - axe.BaseDamage) < 0.2f
+                  && _horde!.Pool.Chill[0] <= 0.0f
+                  && _horde.Pool.ChillRemaining[0] <= 0.0f;
+
+        GD.Print($"  chilled axe hit {_markedHit:F1} (expected {expected:F1}); next hit {_plainHit:F1}, "
+               + $"chill left {_horde!.Pool.Chill[0]:F2}");
+
+        if (!burst)
+            GD.PushError("  the heavy hit did not scale its burst from the chill");
+        if (!spent)
+            GD.PushError("  shatter left chill behind or repeated on the next hit");
+
+        return burst && spent;
+    }
+
+    private bool? StageSpreadReaction(int tick)
+    {
+        var knife = GD.Load<WeaponResource>("res://resources/weapons/combat_knife.tres");
+        var axe = GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres");
+        if (knife == null || axe == null)
+        {
+            GD.PushError("  spread weapons did not load — run BuildWeapons.cs");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+
+            // Only the first brute is inside the knife's 1.6 m reach. All three
+            // sit inside the axe's 3 m, 100-degree sweep.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(1.2f, 0.0f, 0.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(2.5f, 0.0f, 0.5f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(2.5f, 0.0f, -0.5f), 2);
+
+            _weapons!.Equip(0, knife);
+            _weapons.SetProficiency(WeaponCategory.MeleeShort, 0);
+            _weapons.ForceFire(Vector2.Right);
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            _weapons!.Equip(0, axe);
+            _weapons.SetProficiency(WeaponCategory.MeleeLong, 0);
+            _weapons.ForceFire(Vector2.Right);
+            return null;
+        }
+
+        if (tick < 5)
+            return null;
+
+        bool sourceSpent = _horde!.Pool.Bleed[0] <= 0.0f
+                        && _horde.Pool.BleedRemaining[0] <= 0.0f;
+        bool neighboursOpened = _horde.Pool.Bleed[1] >= knife.TraitAmount
+                             && _horde.Pool.Bleed[2] >= knife.TraitAmount;
+
+        GD.Print($"  wound after cleave: source {_horde.Pool.Bleed[0]:F1}/s, "
+               + $"neighbours {_horde.Pool.Bleed[1]:F1}/{_horde.Pool.Bleed[2]:F1}/s");
+
+        if (!sourceSpent)
+            GD.PushError("  spread copied the wound without spending its source");
+        if (!neighboursOpened)
+            GD.PushError("  the cleave did not carry the wound across its sweep");
+
+        return sourceSpent && neighboursOpened;
+    }
+
+    private bool? StageCookOff(int tick)
+    {
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _horde.Hazards.Clear();
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(2.0f, 0.0f, 0.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(3.8f, 0.0f, 0.0f), 2);
+            _horde.Hazards.Add(_horde.Pool.Position[0], 1.0f, 14.0f, 3.0f);
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            float sourceBefore = _horde!.Pool.Health[0];
+            float neighbourBefore = _horde.Pool.Health[1];
+            _horde.Detonate(_horde.Pool.Position[0], 0.5f, 5.0f);
+            _markedHit = neighbourBefore - _horde.Pool.Health[1];
+            _plainHit = sourceBefore - _horde.Pool.Health[0];
+            bool spentNow = _horde.Pool.Burn[0] <= 0.0f && _horde.Pool.BurnRemaining[0] <= 0.0f;
+
+            _horde.Hazards.Clear();
+            float beforeAgain = _horde.Pool.Health[1];
+            _horde.Detonate(_horde.Pool.Position[0], 0.5f, 5.0f);
+            _ammoBefore = Mathf.RoundToInt((beforeAgain - _horde.Pool.Health[1]) * 100.0f);
+
+            if (!spentNow)
+                GD.PushError("  cook off left the burn tag behind");
+            return null;
+        }
+
+        if (tick < 5)
+            return null;
+
+        float repeated = _ammoBefore / 100.0f;
+        bool burst = _markedHit > 20.0f && _plainHit > _markedHit;
+        bool spent = repeated < 0.01f && _horde!.Pool.Burn[0] <= 0.0f;
+
+        GD.Print($"  first blast: source took {_plainHit:F1}, neighbour cook-off {_markedHit:F1}; "
+               + $"second blast reached neighbour for {repeated:F1}, burn left {_horde.Pool.Burn[0]:F1}");
+
+        if (!burst)
+            GD.PushError("  burning the source did not create the secondary radius");
+        if (!spent)
+            GD.PushError("  cook off repeated without a new burn application");
+
+        return burst && spent;
+    }
+
+    private bool? StageConduct(int tick)
+    {
+        var rifle = GD.Load<WeaponResource>("res://resources/weapons/scavenged_rifle.tres");
+        if (rifle == null)
+            return false;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _weapons!.Equip(0, rifle);
+            _weapons.SetProficiency(WeaponCategory.Firearm, 0);
+            _player!.Mods.ChainChance = 1.0f;
+
+            _horde.Spawn(_player.GlobalPosition + new Vector3(2.0f, 0.0f, 0.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(4.2f, 0.0f, 1.2f), 2);
+            _weapons.ForceFire(Vector2.Right);
+            _plainHit = _horde.Pool.ShockRemaining[1];
+
+            // A clean three-body wall for the consumer half.
+            _horde.Pool.Clear();
+            _horde.Spawn(_player.GlobalPosition + new Vector3(2.0f, 0.0f, 0.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(4.0f, 0.0f, 1.0f), 2);
+            _horde.Spawn(_player.GlobalPosition + new Vector3(4.0f, 0.0f, -1.0f), 2);
+            for (int i = 0; i < 3; i++)
+                _horde.Pool.Health[i] = 1000.0f;
+
+            _horde.ApplyShock(0, 3.0f);
+            _horde.ApplyChill(0, 0.4f, 3.0f);
+            _player.Mods.ChainChance = 0.0f;
+
+            float beforeOne = _horde.Pool.Health[1];
+            float beforeTwo = _horde.Pool.Health[2];
+            _weapons.ForceFire(Vector2.Right);
+            _markedHit = beforeOne - _horde.Pool.Health[1];
+            _speedBefore = beforeTwo - _horde.Pool.Health[2];
+
+            // With Shock spent, the same hit cannot conduct again.
+            beforeOne = _horde.Pool.Health[1];
+            beforeTwo = _horde.Pool.Health[2];
+            _weapons.ForceFire(Vector2.Right);
+            _speedChilled = (beforeOne - _horde.Pool.Health[1]) + (beforeTwo - _horde.Pool.Health[2]);
+            return null;
+        }
+
+        if (tick < 3)
+            return null;
+
+        float expected = rifle.BaseDamage * 0.40f;
+        bool applied = _plainHit > 2.5f;
+        bool jumped = Mathf.Abs(_markedHit - expected) < 0.2f
+                   && Mathf.Abs(_speedBefore - expected) < 0.2f;
+        bool spent = _horde!.Pool.ShockRemaining[0] <= 0.0f && _speedChilled < 0.01f;
+
+        GD.Print($"  chain shock {_plainHit:F1}s; conduct {_markedHit:F1}/{_speedBefore:F1} "
+               + $"(expected {expected:F1}), repeat {_speedChilled:F1}, shock left {_horde.Pool.ShockRemaining[0]:F1}s");
+
+        if (!applied)
+            GD.PushError("  the Chain card dealt damage but left no Shock");
+        if (!jumped)
+            GD.PushError("  a hit on chilled Shock did not reach two neighbours");
+        if (!spent)
+            GD.PushError("  Conduct did not spend Shock before the next hit");
+
+        return applied && jumped && spent;
+    }
+
+    /// The second slot has to fire the weapon that is *in* it.
+    ///
+    /// **This is the one thing in the file that cannot be checked with
+    /// `ForceFire`,** and that is exactly why the bug it defends against survived
+    /// four phases. `ForceFire` fires `_slots[_active]`, every other stage here
+    /// equips into slot 0, and `Fire` read the active slot's weapon while taking
+    /// the slot as an argument — so the sidearm fired the *primary's* damage,
+    /// trait, category and penetration, on its own cooldown and out of its own
+    /// magazine. Every readout agreed with itself, every probe was green, and
+    /// three of the four Sidearms measured identically in the balance table
+    /// because all three were a Scavenged Rifle.
+    ///
+    /// So this stage does the one thing none of the others do: it lets the
+    /// handler tick and fire on its own, with two *different* weapons loaded, and
+    /// reads which one arrived. A knife at 1.6 m against a bow at 14 — the target
+    /// stands at 9 m, where only the second slot can reach it. Under the bug the
+    /// primary's reach came out of the sidearm and the target took damage; with
+    /// the fix, only the weapon that can reach it does.
+    private bool? StageSidearmFiresItself(int tick)
+    {
+        var knife = GD.Load<WeaponResource>("res://resources/weapons/combat_knife.tres");
+        var bow = GD.Load<WeaponResource>("res://resources/weapons/hunting_bow.tres");
+        if (knife == null || bow == null)
+        {
+            GD.PushError("  combat_knife.tres or hunting_bow.tres did not load");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _weapons!.Projectiles.Clear();
+
+            // Slot 0 is the blade and slot 1 reaches. Deliberately the opposite
+            // way round from the game, so a stage that passes cannot be passing
+            // because slot 0 happened to be the one that could do the job.
+            _weapons.Equip(0, knife);
+            _weapons.Equip(1, bow);
+            _weapons.SetProficiency(WeaponCategory.MeleeShort, 0);
+            _weapons.SetProficiency(WeaponCategory.BowCrossbow, 0);
+            _weapons.LiveSlots = 2;
+
+            // A brute at 9 m: outside the knife's 1.6 m by a long way, inside the
+            // bow's 14. Give this measurement wall explicit health: the handler
+            // may loose more than one arrow before the read tick as neighbouring
+            // stages change timing, and a dead target takes the reading with it.
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(9.0f, 0.0f, 0.0f), 2);
+
+            // Health it cannot run out of, rather than a window tuned to fit
+            // inside sixty hit points. The first version let the handler fire for
+            // two seconds and the brute died on the third arrow — so the stage
+            // reported "nothing reached 9 m" when what had actually happened was
+            // that too much did. The window below is still short, but nothing now
+            // depends on it staying short.
+            if (_horde.Pool.Count > 0)
+                _horde.Pool.Health[0] = 100_000.0f;
+
+            // The one stage that lets the handler decide for itself. Everything
+            // else here holds fire and drives `ForceFire`, which is what made the
+            // second slot's firing path unreachable from a test.
+            _weapons.HoldFire = false;
+            _beforeAuto = _horde.Pool.Count > 0 ? _horde.Pool.Health[0] : 0.0f;
+            return null;
+        }
+
+        // Long enough for one arrow to loose and cross 9 m at 26 m/s, and short
+        // enough that a second one never leaves. Two arrows plus a ricochet came
+        // to exactly the brute's sixty health, and a target that dies takes the
+        // reading with it — the same trap `DamageAtRange` carries a warning about.
+        if (tick < 60)
+            return null;
+
+        _weapons!.HoldFire = true;
+
+        bool alive = _horde!.Pool.Count > 0;
+        float now = alive ? _horde.Pool.Health[0] : 0.0f;
+        float taken = _beforeAuto - now;
+
+        // The arrow is what reached it, so the hit must look like an arrow: the
+        // bow's damage is well above the knife's, and the knife could not have
+        // contributed at all from 9 m.
+        bool reached = alive && taken >= bow.BaseDamage * 0.8f;
+
+        GD.Print($"  knife in slot 0 (1.6 m), bow in slot 1 ({bow.BaseRange:F0} m), target at 9 m: "
+               + $"took {taken:F1} (bow does {bow.BaseDamage:F1}, knife {knife.BaseDamage:F1})");
+
+        if (!alive)
+        {
+            GD.PushError("  the measurement wall died — the firing stage has no health reading");
+            return false;
+        }
+
+        if (!reached)
+        {
+            GD.PushError("  nothing reached 9 m — the second slot is not firing its own weapon, "
+                       + "or it is not firing at all");
+        }
+
+        return reached;
+    }
+
+    private float _beforeAuto;
 }

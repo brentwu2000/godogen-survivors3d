@@ -57,6 +57,18 @@ public partial class WeaponHandler : Node3D
         /// interesting version is carrying it as a sidearm, fighting with the
         /// other one, and swapping to a charged shot.
         public float SinceFired;
+
+        /// Whether this slot's next shot is a charged one.
+        ///
+        /// On the slot rather than on the handler because both slots fire and
+        /// only one of them is active. The handler's `IsCharged` answered for the
+        /// active slot and was *also* what the shot itself consulted, so a
+        /// charged Marksman Rifle waiting in the second slot handed its 3.5x to
+        /// whatever the first slot fired next — and the readout agreed, because
+        /// it asked the same wrong question.
+        public bool Charged =>
+            Weapon is { Trait: WeaponTrait.Charge, TraitCount: > 0 }
+            && SinceFired >= Weapon.TraitCount;
     }
 
     private readonly Slot[] _slots = { new(), new() };
@@ -333,15 +345,16 @@ public partial class WeaponHandler : Node3D
     /// Read by the readout as well as by the shot, so what the player is told and
     /// what happens cannot disagree — the entire value of the trait is that the
     /// player knows when it is ready.
-    public bool IsCharged
-    {
-        get
-        {
-            Slot slot = _slots[_active];
-            return slot.Weapon is { Trait: WeaponTrait.Charge, TraitCount: > 0 }
-                   && slot.SinceFired >= slot.Weapon.TraitCount;
-        }
-    }
+    public bool IsCharged => ChargedIn(_active);
+
+    /// Whether *that* slot's next shot is a charged one.
+    ///
+    /// Per slot because both of them fire. `IsCharged` read the active slot and
+    /// was also the test the shot itself used, so a holstered Marksman Rifle
+    /// charging in the second slot — the exact case the trait's own comment sells
+    /// it on — fired its multiplier onto whatever was in the first.
+    public bool ChargedIn(int slot) =>
+        slot >= 0 && slot < _slots.Length && _slots[slot].Charged;
 
     public int GetProficiency(WeaponCategory category) => _proficiency[(int)category];
 
@@ -489,6 +502,20 @@ public partial class WeaponHandler : Node3D
         _slots[_active].SinceFired = 0.0f;
     }
 
+    /// Puts the firing RNG back to a known point.
+    ///
+    /// For a probe that has to fire the same weapon twice and attribute the
+    /// difference to one modifier. Crit, spread, ricochet and the chain arc all
+    /// draw from this one stream, so two otherwise identical trials differ by
+    /// whatever the previous trial happened to consume — and at the two per cent
+    /// threshold a comparison stage uses, that noise is the same size as the
+    /// signal.
+    ///
+    /// Reseeding rather than zeroing: this generator is an xorshift, and a state
+    /// of zero is its fixed point. It would return zero forever, which reads as a
+    /// crit on every shot and a perfectly centred cone.
+    public void ReseedForTesting(ulong seed) => _rng = seed != 0UL ? seed : 1UL;
+
     private bool TryGetAimDirection(Vector3 origin, float range, out Vector2 direction)
     {
         direction = Vector2.Zero;
@@ -520,7 +547,29 @@ public partial class WeaponHandler : Node3D
 
     private void Fire(Slot slot, Vector3 origin, Vector2 direction, int level, bool allowBurst = true)
     {
-        WeaponResource weapon = Weapon!;
+        // **This slot's weapon, not the one in hand.**
+        //
+        // It read `Weapon` — which is `_slots[_active].Weapon` — while taking the
+        // slot as an argument and using it for everything else. So from the day
+        // both slots started firing, the second slot has been firing the *first
+        // slot's weapon*: its damage, its trait, its category, its penetration and
+        // its knockback, on the sidearm's own cooldown and out of the sidearm's
+        // own magazine.
+        //
+        // Nothing caught it for four phases because nothing could. `TickSlot`
+        // reads `slot.Weapon` correctly for the schedule, the ammo, the reload,
+        // the level and the aim range, so the sidearm ran dry on its own reserve
+        // and reloaded on its own timer and every readout agreed with itself.
+        // Every probe equips into slot 0 and calls `ForceFire`, which fires the
+        // active slot — so the one line that was wrong is the one line no test
+        // ever executed. `StageSidearmFiresItself` is the test that does.
+        //
+        // It is also why the pair measured +10% instead of something larger, and
+        // why three of the four Sidearms measured today were indistinguishable
+        // from each other: they were all a Scavenged Rifle.
+        if (slot.Weapon is not { } weapon)
+            return;
+
         float range = weapon.GetEffectiveRange(level);
 
         // Rolled once per attack, not once per target. A swing that crits should
@@ -535,7 +584,11 @@ public partial class WeaponHandler : Node3D
         // Applied before the shot and spent by it — the `SinceFired` reset lives
         // at the call sites, so a burst shot and an ordinary shot both count as
         // having fired.
-        if (IsCharged)
+        //
+        // Asked of *this* slot. The same mistake as the weapon above: a charged
+        // Marksman Rifle waiting in the second slot handed its 3.5x to whatever
+        // the first slot fired next.
+        if (slot.Charged)
             damage *= weapon.TraitAmount;
 
         float knockback = weapon.Knockback + Mods.Knockback;
@@ -555,6 +608,9 @@ public partial class WeaponHandler : Node3D
             int count = _horde!.QueryArc(origin, direction, range * Mods.AreaScale,
                                          weapon.SwingArcDegrees * 0.5f, _hitList);
 
+            if (weapon.Trait == WeaponTrait.Cleave)
+                SpreadBleed(_hitList, count);
+
             // Backwards: a kill swap-removes the last element into the killed
             // slot, which would silently skip an enemy on a forward walk.
             for (int i = count - 1; i >= 0; i--)
@@ -564,8 +620,11 @@ public partial class WeaponHandler : Node3D
                     continue;
 
                 Vector3 where = _horde.Pool.Position[index];
-                _horde.Damage(index, damage, direction * knockback);
-                ApplyBleed(weapon, index);
+                bool killed = _horde.Damage(index, damage, direction * knockback);
+                if (!killed)
+                    killed = ResolveReaction(weapon, index, damage);
+                if (!killed)
+                    ApplyOnHit(weapon, index);
                 RecordHit(weapon.Category, where, damage);
             }
 
@@ -577,6 +636,8 @@ public partial class WeaponHandler : Node3D
                 int behind = _horde.QueryArc(origin, -direction, range * Mods.AreaScale,
                                              weapon.SwingArcDegrees * 0.5f, _hitList);
 
+                SpreadBleed(_hitList, behind);
+
                 for (int i = behind - 1; i >= 0; i--)
                 {
                     int index = _hitList[i];
@@ -584,7 +645,10 @@ public partial class WeaponHandler : Node3D
                         continue;
 
                     Vector3 where = _horde.Pool.Position[index];
-                    _horde.Damage(index, damage * weapon.TraitAmount, -direction * knockback);
+                    float cleaveDamage = damage * weapon.TraitAmount;
+                    bool killed = _horde.Damage(index, cleaveDamage, -direction * knockback);
+                    if (!killed)
+                        ResolveReaction(weapon, index, cleaveDamage);
                     RecordHit(weapon.Category, where);
                 }
             }
@@ -657,8 +721,11 @@ public partial class WeaponHandler : Node3D
                 continue;
 
             Vector3 where = _horde.Pool.Position[index];
-            _horde.Damage(index, damage, shot * knockback);
-            ApplyBleed(weapon, index);
+            bool killed = _horde.Damage(index, damage, shot * knockback);
+            if (!killed)
+                killed = ResolveReaction(weapon, index, damage);
+            if (!killed)
+                ApplyOnHit(weapon, index);
             RecordHit(weapon.Category, where, damage);
             remaining--;
         }
@@ -712,6 +779,16 @@ public partial class WeaponHandler : Node3D
             // One long pale round. Length is the tell at thirty metres.
             WeaponTrait.Charge => (new Color(0.94f, 0.96f, 1.0f), 1.35f),
 
+            // Cold, and the same cold the chilled body turns — the tracer is what
+            // connects the shot the player fired to the enemy that went blue, and
+            // two unrelated colours would leave them looking like two effects.
+            WeaponTrait.Chill => (new Color(0.55f, 0.84f, 1.0f), 0.8f),
+
+            // Thin and amber. Small on purpose: a mark does no damage, and a
+            // round that looked heavier than the rifle's would be selling the
+            // wrong thing about the weapon.
+            WeaponTrait.Mark => (new Color(1.0f, 0.74f, 0.30f), 0.5f),
+
             _ => (new Color(1.0f, 0.90f, 0.62f), 0.7f + 0.5f * bite),
         };
     }
@@ -752,7 +829,17 @@ public partial class WeaponHandler : Node3D
                 : -1;
             Vector3 nextPosition = next >= 0 ? _horde.Pool.Position[next] : Vector3.Zero;
 
-            _horde.Damage(target, Projectiles.Damage[i], velocity.Normalized() * Projectiles.Knockback[i]);
+            bool killed = _horde.Damage(target, Projectiles.Damage[i],
+                                        velocity.Normalized() * Projectiles.Knockback[i]);
+
+            // A blast projectile is the Bolt Launcher's heavy impact. The pool
+            // does not retain its WeaponResource, but Blast > 0 is deliberately
+            // exclusive to that trait, so it carries exactly the fact the
+            // reaction needs without growing every projectile for one enum.
+            if (!killed && Projectiles.Blast[i] > 0.0f)
+                Shatter(target, Projectiles.Damage[i]);
+            if (!killed)
+                Conduct(target, WeaponCategory.BowCrossbow, Projectiles.Damage[i]);
             RecordHit(WeaponCategory.BowCrossbow, position, Projectiles.Damage[i]);
 
             // Detonate where it connected, and stop.
@@ -801,10 +888,133 @@ public partial class WeaponHandler : Node3D
     /// crowd tool, and one that can cross the arena is a homing missile.
     private const float BounceRange = 7.0f;
 
-    private void ApplyBleed(WeaponResource weapon, int index)
+    /// Whatever this weapon leaves behind on something it hit and did not kill.
+    ///
+    /// One place, called from both the swing and the shot, because the three
+    /// statuses it can leave are the three weapons whose entire signature *is*
+    /// what happens after the hit — a trait wired into one of the two paths would
+    /// work on a rifle and silently do nothing on a blade, and the symptom is a
+    /// weapon that reads as merely underpowered.
+    ///
+    /// **Only on a survivor.** The pool swap-removes, so a killing hit leaves the
+    /// index pointing at whoever was last — and marking or chilling a body chosen
+    /// by the order of an array is worse than not doing it at all, because it is
+    /// invisible and it is sometimes right. Bleed had this the whole time and got
+    /// away with it: 4 damage a second lands on *someone* either way. A mark
+    /// lands on the wrong target and the player watches the wrong enemy not die.
+    private void ApplyOnHit(WeaponResource weapon, int index)
     {
-        if (weapon.Trait == WeaponTrait.Bleed && weapon.TraitAmount > 0.0f)
-            _horde!.ApplyBleed(index, weapon.TraitAmount, weapon.TraitCount);
+        if (weapon.TraitAmount <= 0.0f)
+            return;
+
+        switch (weapon.Trait)
+        {
+            case WeaponTrait.Bleed:
+                _horde!.ApplyBleed(index, weapon.TraitAmount, weapon.TraitCount);
+                break;
+
+            case WeaponTrait.Chill:
+                _horde!.ApplyChill(index, weapon.TraitAmount, weapon.TraitCount);
+                break;
+
+            case WeaponTrait.Mark:
+                _horde!.ApplyMark(index, weapon.TraitAmount, weapon.TraitCount);
+                break;
+        }
+    }
+
+    /// Resolves reactions consumed by the weapon that just landed.
+    /// Returns true when the reaction killed and invalidated the pool index.
+    private bool ResolveReaction(WeaponResource weapon, int index, float impactDamage)
+    {
+        Conduct(index, weapon.Category, impactDamage);
+
+        if (weapon.Trait is not (WeaponTrait.Cleave or WeaponTrait.Spread
+                                 or WeaponTrait.Blast or WeaponTrait.Shatter))
+            return false;
+
+        return Shatter(index, impactDamage);
+    }
+
+    /// Chill + a heavy impact: spend the slow for a damage burst proportional
+    /// to both the impact and the amount of chill that was banked.
+    private bool Shatter(int index, float impactDamage)
+    {
+        if (_horde == null || impactDamage <= 0.0f)
+            return false;
+
+        float chill = _horde.ConsumeChill(index);
+        if (chill <= 0.0f)
+            return false;
+
+        // At the Hand Emitter's 45% this adds 67.5% of the triggering hit. A
+        // stronger non-weapon chill pays more, while Horde.MaxChill keeps the
+        // burst bounded below one extra full impact.
+        const float ShatterScale = 1.5f;
+        return _horde.Damage(index, impactDamage * chill * ShatterScale, Vector2.Zero);
+    }
+
+    private void Conduct(int index, WeaponCategory category, float impactDamage)
+    {
+        if (_horde == null || index < 0 || index >= _horde.Pool.Count
+            || _horde.Pool.Chill[index] <= 0.0f || !_horde.ConsumeShock(index))
+            return;
+
+        Vector3 from = _horde.Pool.Position[index];
+        int first = _horde.NearestExcept(from, ConductRange, index);
+        int second = _horde.NearestExceptTwo(from, ConductRange, index, first);
+        _conductTargets[0] = first;
+        _conductTargets[1] = second;
+
+        foreach (int target in _conductTargets)
+        {
+            if (target < 0 || target >= _horde.Pool.Count)
+                continue;
+
+            Vector3 to = _horde.Pool.Position[target];
+            _horde.Damage(target, impactDamage * ConductFraction, Vector2.Zero);
+            _hits[(int)category]++;
+            Hit?.Invoke(to, category, impactDamage * ConductFraction);
+            Chained?.Invoke(from, to);
+        }
+    }
+
+    private const float ConductRange = 5.0f;
+    private const float ConductFraction = 0.40f;
+    private readonly int[] _conductTargets = new int[2];
+
+    /// Bleed + cleave: take one wound off the sweep and put it on every other
+    /// body the same arc touched. The source is excluded so the setup is truly
+    /// spent rather than immediately refreshed under a different name.
+    private void SpreadBleed(int[] hits, int count)
+    {
+        if (_horde == null)
+            return;
+
+        int source = -1;
+        for (int i = 0; i < count; i++)
+        {
+            int index = hits[i];
+            if (index >= 0 && index < _horde.Pool.Count && _horde.Pool.BleedRemaining[index] > 0.0f)
+            {
+                source = index;
+                break;
+            }
+        }
+
+        if (source < 0)
+            return;
+
+        (float damage, float seconds) = _horde.ConsumeBleed(source);
+        if (damage <= 0.0f || seconds <= 0.0f)
+            return;
+
+        for (int i = 0; i < count; i++)
+        {
+            int index = hits[i];
+            if (index != source)
+                _horde.ApplyBleed(index, damage, seconds);
+        }
     }
 
     private void RecordHit(WeaponCategory category, Vector3 where) =>
@@ -841,7 +1051,9 @@ public partial class WeaponHandler : Node3D
         // would let a chain chain — a chance-based effect that can re-trigger
         // itself has a tail nobody chose and a frame cost nobody measured.
         Vector3 to = _horde.Pool.Position[next];
-        _horde.Damage(next, damage * ChainFraction, Vector2.Zero);
+        bool killed = _horde.Damage(next, damage * ChainFraction, Vector2.Zero);
+        if (!killed)
+            _horde.ApplyShock(next, ShockSeconds);
         _hits[(int)category]++;
 
         // A chain jump reads as a smaller event than the shot that started it,
@@ -868,6 +1080,7 @@ public partial class WeaponHandler : Node3D
     /// How far away the second target has to be. Enough to be a different enemy
     /// rather than the same one measured from a slightly different point.
     private const float ChainMinimumGap = 0.6f;
+    private const float ShockSeconds = 3.0f;
 
     /// Rotates the shot by a uniform angle inside the cone. Deterministic and
     /// allocation-free, so a capture run reproduces exactly.

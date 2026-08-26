@@ -12,7 +12,7 @@ it.
 
 **Nine enemy variants** as solid low-poly bodies rigged in the vertex stage, across **five places**
 that ask different questions of a build, from a rail yard to a laboratory interior with its own light.
-**Three survivors**, chosen before the loadout. **Nine weapons**, none of them a strictly better
+**Three survivors**, chosen before the loadout. **Thirteen weapons**, none of them a strictly better
 version of another. Threat is a *place* — danger zones you choose to enter — rather than a spawn rate,
 and a map leans toward one kind of them rather than holding one of each. The growth deck has five
 lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
@@ -54,15 +54,28 @@ without a touchscreen.
 
 The build gate is those first three commands. Every stage closes against it plus a probe below.
 
+**`dotnet build` before running anything under `scripts/tools/`.** `--script` runs the compiled
+assembly, not the `.cs` file on disk, so editing a builder and running it straight away re-emits the
+*previous* values — over the same paths, printing the same `Saved res://…` lines, exit code 0. Nothing
+says the output is stale. A balance measurement was taken against an untouched weapon this way and was
+only caught because it came back bit-identical to the run before it. Read one field back out of the
+generated file before trusting a re-generation:
+
+```bash
+dotnet build && godot --headless --script scripts/tools/BuildWeapons.cs
+grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
+```
+
 | Script | Headless | Asserts |
 | :--- | :---: | :--- |
 | `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget |
 | `test/FlowFieldProbe.cs` | yes | An enemy behind the long wall routes around it instead of into it |
-| `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, and every proficiency curve |
+| `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, every proficiency curve, and that both shelves are stocked — the Sidearm one with four weapons, three distinct signatures and something that reaches 8 m |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
 | `test/KnotProbe.cs` | yes | Some runs knot and some do not, a knot lands as a mass rather than a spread, and a knot run receives no more bodies than a scattered one |
 | `test/EnemyTypeProbe.cs` | yes | Each variant moves, hurts, resists and dies by its own row; blast is one level deep; roster follows intensity |
 | `test/GrowthProbe.cs` | yes | Start level, every curve stopping at the ceiling, armour's floor, and the deck emptying as caps fill |
+| `test/DeckMatrix.cs` | yes | Every weapon fired under every growth option: no weapon can spend less than half the deck its neighbours can. **Not in the sweep** — 276 trials, about a quarter of an hour. Run it when a weapon, an option or a trait changes |
 | `test/ItemProbe.cs` | yes | Using something costs its sale value, nothing is wasted, a dry rifle stops and the sidearm does not, and throwing is its own verb |
 | `test/LevelProbe.cs` | yes | A seed reproduces its arena, nothing is placed in a wall, the horde routes around what was generated, and 100 seeds produce no sealed exit |
 | `test/ShopProbe.cs` | yes | A v1 save migrates, a newer one is refused, buying is all-or-nothing, and dying costs the kit but not the practice |
@@ -76,7 +89,7 @@ The build gate is those first three commands. Every stage closes against it plus
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
-| `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet and burst each do what only they do |
+| `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet, burst, chill and mark each do what only they do — the last two also that the status is *spent* rather than permanent |
 | `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
 | `test/FirstRunProbe.cs` | yes | A fresh profile has not seen the base, an older save has, and opening the game on a new profile lands in a run without a keypress |
 | `test/MusicProbe.cs` | yes | Four layers of one length all playing from the first frame, layers arriving with intensity and crowd and the boss, a threshold that does not chatter, silence when the run ends, and every layer audibly what it claims to be |
@@ -437,7 +450,45 @@ Scythe beat the Fire Axe on all eight of theirs. The rifle is the one that never
 largest magazine and reserve in the game and the fastest reload, paid for with a lighter round and a
 shorter reach — and the axe went from being a worse scythe to being the opposite of one.
 
-Two bugs the traits uncovered, both about an index that stopped meaning what it meant:
+**Two of the twelve signatures do no damage at all, and they arrived with the Sidearm shelf.** The
+Hand Emitter takes 45% of a body's speed for two seconds; the Sidearm Pistol leaves it taking 20% more
+from *everything* for three. Neither is worth measuring on its own, which is the point of putting them
+in the small hand: both slots fire, so a shelf of four weapons each scored on its own damage is a
+shelf with one correct answer on it. A mark is worth 20% of whatever the other hand is holding, so the
+pistol is worth least beside a knife and most beside a Fire Axe — the first time a loadout has priced
+its two halves against each other rather than adding them up. See `WEAPONS.md`.
+
+Both are per-body statuses on the machinery bleed already used, with their own clocks and a clamp in
+`Horde` (60% chill, 50% mark) so a typo in a `.tres` file is a weak weapon rather than a stun-lock.
+**`RunModifiers.Chill` is a different thing with the same name** — a gradient of sticky ground around
+the player, from a card — and the two multiply rather than replace, so being in the ring *and* shot by
+an emitter is worse than either and still never a stop.
+
+**The largest thing the Sidearm shelf found was that the sidearm was never firing.** `WeaponHandler.Fire`
+took a slot as an argument and then read `Weapon` — which is the *active* slot's weapon — so from the
+day both slots were turned on, the second slot fired the first slot's weapon: its damage, trait,
+category, penetration and knockback, on the sidearm's own cooldown and out of the sidearm's own
+magazine. `TickSlot` was correct about everything else, so the sidearm ran dry on its own reserve,
+reloaded on its own timer and aimed to its own reach, and every readout agreed with itself. `Charge`
+had it too, from the same cause: a rifle charging in the second slot handed its 3.5x to whatever the
+first slot fired next.
+
+Nothing could have caught it. `ForceFire` fires the active slot and every probe equips into slot 0, so
+the second slot's firing path was the one path no test had ever run. It surfaced in the balance table:
+the Sidearm Pistol's mark was changed from 20% to 12% and twelve seeded runs came back *byte-identical*,
+which a deterministic simulation cannot do if the number reaches anything.
+`TraitProbe.StageSidearmFiresItself` closes it, and it is the only stage in that file that lets the
+handler fire on its own instead of driving `ForceFire`.
+
+Three more bugs the traits uncovered, all about an index that stopped meaning what it meant:
+
+- Every status was applied *after* the damage that could kill, and a kill swap-removes — so a killing
+  hit left the index pointing at whoever had been last, and the status landed on a body chosen by
+  array order. Bleed had this since it was written and got away with it, because 4 damage a second
+  lands on somebody either way. A mark does not: the player watches the wrong enemy fail to die
+  faster. `ApplyOnHit` is behind the kill check now, and it is one function rather than one per firing
+  path, because a status wired into the shot and not the swing works on rifles and silently does
+  nothing on blades.
 
 - A ricochet chose its next target *after* the hit landed, and a kill swap-removes — so "anyone but
   the one I just hit" excluded whoever had taken the victim's index, which with two enemies on the
@@ -1221,9 +1272,22 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-Everything the player looks at has had a pass, the numbers behind it are recorded above, and 24 probes
+Everything the player looks at has had a pass, the numbers behind it are recorded above, and 45 probes
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
+
+- **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
+  115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
+  later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by
+  hand (`lingers:auto slots:both`, twenty-four runs), which happened this time because a new Sidearm
+  forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
+  thing to re-take whenever a weapon changes, and it is written here because that is the only place
+  that will say so. See `WEAPONS.md`.
+- **The survivor roster has no models.** `Player.InstallCharacterModel` looks for
+  `assets/models/survivors/<name>.glb` and quietly falls back to the procedural `SoloBody` when there
+  is none, which is every survivor today: `art-src/models/build_roster.py` bakes the seven but has
+  never been run against a committed base mesh. The fallback is by design and the game looks finished
+  without it; what is missing is the roster, not the plumbing.
 
 - **The APK has never been built, let alone run.** Blocked on three installs this machine does not
   have: an Android SDK, a JDK, and an export template matching 4.7.1 (the only one present is 4.6.3).

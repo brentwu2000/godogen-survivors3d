@@ -193,7 +193,7 @@ public sealed class HordeRenderer
             Write(i, Terrain.Plant(pool.Position[i]),
                   type.SpriteScale * Elites.ScaleBonus(elite) * Horde.EmergeScale(pool.Emerge[i]),
                   pool.Velocity[i].X < 0.0f ? 1.0f : 0.0f, pool.Phase[i], 0.0f, type.SpriteLayer,
-                  pool.HitFlash[i], Elites.Tint(elite));
+                  pool.HitFlash[i], Elites.Tint(elite), pool.Chill[i]);
         }
 
         Upload(pool.Count);
@@ -221,7 +221,7 @@ public sealed class HordeRenderer
     }
 
     private void Write(int index, Vector3 position, float scale, float flip, float phase, float spin,
-                       int layer, float flash = 0.0f, Color tint = default)
+                       int layer, float flash = 0.0f, Color tint = default, float chill = 0.0f)
     {
         int b = index * _floatsPerInstance;
 
@@ -247,7 +247,17 @@ public sealed class HordeRenderer
             _buffer[c + 0] = flash;
             _buffer[c + 1] = tint.G;
             _buffer[c + 2] = tint.B;
-            _buffer[c + 3] = 1.0f;
+
+            // Alpha was the one float in this block nobody had spent, and chill
+            // is the one status that has to be legible on a body rather than
+            // inferred from it: a slowed enemy and an enemy that happens to be
+            // walking away look identical for the second and a half it matters.
+            //
+            // The block is full now. A fifth per-instance value needs a channel,
+            // not a packing — the elite tint's own red is already discarded here
+            // to make room for the flash, and that was one negotiation too many
+            // to repeat inside a float.
+            _buffer[c + 3] = chill;
             c += 4;
         }
 

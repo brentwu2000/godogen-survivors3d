@@ -204,7 +204,19 @@ public partial class WeaponProbe : SceneTree
         return ok;
     }
 
-    /// Neither shelf is empty, and the starting kit is a legal pair.
+    /// How many Sidearms the design says the shelf carries.
+    ///
+    /// A number rather than "more than one", because the thing being defended is
+    /// specific: WEAPONS.md step 5 is "the slot is a real choice or it is a knife
+    /// with extra steps", and a shelf that quietly drops back to three is that
+    /// step being undone without anybody deciding to.
+    private const int SidearmShelf = 4;
+
+    /// The furthest any Sidearm reaches, filled in as the shelf is read.
+    private float _longestSidearm;
+
+    /// Neither shelf is empty, the Sidearm shelf is a choice rather than a
+    /// ladder, and the starting kit is a legal pair.
     ///
     /// A slot type nothing occupies is a slot type that does not exist, and it
     /// would fail silently: the shop would simply never offer a sidearm, the
@@ -212,6 +224,14 @@ public partial class WeaponProbe : SceneTree
     /// number above would still pass. The starting kit is checked with it
     /// because that is the pair every player begins with and the one a fresh
     /// profile cannot get wrong.
+    ///
+    /// **Distinct traits, not just distinct rows.** `StageNothingDominates`
+    /// already refuses a Sidearm beaten on every axis, and it is not enough here:
+    /// four blades with four sets of numbers all pass it and are still four ways
+    /// to do one thing. What makes this shelf a decision is that each option
+    /// answers a different question — bleed, reach, and speed taken off the
+    /// horde — so what is asserted is the *count of distinct signatures*, which
+    /// is the property that would actually be lost.
     private bool? StageEverySlotIsStocked(int tick)
     {
         using var directory = DirAccess.Open("res://resources/weapons");
@@ -222,6 +242,8 @@ public partial class WeaponProbe : SceneTree
         }
 
         int primaries = 0, sidearms = 0;
+        var sidearmTraits = new System.Collections.Generic.HashSet<WeaponTrait>();
+        var shelf = new System.Collections.Generic.List<string>();
 
         foreach (string file in directory.GetFiles())
         {
@@ -235,9 +257,16 @@ public partial class WeaponProbe : SceneTree
                 continue;
 
             if (one.Slot == WeaponSlot.Sidearm)
+            {
                 sidearms++;
+                sidearmTraits.Add(one.Trait);
+                _longestSidearm = Mathf.Max(_longestSidearm, one.BaseRange);
+                shelf.Add($"{one.WeaponName}({one.Trait}, {one.BaseRange:F1} m)");
+            }
             else
+            {
                 primaries++;
+            }
         }
 
         var kitPrimary = GD.Load<WeaponResource>("res://resources/weapons/scavenged_rifle.tres");
@@ -248,8 +277,40 @@ public partial class WeaponProbe : SceneTree
 
         GD.Print($"  {primaries} primaries, {sidearms} sidearms; the starting kit is one of each "
                + $"= {kitIsAPair}");
+        GD.Print($"  the sidearm shelf: {string.Join("  ", shelf)}");
 
-        return primaries > 0 && sidearms > 0 && kitIsAPair;
+        bool stocked = sidearms >= SidearmShelf;
+        if (!stocked)
+            GD.PushError($"  {sidearms} sidearms, the design says {SidearmShelf}");
+
+        // Three, not four: the knife and the katana share `Bleed` on purpose —
+        // one rewards touching many things once and the other rewards choosing
+        // what to touch, which is a difference in the numbers around the trait
+        // rather than in the trait. Demanding four would be demanding a new
+        // mechanic per weapon, which is how a shelf grows a trait nothing needs.
+        const int distinct = SidearmShelf - 1;
+        bool varied = sidearmTraits.Count >= distinct;
+        if (!varied)
+        {
+            GD.PushError($"  {sidearmTraits.Count} distinct sidearm signatures across {sidearms} "
+                       + $"weapons — a ladder, not a choice");
+        }
+
+        // And at least one that reaches. The Sidearm slot spent its whole
+        // existence as melee, and a shelf that is entirely blades again leaves a
+        // melee Primary with no answer at all to a spitter holding at eight
+        // metres — which is the specific gap this step was opened to close.
+        // Eight is that spitter's range, so the threshold is a distance in the
+        // game rather than a number chosen to make the current shelf pass.
+        const float spitterRange = 8.0f;
+        bool reaches = _longestSidearm >= spitterRange;
+        if (!reaches)
+        {
+            GD.PushError($"  the longest sidearm reaches {_longestSidearm:F1} m — nothing on this "
+                       + $"shelf answers something holding at {spitterRange:F0} m");
+        }
+
+        return primaries > 0 && stocked && varied && reaches && kitIsAPair;
     }
 
     /// The two weapons as comparable numbers, higher being better.

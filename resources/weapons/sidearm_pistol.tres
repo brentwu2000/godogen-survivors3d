@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="WeaponResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/WeaponResource.cs" id="1_talmx"]
+
+[resource]
+script = ExtResource("1_talmx")
+WeaponName = "Sidearm Pistol"
+Slot = 1
+Favours = 1
+BaseDamage = 7.0
+BaseAttackSpeed = 2.2
+BaseRange = 14.0
+BaseSpreadDegrees = 5.0
+BaseReloadTime = 1.6
+MagazineSize = 12
+StartingReserve = 42
+Knockback = 0.06
+Trait = 9
+TraitAmount = 0.2
+TraitCount = 3
+Tier = 2
+Price = 800
+MaxLevel = 10
+TierStartBonus = 1
