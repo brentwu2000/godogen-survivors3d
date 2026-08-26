@@ -105,6 +105,36 @@ if (-not (Test-Path (Join-Path $data 'Survivors3D.dll'))) {
     $failures += 'Survivors3D.dll missing from the data folder — is Survivors3D.sln still there?'
 }
 
+# The font's licence, inside the pack with the font.
+#
+# `export_filter="all_resources"` means *resources* — files Godot imports. A
+# `.txt` is not one, so the first export after the UI font landed shipped
+# `ui.otf` and left `OFL.txt` behind, which is a redistribution of an OFL face
+# without the licence it requires. Nothing failed; the build was correct in every
+# way this script already checked.
+#
+# Checked by reading the pack rather than the source tree, because the question
+# is not "is the licence in the repository" — it was — but "did it reach the
+# thing somebody is handed". `include_filter` in export_presets.cfg is what puts
+# it there, and a filter is exactly the kind of line that gets cleared by an
+# editor round-trip without anyone noticing.
+if (Test-Path $pck) {
+    $bytes = [System.IO.File]::ReadAllBytes($pck)
+    $needle = [System.Text.Encoding]::UTF8.GetBytes('assets/fonts/OFL.txt')
+    $found = $false
+    for ($i = 0; $i -le $bytes.Length - $needle.Length -and -not $found; $i++) {
+        if ($bytes[$i] -ne $needle[0]) { continue }
+        $match = $true
+        for ($j = 1; $j -lt $needle.Length; $j++) {
+            if ($bytes[$i + $j] -ne $needle[$j]) { $match = $false; break }
+        }
+        $found = $match
+    }
+    if (-not $found) {
+        $failures += 'assets/fonts/OFL.txt is not in the pack — the UI font ships under the SIL OFL and the licence has to travel with it. See include_filter in export_presets.cfg.'
+    }
+}
+
 $failures = $failures | Where-Object { $_ }
 if ($failures.Count -gt 0) {
     foreach ($failure in $failures) { Write-Host "FAIL  $failure" }
