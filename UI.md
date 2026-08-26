@@ -222,23 +222,27 @@ screen nobody screenshots" and "the build stops".
 
 Each step is playable before the next starts and closes against a probe, per the project's rule.
 
-1. **A Chinese character on screen.** ~~Source an OFL face~~ — *survey done, see constraint 1.*
-   `test/FontProbe.cs` exists and holds the premise: while no UI font is shipped it asserts the engine
-   default cannot draw the language, and the day a font *is* declared in `gui/theme/custom_font` it
-   becomes the coverage gate step 4 needs, asserting the shipped face draws every character the UI can
-   produce. One probe across the transition rather than two.
+1. ~~**A Chinese character on screen.**~~ **Done.** `assets/fonts/ui.otf` is a **31 KB** subset of Noto
+   Sans Mono CJK TC Regular (SIL OFL 1.1), cut from a 15.6 MB source by
+   `art-src/fonts/build_font.py` and wired in as `gui/theme/custom_font`. The source is not in the
+   repository — sixteen megabytes to ship thirty-one kilobytes is a bad trade and git keeps it forever
+   — so `art-src/fonts/SOURCE.md` records its URL and sha256 instead, and the cutter **fails** rather
+   than dropping a character the source cannot draw.
 
-   What is left of this step is acquiring the face itself. **It needs an OFL monospace CJK file, and
-   this machine has none** — the three candidate families came back uninstalled, and the ones that did
-   answer are Windows-bundled and cannot ship. So this is the step that needs either a download or a
-   file from the owner:
+   `FontProbe` flipped from survey to coverage gate on its own, and the transition caught a bug in the
+   probe: once a project theme font exists it becomes the last-resort fallback for *every* `SystemFont`,
+   so the survey began reporting families this machine does not have as fully covered. A survey that
+   agrees with whatever was just done is worse than no survey, so it now runs only in the state where
+   its answers mean anything. Sweep clean at 46 probes.
 
-   - **Noto Sans Mono CJK TC** (SIL OFL 1.1) — the safe default, Google/Adobe, matches Noto elsewhere.
-   - **Sarasa Mono TC** (SIL OFL 1.1) — Iosevka Latin over Source Han Sans, and the Latin half is
-     narrower, which suits a terminal-styled UI.
+   Sarasa Mono TC remains the equally-good alternative — same licence, same 2:1 metric, a narrower
+   Latin half that may suit the terminal look better. It lost on download shape alone. Swapping is one
+   `--source` argument and a re-run.
 
-   Either is fine; both are OFL, so attribution in the repo and nothing else.
-   *Probe:* `FontProbe` flips from "no UI font shipped" to the coverage gate on its own.
+   *Probe:* `FontProbe` holds the premise while no font is shipped — the engine default cannot draw
+   this language — and becomes the coverage gate the moment one is declared. One probe across the
+   transition rather than two.
+
 2. **The string table, English only.** Every user-visible literal becomes a key; `tr()` at the call
    site; the CSV has one locale. Nothing on screen changes, which is the point — a step that changes
    the words *and* the mechanism cannot be reviewed.

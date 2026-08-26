@@ -113,6 +113,15 @@ drop={
 ])
 }
 
+[gui]
+
+; The UI font, and the only reason the game can draw Chinese at all.
+; A subset of Noto Sans Mono CJK TC cut by art-src/fonts/build_font.py --
+; see art-src/fonts/SOURCE.md. Monospace on purpose: every screen here is a
+; text page padded with spaces, and a Han glyph is exactly two Latin cells
+; in this face against 1.03 in a proportional one.
+theme/custom_font="res://assets/fonts/ui.otf"
+
 [physics]
 
 common/physics_ticks_per_second=60

@@ -49,9 +49,34 @@ public partial class FontProbe : SceneTree
         GD.Print($"asking for {Distinct(Wanted).Length} distinct characters the UI needs");
         GD.Print("");
 
-        // The default first, so the claim "Godot ships no Han glyphs" is measured
-        // here rather than repeated from memory. If this ever comes back covered,
-        // most of UI.md's font section stops being necessary.
+        var configuredPath = ProjectSettings.GetSetting(ThemeFontSetting).AsString();
+        bool shipped = configuredPath.Length > 0 && ResourceLoader.Exists(configuredPath);
+
+        if (shipped)
+        {
+            // The gate, and nothing else.
+            //
+            // **The survey below stops telling the truth the moment a font is
+            // shipped.** A project theme font becomes the last-resort fallback
+            // for every `SystemFont`, so asking for a family this machine does
+            // not have comes back fully covered — the first run after wiring the
+            // font in reported "Noto Sans Mono CJK TC: all" on a machine where it
+            // is not installed. Printing that would be worse than printing
+            // nothing: it is a survey that agrees with whatever was just done.
+            bool covers = Report($"shipped UI font ({configuredPath})", GD.Load<Font>(configuredPath));
+
+            GD.Print("");
+            GD.Print(covers
+                ? "PROBE OK — the shipped font covers everything the UI asks for"
+                : "PROBE FAILED — the shipped font cannot draw text this UI produces");
+
+            Quit(covers ? 0 : 1);
+            return;
+        }
+
+        // No font shipped, so this is the survey that decides which one to ship.
+        // It only runs in that state, which is also the only state where its
+        // answers mean anything.
         Font? fallback = ThemeDB.Singleton?.FallbackFont;
         bool fallbackCovers = Report("project default", fallback);
 
@@ -91,32 +116,11 @@ public partial class FontProbe : SceneTree
         //
         // A probe that passed because Windows happens to bundle MingLiU would go
         // green here and red on the build server, and would say nothing at all
-        // about the game. So there are only two states worth asserting, and which
-        // one applies depends on whether a UI font has been shipped yet.
-        var configured = ProjectSettings.GetSetting(ThemeFontSetting).AsString();
-        bool shipped = configured.Length > 0 && ResourceLoader.Exists(configured);
-
+        // about the game. With nothing shipped, the thing worth holding is the
+        // premise the whole plan rests on: the engine's own default cannot draw
+        // this language. The day that stops being true, `UI.md`'s font section
+        // should be deleted rather than followed — and this is what would say so.
         GD.Print("");
-
-        if (shipped)
-        {
-            // Once a font is declared, this is a coverage gate: the shipped face
-            // must draw every character the UI can produce. That is the assertion
-            // `UI.md` step 4 wants, and it is the reason this probe outlives the
-            // survey above.
-            bool covers = Report($"shipped UI font ({configured})", GD.Load<Font>(configured));
-            GD.Print(covers
-                ? "PROBE OK — the shipped font covers everything the UI asks for"
-                : "PROBE FAILED — the shipped font cannot draw text this UI produces");
-
-            Quit(covers ? 0 : 1);
-            return;
-        }
-
-        // No font shipped yet, so the thing worth holding is the premise the whole
-        // plan rests on: the engine's own default cannot draw this language. The
-        // day that stops being true, `UI.md`'s font section should be deleted
-        // rather than followed — and this is what would say so.
         GD.Print(fallbackCovers
             ? "PROBE FAILED — the default font now covers Han; UI.md's font section is obsolete"
             : "PROBE OK — no UI font shipped yet, and the default cannot draw this language");

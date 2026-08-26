@@ -1,0 +1,25 @@
+# Characters the shipping UI font must be able to draw.
+#
+# Printable ASCII is added by build_font.py and is not listed here. Whitespace is
+# a separator, so a line may be wrapped anywhere without adding a glyph.
+#
+# This file is the authority until UI.md step 4, when the translation table takes
+# over and build_font.py reads its locale columns instead. `test/FontProbe.cs`
+# keeps its own list of what the UI needs and asserts the shipped font covers it
+# — two lists, one checking the other, which is the right direction: a font
+# missing something the UI can produce must fail the build rather than the eye.
+
+# The fittings and the room
+軍械庫 置物櫃 紀錄 合約 地圖 大門 宿舍 主控台
+
+# The verbs
+購買 裝上 賣出 出發 啟程 選擇 離開 返回 重擲 交出
+
+# Settings
+繁體中文 語言 設定 英文
+
+# Loadout
+角色 裝備 武器 主武器 副武器 護甲 背包 靴子 飾品
+
+# Readouts
+生命值 彈藥 信用點 存活 秒數 波次 擊殺 等級 收益 存放 價值
