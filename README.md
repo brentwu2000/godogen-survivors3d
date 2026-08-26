@@ -12,7 +12,7 @@ it.
 
 **Nine enemy variants** as solid low-poly bodies rigged in the vertex stage, across **five places**
 that ask different questions of a build, from a rail yard to a laboratory interior with its own light.
-**Three survivors**, chosen before the loadout. **Thirteen weapons**, none of them a strictly better
+**Three survivors**, chosen before the loadout. **Fifteen weapons**, none of them a strictly better
 version of another. Threat is a *place* — danger zones you choose to enter — rather than a spawn rate,
 and a map leans toward one kind of them rather than holding one of each. The growth deck has five
 lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
@@ -1177,6 +1177,34 @@ The bot now paths with a flow field of its own rather than steering straight. On
 with five blocks that was enough; on a generated one it walked into the first wall between it and the
 crate and reported the route as blocked. A player looks at the screen and goes around, and the
 closest thing to that this project already owns is the field.
+
+**`FlowField.BlockBox` marked every footprint a full cell too large in all four directions**, and had
+since it was written. A cell index is the cell *containing* a coordinate, so the last cell a box
+overlaps is `floor` of its far edge; the code used `ceil`, which names the cell after it, and the loop
+is inclusive. At a 1.5 m cell that is up to 1.5 m of phantom wall per side on top of whatever the
+caller asked to inflate by — invisible, because a route that goes slightly too far around still gets
+there.
+
+Two things it had already caused, both of which had been explained as something else:
+
+- **`AutoPlay` argued itself down from 0.9 to 0.55 of body-radius inflation** because "0.9 either side
+  turns a 2.2 m doorway into no doorway". True, and the field was quietly adding two to three times the
+  number under discussion. The constant was tuned against the bug.
+- **One seed in twelve returned `Stuck — banked 0` on every arm of every balance table this project
+  has printed.** Seed `3432918353`: the bot stood 2.45 m clear of the nearest real obstacle, inside a
+  footprint that was not there, two metres from a crate it needed to be 1.8 m from, with `Sample`
+  returning zero. It now extracts at 52 s with a peak of 160 enemies instead of 33 — it plays the
+  level rather than jittering in a corner.
+
+The fix changes enemy routing as well as the bot's, so every balance number moves with it.
+
+`AutoPlay.Navigate` had a second half of the same failure. `EscapeFrom` outranked the flow whenever
+the bot stood in a footprint, which is right when the goal is across the map and wrong when it is two
+metres away: escaping walks away from the crate, the flow pulls it back, and the loop is indefinite.
+Its own comment named that oscillation as "a third thing again" and nothing acted on it. Inside
+`FinalApproach` — 2.6 m, past a crate's 1.8 m reach and far short of the 7.5 m wall-lean the escape
+was written for — the straight line is the answer, because there is nothing to route around at that
+range and the collider resolves any real overlap.
 
 **And they were measured with the starting kit, every one of them, until the weapon arm existed.** A
 play-test runs on a fresh ephemeral profile for the reason below, and a fresh profile owns the

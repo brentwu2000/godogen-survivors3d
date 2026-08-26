@@ -65,12 +65,30 @@ public sealed class FlowField
 
     /// Marks an axis-aligned footprint impassable. Called once at build time;
     /// the field itself is rebuilt every few ticks but obstacles are static.
+    ///
+    /// **Floor on both edges, not floor-and-ceil.** A cell index is the cell
+    /// *containing* a coordinate, so the last cell a box overlaps is the one
+    /// containing its far edge — `floor`. `ceil` names the cell after it, and the
+    /// loop below is inclusive, so every footprint was marked a full cell too far
+    /// in all four directions whenever an edge did not land exactly on a boundary,
+    /// which it almost never does.
+    ///
+    /// At a 1.5 m cell that is up to 1.5 m of phantom wall per side, on top of
+    /// whatever the caller asked to inflate by. It is why `AutoPlay` had to argue
+    /// itself down from 0.9 to 0.55 of body-radius inflation to stop closing
+    /// doorways that exist — the field was quietly adding two or three times the
+    /// number under discussion.
+    ///
+    /// It is also the `Stuck` outcome that one seed in twelve produced on every
+    /// balance table this project has printed: a bot standing 2.45 m clear of the
+    /// nearest real box, inside a footprint that was not there, with `Sample`
+    /// returning zero and no way to walk the last two metres to a crate.
     public void BlockBox(Vector2 center, Vector2 halfExtents)
     {
         int minX = ClampX(Mathf.FloorToInt((center.X - halfExtents.X - _origin.X) / _cellSize));
-        int maxX = ClampX(Mathf.CeilToInt((center.X + halfExtents.X - _origin.X) / _cellSize));
+        int maxX = ClampX(Mathf.FloorToInt((center.X + halfExtents.X - _origin.X) / _cellSize));
         int minZ = ClampZ(Mathf.FloorToInt((center.Y - halfExtents.Y - _origin.Y) / _cellSize));
-        int maxZ = ClampZ(Mathf.CeilToInt((center.Y + halfExtents.Y - _origin.Y) / _cellSize));
+        int maxZ = ClampZ(Mathf.FloorToInt((center.Y + halfExtents.Y - _origin.Y) / _cellSize));
 
         for (int z = minZ; z <= maxZ; z++)
         for (int x = minX; x <= maxX; x++)

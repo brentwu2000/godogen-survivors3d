@@ -236,8 +236,8 @@ today, "it never runs out", is not.
 
 ## The table
 
-Thirteen weapons exist. The original nine remain; three Sidearms and the War Hammer have landed, with
-the Arc Lance and Pulse Rifle still to come.
+Fifteen weapons exist. The original nine remain, joined by three Sidearms and three new Primaries:
+the War Hammer, Arc Lance and Pulse Rifle.
 
 ### Primaries
 
@@ -267,10 +267,9 @@ All four exist. Numbers as shipped rather than as planned, because two of them m
 | Hand Emitter | firearm | 5 | 2.8/s | 8 | **chills** 45% for 2 s; no magazine |
 
 **The Hand Emitter is a Firearm, not a `Tech` category.** Category here says how a weapon *resolves*
-and which proficiency track it feeds, and this one resolves like a pistol. A `Tech` category is what
-step 7 is for — overheat and a held beam are firing models, and adding the category early would mean
-`Profile`, `RunRecord`, `BodyMeshLibrary`, `SoundDirector` and `EffectDirector` all growing a fifth
-case for a weapon that behaves like the fourth.
+and which proficiency track it feeds, and this one resolves like a pistol. `Tech` was reserved for
+step 7 because overheat and a held beam are genuinely different firing models. Arc Lance and Pulse
+Rifle now establish that fifth proficiency track.
 
 **The Sidearm Pistol carried a burst first, and that was the wrong trait.** A burst makes the weapon
 holding it hit harder, which is a Primary's job; written that way the shelf was a knife, a bigger
@@ -575,14 +574,15 @@ the next starts.
    tag refreshed by the ground without taking a second copy of the DPS. Any shared blast path consumes
    it for a 2.4 m burst worth 1.5 seconds of that fire; the same blast cannot cook it twice. Chain now
    leaves three seconds of Shock. A hit on a target carrying both Shock and Chill spends Shock and
-   conducts 40% of the triggering hit to each of two neighbours, one level deep. The future tech
-   weapons gain a second Shock source; the reaction already has a working non-weapon source and
+   conducts 40% of the triggering hit to each of two neighbours, one level deep. The two tech
+   weapons add two direct Shock sources; the reaction already had a working non-weapon source and
    consumer rather than waiting configured-but-inert for step 7.
-7. **The three new Primaries.** **War Hammer done:** 38 damage at 0.55/s through a 45-degree, 2.8 m
-   line with 1.8 knockback. It is the native `Shatter` trait, and pays for the hardest single impact
-   with the slowest and narrowest swing; `WeaponProbe` finds all twelve same-slot/category pairs are
-   trades. Arc Lance and Pulse Rifle remain, last because overheat and a held beam are new firing
-   models rather than new numbers, and they should land on a table that already balances.
+7. ~~**The three new Primaries.**~~ **Done.** War Hammer lands a 38-damage, 0.55/s Shatter through
+   the narrowest heavy arc. Arc Lance is a 0.1-second held beam at 12 m and shocks only after 0.75 s
+   dwelling on the same body. Pulse Rifle fires at 8/s without ammunition, overheats after nine shots,
+   locks while venting, and resumes below 35% heat. The latter two establish the fifth proficiency
+   category, `Tech`; old four-entry profiles load with Tech practice at zero. `TraitProbe` holds both
+   firing-model contracts alongside every earlier signature and reaction.
 
 **Step 1 before anything else, and stop there for a measurement.** Everything after it is priced
 against a number this project does not have yet: what two weapons firing is actually worth. Guessing

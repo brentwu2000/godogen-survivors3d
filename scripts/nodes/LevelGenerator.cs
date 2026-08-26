@@ -274,10 +274,22 @@ public partial class LevelGenerator : Node3D
     /// Asks a real FlowField, built the way the horde builds its own.
     ///
     /// Writing a second reachability test here was a mistake worth recording: it
-    /// agreed with itself and disagreed with the game. The field blocks a cell
-    /// with floor() on one edge and ceil() on the other, so a copy that floors
-    /// both is a fraction more optimistic than the thing it is standing in for —
-    /// enough to call a sealed corner open. One implementation, no drift.
+    /// agreed with itself and disagreed with the game, and called a sealed corner
+    /// open. **The lesson is "one implementation, no drift" and it still holds.**
+    /// The explanation attached to it did not: it blamed the disagreement on the
+    /// field blocking with floor() on one edge and ceil() on the other, and read
+    /// that asymmetry as a property to match rather than as the bug it was. A cell
+    /// index is the cell containing a coordinate, so a box overlaps floor(min)
+    /// through floor(max); ceil named the cell *after* the box and marked up to a
+    /// full extra cell per side. `BlockBox` floors both edges now, so this check
+    /// is uniformly a little more permissive than it used to be — and still
+    /// identical to what the horde walks, which is the only thing that matters
+    /// here.
+    ///
+    /// The margin that keeps a corner honest is `inflate`, passed in and visible,
+    /// rather than a rounding rule nobody could see. It is the horde's separation
+    /// radius, so this asks "can a body that size get through" rather than "is
+    /// there a gap".
     private bool Reachable(System.Collections.Generic.List<Block> blocks, Vector2 target)
     {
         var horde = GetParent().GetNodeOrNull<Horde>("Horde");

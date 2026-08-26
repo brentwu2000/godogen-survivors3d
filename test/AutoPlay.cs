@@ -18,6 +18,14 @@ public partial class AutoPlay : SceneTree
 {
     private const float ArriveDistance = 1.2f;
 
+    /// Within this of the target, routing stops being a question and the straight
+    /// line is the answer. See `Navigate`, which is where it earns its keep.
+    ///
+    /// 2.6 m: past a crate's 1.8 m `SearchRadius` with room for the last step,
+    /// and far short of the 7.5 m at which a bot once leaned on a wall — so the
+    /// case `EscapeFrom` was added for still reaches it.
+    private const float FinalApproach = 2.6f;
+
     private const int LegTimeoutTicks = 60 * 60;   // one minute per leg
 
     private Player _player = null!;
@@ -717,6 +725,34 @@ public partial class AutoPlay : SceneTree
             _navTarget = target;
             _navField.Rebuild(target);
         }
+
+        // Close enough that there is nothing left to route around.
+        //
+        // **This is the oscillation the note below names and nothing acted on.**
+        // `EscapeFrom` outranks the flow whenever the bot stands inside an
+        // inflated footprint, which is right when the goal is across the map and
+        // wrong when it is two metres away: a crate placed against a prop puts its
+        // own approach inside that prop's margin, so escaping means walking away
+        // from the thing the bot is trying to touch — and the flow then pulls it
+        // straight back in. Neither answer is wrong on its own and together they
+        // are a loop.
+        //
+        // Seed 3432918353 spent sixty seconds doing exactly that: 2.0 m from
+        // Crate5 against a reach of 1.8, `sample (0.00, 0.00)`, standing in a
+        // footprint, and 5.15 m of travel in the last ten seconds — motion with no
+        // progress. It banked nothing, and it did it on **every** arm of every
+        // balance table this project has printed, so one layout in twelve has been
+        // contributing a zero to the survival column for reasons that had nothing
+        // to do with the weapon being measured.
+        //
+        // Inside this radius the straight line is the answer for the same reason
+        // it is for a blocked target: routing is a question about walls, there is
+        // no room for one at this range, and the collider resolves any real
+        // overlap. Comfortably past a crate's 1.8 m reach so the final step can be
+        // taken, and comfortably short of the 7.5 m wall-lean the escape below was
+        // written for, so that case still gets escaped from.
+        if (delta.LengthSquared() <= FinalApproach * FinalApproach)
+            return straight;
 
         // Out of a wall first, if that is where the bot is standing.
         //
