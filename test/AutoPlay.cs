@@ -750,7 +750,7 @@ public partial class AutoPlay : SceneTree
 
         // Close enough that there is nothing left to route around.
         //
-        // **This is the oscillation the note below names and nothing acted on.**
+        // **The short-range half of the oscillation `RouteMemory` now holds.**
         // `EscapeFrom` outranks the flow whenever the bot stands inside an
         // inflated footprint, which is right when the goal is across the map and
         // wrong when it is two metres away: a crate placed against a prop puts its
@@ -758,6 +758,12 @@ public partial class AutoPlay : SceneTree
         // from the thing the bot is trying to touch — and the flow then pulls it
         // straight back in. Neither answer is wrong on its own and together they
         // are a loop.
+        //
+        // Kept as its own rule rather than folded into `RouteMemory`, because the
+        // two cases want different things. This one is *arrival*: there is nothing
+        // left to route around and the straight line is simply correct, forever.
+        // The one further down is *transit*, where the field is still the
+        // authority and the margin only has to be crossed.
         //
         // Seed 3432918353 spent sixty seconds doing exactly that: 2.0 m from
         // Crate5 against a reach of 1.8, `sample (0.00, 0.00)`, standing in a
@@ -776,26 +782,15 @@ public partial class AutoPlay : SceneTree
         if (delta.LengthSquared() <= FinalApproach * FinalApproach)
             return straight;
 
-        // Out of a wall first, if that is where the bot is standing.
-        //
-        // "Straight on is the honest fallback" was wrong, and specifically wrong
-        // in the one case it was written for. Inside an inflated footprint the
-        // target is usually on the *other side* of the thing being stood against,
-        // so the straight line points into it — the bot leaned on the south face
-        // of an eight-metre wall for sixty seconds, seven and a half metres from
-        // the extraction pad, while the sweep recorded the run as having no result
-        // at all. `EscapeFrom` is the field's answer to "which way is out".
-        //
-        Vector2 escape = _navField.EscapeFrom(_player.GlobalPosition);
-        if (escape != Vector2.Zero)
-            return escape;
-
-        Vector2 flow = _navField.Sample(_player.GlobalPosition);
-
-        // Zero here now means a genuinely unreachable target rather than a body
-        // in a margin, and straight on is the honest answer to that.
-        return flow == Vector2.Zero ? straight : flow;
+        // Which of the three answers, and why one of them has to remember: see
+        // `RouteMemory`. It holds the escape and the push through the margin
+        // apart, and nothing in a single frame can tell them apart.
+        return _memory.Choose(_navField.Sample(_player.GlobalPosition),
+                              _navField.EscapeFrom(_player.GlobalPosition),
+                              straight);
     }
+
+    private readonly RouteMemory _memory = new();
 
     /// The closest point to `wanted` the bot can actually stand on.
     ///

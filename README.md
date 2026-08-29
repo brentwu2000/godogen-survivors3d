@@ -68,7 +68,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 
 | Script | Headless | Asserts |
 | :--- | :---: | :--- |
-| `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget; and a driver closes on something 2 m away and 90° off, which a driver that advances while turning cannot |
+| `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget; a driver closes on something 2 m away and 90° off, which a driver that advances while turning cannot; and the field's heading survives clipping the margin while a bot leaning on a wall still escapes |
 | `test/FlowFieldProbe.cs` | yes | An enemy behind the long wall routes around it instead of into it |
 | `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, every proficiency curve, and that both shelves are stocked — the Sidearm one with four weapons, three distinct signatures and something that reaches 8 m |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
@@ -1036,6 +1036,36 @@ gate would collapse the moment it fired and start the orbit again. That seed wen
 `Stuck, banked 120 at 70 s` to `Extracted, banked 3172 at 167 s`; it now searches the crate it spent a
 minute circling **at 11 s**.
 
+**The other stuck seed was two correct answers making a loop, and it needed the bot to remember which
+one it had just given.** Obstacles are inflated by 0.55 m before the field marks them and the body is
+0.35, so the blocked band reaches about a metre past anything that can be touched — and `Sample`
+returns zero throughout it. Two completely different situations produce that zero. A bot *leaning on a
+wall* needs to be told which way is out, which is what `EscapeFrom` was written for. A bot *clipping
+the band while turning through a gap* needs the opposite, and it clips constantly, because
+turn-and-advance arcs and the cells are 1.5 m.
+
+`0xD6E8FEB1` ran that on a six-second cycle for a whole leg, traced tick by tick:
+
+```
+at (33.9,14.4) blocked=False sample=(0,1)          <- the field points through the gap
+at (32.9,15.6) blocked=True  escape=(-0.71,-0.71)  <- arced a metre sideways on the way in
+at (31.0,14.7) blocked=False sample=(1,0)          <- escaped, back where it started
+at (33.8,12.8) blocked=False sample=(0,1)          <- and pointed at the gap again
+```
+
+Nineteen metres from `Crate7`, four metres of travel every ten seconds, and every single step
+defensible. Nothing in one frame separates the two cases, so `RouteMemory` holds state: the last
+heading the field gave wins for 45 ticks — long enough to cross a metre of margin, short enough that a
+bot against something real gives up inside a second — and only then does the escape run. The collider
+decides whether the gap was real, which is what a collider is for. The escape also *forgets* the
+heading it is escaping from, because the cell it lands in hands that heading straight back and one
+tick of it is the same loop with an extra step.
+
+That seed went from `Stuck, banked 440 at 71 s` to `Extracted, banked 2695 at 63 s`, and with both
+defects gone the sweep's twelve layouts extract twelve times out of twelve. Neither could reach a
+player — a person walks through the gap and does not orbit a crate — but both had been quietly voting
+in every balance table this project has printed.
+
 **"The crowd gets through" and "the player gets through" are different claims.** Enemies are not
 physics bodies; they follow a flow field and collide with nothing, so a stage that watches 24 walkers
 close from 34 m says only that a route exists. `BiomeProbe` now runs a separate check with the
@@ -1115,22 +1145,25 @@ reproducible in the current environment, so it was environmental, not something 
 
 ## Balance
 
-**Every table below was taken with a driver that could not close on anything inside 2.3 m**, and one
-of the twelve layouts spent most of its run circling a crate rather than playing. The fix is in
-Decisions; what it is worth is that seed `0x27D4EB2F` went from `Stuck, 120 banked at 70 s` to
-`Extracted, 3172 banked at 167 s` — the largest single change any of these numbers has ever taken from
-something that is not a design decision. Eleven of the twelve now extract on the starting kit:
+**Twelve of twelve layouts now extract on the starting kit, and two of them never used to arrive at
+all.** Both failures belonged to the driver rather than to the game — a turning circle it could not
+close inside, and an escape rule that undid its own progress; both are in Decisions. Between them they
+had been contributing two zeroes to the survival column of every balance table this project has
+printed, for reasons that had nothing to do with what was being measured.
 
 | Seed | | Seed | | Seed | |
 | :--- | ---: | :--- | ---: | :--- | ---: |
-| `0x51E5D0A7` | 764 at 48 s | `0x9E3779B9` | 712 at 109 s | `0xC17E4A9B` | 1454 at 113 s |
-| `0x2545F491` | 1923 at 122 s | `0xBF58476D` | 1803 at 69 s | `0x94D049BB` | 1217 at 70 s |
-| `0x1B873593` | 1444 at 71 s | `0x85EBCA6B` | 950 at 141 s | `0xCC9E2D51` | 267 at 50 s |
-| `0x27D4EB2F` | **3172 at 167 s** | `0x165667B1` | 1987 at 144 s | `0xD6E8FEB1` | *stuck — see What's left* |
+| `0x51E5D0A7` | 757 at 46 s | `0x9E3779B9` | 598 at 116 s | `0xC17E4A9B` | 2315 at 155 s |
+| `0x2545F491` | 1337 at 47 s | `0xBF58476D` | 2449 at 113 s | `0x94D049BB` | 1215 at 70 s |
+| `0x1B873593` | 349 at 68 s | `0x85EBCA6B` | 664 at 135 s | `0xCC9E2D51` | 568 at 54 s |
+| `0x27D4EB2F` | **3166 at 167 s** | `0x165667B1` | 1345 at 38 s | `0xD6E8FEB1` | **2695 at 63 s** |
 
-The tables further down are not re-taken here, because a driver change is not a design change and
-re-running them is a quarter of an hour each. They are still the right shape and the right
-comparisons; read them as a floor. **Re-take them before any of them settles a decision.**
+Median 1276 banked at 69 s, 12/12 out. The two bold rows were `Stuck, 120 at 70 s` and
+`Stuck, 440 at 71 s`; the other ten moved too, because a routing change moves every route.
+
+The tables further down are **not** re-taken here, because a driver change is not a design change and
+each is a quarter of an hour. They are still the right shape and the right comparisons; read them as a
+floor. **Re-take the one that is about to settle something before it settles it.**
 
 `test/AutoPlay.cs` found that the first version gave the player **no reason to stay**: loitering 180 s
 banked exactly what leaving immediately banked (266 either way), because all value sat in crates and
@@ -1310,6 +1343,10 @@ Its own comment named that oscillation as "a third thing again" and nothing acte
 was written for — the straight line is the answer, because there is nothing to route around at that
 range and the collider resolves any real overlap.
 
+That was the *arrival* half. The same loop happens in *transit*, nineteen metres out, where the field
+is still the authority and the margin only has to be crossed — and it needed a different answer, which
+is `RouteMemory` further down.
+
 **And they were measured with the starting kit, every one of them, until the weapon arm existed.** A
 play-test runs on a fresh ephemeral profile for the reason below, and a fresh profile owns the
 Scavenged Rifle and the Combat Knife — so every number this file printed before that arm was about two
@@ -1408,29 +1445,11 @@ Everything the player looks at has had a pass, the numbers behind it are recorde
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
 
-- **One sweep seed in twelve is still lost to the escape-and-return oscillation**, and it is the half
-  of the crate problem the turning circle did not explain. `0xD6E8FEB1` gives up 19 m from `Crate7`
-  having moved 3.7 m in ten seconds:
-
-  ```
-  godot --headless --fixed-fps 60 --script test/AutoPlay.cs -- \
-        linger:auto seed:3605593777 weapon:scavenged_rifle
-  # AUTOPLAY FAILED — could not reach Crate7 in 60s (still 19.4m away)
-  #   flow (-0.71, -0.71) toward a target 19 m in +z
-  #   source: escape (-0.71, -0.71), sample (0.00, 0.00); standing in a footprint = True
-  ```
-
-  Every number there is consistent and the behaviour still is not. The bot is standing inside an
-  inflated block footprint, so its own cell was never reached by the flood and `Sample` honestly
-  returns zero; `EscapeFrom` outranks the flow in exactly that case and pushes it clear; outside the
-  footprint the flow routes it back past the same block; repeat. `Navigate` already carries a comment
-  naming this — *"a bot that escapes and is then pulled straight back in is a third thing again — an
-  oscillation, which reads as stuck and is not the same bug as either"* — and nothing has ever acted
-  on it. What it needs is a memory of having escaped, so the flow cannot immediately undo it.
-
-  **It is in `BalanceSweep`'s default set** and `Survived` is `Outcome == "Extracted"`, so that run is
-  currently averaged into the table as a two-thirds-length failure — one of every twelve layouts is
-  measuring the driver rather than the game.
+- **Every balance table below the first one was taken with a driver that could not reach two of the
+  twelve layouts.** Both defects are fixed and neither was in the game — see Decisions — but the
+  tables were not re-taken, because a driver change is not a design change and each is a quarter of an
+  hour. They are still the right shape and the right comparisons. **Re-take the one that matters
+  before it settles anything.**
 - **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
   115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
   later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by

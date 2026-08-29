@@ -244,6 +244,8 @@ public partial class MovementProbe : SceneTree
             $"never got closer than {_orbitClosest:F2}m — a driver that advances while turning "
             + "orbits anything inside v/w and cannot close");
 
+        CheckRouteMemory();
+
         // Turning is not translation. A small drift is allowed: the player is a
         // CharacterBody3D with momentum, so leg one's velocity is still bleeding
         // off through the start of the turn.
@@ -259,6 +261,53 @@ public partial class MovementProbe : SceneTree
         GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
         Quit(_failed ? 1 : 0);
         return true;
+    }
+
+    /// Leg four, and it moves nothing: the state machine that decides what to do
+    /// when the flow field will not answer.
+    ///
+    /// Physical because the other three are, and this one cannot be — the whole
+    /// defect is that a single frame of it looks correct. What is wrong is the
+    /// *sequence*, so a sequence is what has to be driven. See `RouteMemory` for
+    /// which two bugs it holds apart; `north` stands in for the field's heading
+    /// through a gap and `back` for the way out of the margin it clips.
+    private void CheckRouteMemory()
+    {
+        var north = new Vector2(0.0f, 1.0f);
+        var back = new Vector2(0.0f, -1.0f);
+        var straight = new Vector2(1.0f, 0.0f);
+        var memory = new RouteMemory();
+
+        Check(memory.Choose(north, Vector2.Zero, straight) == north,
+            "an open cell did not simply follow the field");
+
+        // Clipping the margin. The field's heading has to survive it, or the
+        // escape walks the bot back out of every gap it is aimed at.
+        Vector2 first = memory.Choose(Vector2.Zero, back, straight);
+        Vector2 last = north;
+        for (int i = 1; i < RouteMemory.BandPushTicks; i++)
+            last = memory.Choose(Vector2.Zero, back, straight);
+
+        Check(first == north && last == north,
+            $"the margin was fled on tick {(first == north ? RouteMemory.BandPushTicks : 1)} of "
+            + $"{RouteMemory.BandPushTicks} — a driver that escapes the moment it clips a gap "
+            + "oscillates in front of it forever");
+
+        // Leaning on something real. Past the push the escape has to win, or the
+        // eight-metre-wall bug comes back.
+        Vector2 gaveUp = memory.Choose(Vector2.Zero, back, straight);
+        Check(gaveUp == back,
+            $"still pushing after {RouteMemory.BandPushTicks} ticks in the margin — a bot against "
+            + "a wall would lean on it until the leg timed out");
+
+        // And the field must not undo that on the very next tick. The cell an
+        // escape lands in points straight back at whatever the bot walked into.
+        Check(memory.Choose(Vector2.Zero, back, straight) == back,
+            "one tick after escaping, the remembered heading came back — that is the loop with an "
+            + "extra step in it");
+
+        GD.Print($"leg 4: the field's heading survived {RouteMemory.BandPushTicks} ticks of margin, "
+               + "then the escape took over and stayed taken");
     }
 
     private void Check(bool ok, string complaint)
