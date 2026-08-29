@@ -68,7 +68,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 
 | Script | Headless | Asserts |
 | :--- | :---: | :--- |
-| `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget |
+| `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget; and a driver closes on something 2 m away and 90° off, which a driver that advances while turning cannot |
 | `test/FlowFieldProbe.cs` | yes | An enemy behind the long wall routes around it instead of into it |
 | `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, every proficiency curve, and that both shelves are stocked — the Sidearm one with four weapons, three distinct signatures and something that reaches 8 m |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
@@ -1019,6 +1019,23 @@ before pathing. A 2.2 m doorway survives a 0.35 m body and does not survive 0.9 
 resolution. The bot's margin came down to 0.55 and the biome's doorways went up to 3.2 m — a gap that
 only just exists on the grid is one that some consumer of the grid will decide is not there.
 
+**A bot that never stops turning cannot reach anything inside its own turning circle**, and it reads
+as a level bug. Turn-and-advance moves at `v` while turning at `ω`, so the tightest
+arc it can trace has radius `v/ω` — 6.0 m/s against 150°/s is **2.29 m**. `BotDrive` advanced whenever
+the target was not behind it, so a bot that arrived off-heading settled onto exactly that circle and
+stayed there: seed `0x27D4EB2F` orbited `Crate0` at **2.3 m** for the full sixty seconds, on every
+loadout, with the flow field pointing straight at it the whole time. Every diagnostic said the route
+was correct, because it was. The Warden, at 5.3 m/s, orbited the same crate at 2.2 m — which is
+`v/ω` again and is what identified it.
+
+It turns on the spot now, and only inside `2·v/ω`; outside it the old rule stands, because a bot that
+stopped dead at every corner would be standing still in a horde and measuring a different game. The
+radius comes from the player's own top speed rather than a constant, since speed is a growth option
+and four of them nearly double the circle — and from top speed rather than current velocity, or the
+gate would collapse the moment it fired and start the orbit again. That seed went from
+`Stuck, banked 120 at 70 s` to `Extracted, banked 3172 at 167 s`; it now searches the crate it spent a
+minute circling **at 11 s**.
+
 **"The crowd gets through" and "the player gets through" are different claims.** Enemies are not
 physics bodies; they follow a flow field and collide with nothing, so a stage that watches 24 walkers
 close from 34 m says only that a route exists. `BiomeProbe` now runs a separate check with the
@@ -1097,6 +1114,23 @@ reproducible in the current environment, so it was environmental, not something 
 `ActiveRadius`, longer `FieldRebuildInterval`, wider far-stride — none of which change structure.
 
 ## Balance
+
+**Every table below was taken with a driver that could not close on anything inside 2.3 m**, and one
+of the twelve layouts spent most of its run circling a crate rather than playing. The fix is in
+Decisions; what it is worth is that seed `0x27D4EB2F` went from `Stuck, 120 banked at 70 s` to
+`Extracted, 3172 banked at 167 s` — the largest single change any of these numbers has ever taken from
+something that is not a design decision. Eleven of the twelve now extract on the starting kit:
+
+| Seed | | Seed | | Seed | |
+| :--- | ---: | :--- | ---: | :--- | ---: |
+| `0x51E5D0A7` | 764 at 48 s | `0x9E3779B9` | 712 at 109 s | `0xC17E4A9B` | 1454 at 113 s |
+| `0x2545F491` | 1923 at 122 s | `0xBF58476D` | 1803 at 69 s | `0x94D049BB` | 1217 at 70 s |
+| `0x1B873593` | 1444 at 71 s | `0x85EBCA6B` | 950 at 141 s | `0xCC9E2D51` | 267 at 50 s |
+| `0x27D4EB2F` | **3172 at 167 s** | `0x165667B1` | 1987 at 144 s | `0xD6E8FEB1` | *stuck — see What's left* |
+
+The tables further down are not re-taken here, because a driver change is not a design change and
+re-running them is a quarter of an hour each. They are still the right shape and the right
+comparisons; read them as a floor. **Re-take them before any of them settles a decision.**
 
 `test/AutoPlay.cs` found that the first version gave the player **no reason to stay**: loitering 180 s
 banked exactly what leaving immediately banked (266 either way), because all value sat in crates and
@@ -1374,32 +1408,29 @@ Everything the player looks at has had a pass, the numbers behind it are recorde
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
 
-- **Two of the twelve sweep seeds have a crate the bot cannot close on.** It is the seed, not the
-  loadout: `0x27D4EB2F` stops 2.3 m from `Crate0` and `0xD6E8FEB1` stops 20 m from `Crate7`, on
-  `fire_axe+katana`, `fire_axe+combat_knife` and the plain starting kit alike, at the same distance
-  every time.
+- **One sweep seed in twelve is still lost to the escape-and-return oscillation**, and it is the half
+  of the crate problem the turning circle did not explain. `0xD6E8FEB1` gives up 19 m from `Crate7`
+  having moved 3.7 m in ten seconds:
 
   ```
   godot --headless --fixed-fps 60 --script test/AutoPlay.cs -- \
-        linger:auto seed:668265263 weapon:scavenged_rifle
-  # AUTOPLAY FAILED — could not reach Crate0 in 60s (still 2.3m away)
-  #   flow (0.80, 0.60), moved 0.76 m in the last ten seconds
-  #   standing in a footprint = False, target in one = False; nearest block 8.6 m away
+        linger:auto seed:3605593777 weapon:scavenged_rifle
+  # AUTOPLAY FAILED — could not reach Crate7 in 60s (still 19.4m away)
+  #   flow (-0.71, -0.71) toward a target 19 m in +z
+  #   source: escape (-0.71, -0.71), sample (0.00, 0.00); standing in a footprint = True
   ```
 
-  Three explanations are already ruled out, which is most of what is worth knowing before guessing at
-  a fix. It is **not the route**: `(0.80, 0.60)` is the correct bearing from the bot to the crate to
-  two digits, and neither end is inside an inflated footprint. It is **not cover**: `ReportNearbyCover`
-  lists everything under `Obstacles` within ten metres and the nearest is 8.6 m away, and blocks are
-  the only colliders the arena builds — the terrain is a visual height field over a flat box. And it
-  is **not the bot deciding to leave**: `ShouldBreakContact` never fires, because health never falls
-  below its threshold and the log carries no `breaking contact` line. A correct heading, a clear
-  approach, and 0.76 m of travel in ten seconds.
+  Every number there is consistent and the behaviour still is not. The bot is standing inside an
+  inflated block footprint, so its own cell was never reached by the flood and `Sample` honestly
+  returns zero; `EscapeFrom` outranks the flow in exactly that case and pushes it clear; outside the
+  footprint the flow routes it back past the same block; repeat. `Navigate` already carries a comment
+  naming this — *"a bot that escapes and is then pulled straight back in is a third thing again — an
+  oscillation, which reads as stuck and is not the same bug as either"* — and nothing has ever acted
+  on it. What it needs is a memory of having escaped, so the flow cannot immediately undo it.
 
-  It surfaced while chasing the body-rebuild crash and is recorded rather than fixed. **Both seeds are
-  in `BalanceSweep`'s default set** and `Survived` is `Outcome == "Extracted"`, so a stuck run is
-  currently averaged in as a two-thirds-length failure — two of every twelve layouts the table reports
-  are measuring the driver rather than the game.
+  **It is in `BalanceSweep`'s default set** and `Survived` is `Outcome == "Extracted"`, so that run is
+  currently averaged into the table as a two-thirds-length failure — one of every twelve layouts is
+  measuring the driver rather than the game.
 - **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
   115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
   later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by

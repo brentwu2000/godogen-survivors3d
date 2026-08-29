@@ -405,8 +405,14 @@ public partial class Presentation : SceneTree
         }
 
         // See `BotDrive`: the horizontal keys turn the view now, so the old
-        // four-key decomposition steered this straight into a spin.
-        BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f);
+        // four-key decomposition steered this straight into a spin. The distance
+        // and turning radius go with it for the same reason — a driver that
+        // advances while turning orbits anything inside `v/w` — because a fix
+        // made in one of the three drivers and left out of the other two is the
+        // exact failure `BotDrive` was extracted to prevent.
+        float radius = _player.MoveSpeed * (1.0f + _player.AdrenalineBoost)
+                       / Mathf.DegToRad(_rig?.TurnRateDegrees ?? 150.0f);
+        BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f, flat.Length(), radius);
         return false;
     }
 

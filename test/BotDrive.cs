@@ -37,7 +37,14 @@ public static class BotDrive
     /// `yaw` is the rig's, and `desired` is in world XZ — the same space
     /// `CameraRig.Forward` returns, so a caller with a flow-field direction can
     /// pass it straight in.
-    public static void Steer(Vector2 desired, float yaw)
+    ///
+    /// `distance` and `turnRadius` are what stop the bot orbiting something it is
+    /// standing next to; both default to "do not check", so a caller that has
+    /// neither behaves exactly as this did before they existed. See the note on
+    /// `inside` below.
+    public static void Steer(Vector2 desired, float yaw,
+                             float distance = float.PositiveInfinity,
+                             float turnRadius = 0.0f)
     {
         if (desired.LengthSquared() < 0.000001f)
         {
@@ -69,12 +76,35 @@ public static class BotDrive
         Set("move_right", turning && side > 0.0f);
         Set("move_left", turning && side < 0.0f);
 
+        // Turn first when the target is inside the turning circle, and only
+        // there.
+        //
+        // **This is a geometric dead end, not a tuning problem.** Turn-and-advance
+        // moves at v while turning at ω, so the tightest arc it can trace has
+        // radius v/ω — 6.0 m/s against 150°/s is 2.29 m. A bot that keeps pressing
+        // forward while off-heading therefore settles onto exactly that circle
+        // around whatever it is chasing, and no amount of time gets it closer: two
+        // of the twelve `BalanceSweep` seeds sent it round a crate 2.3 m out for
+        // sixty seconds with the flow field pointing straight at the thing. It was
+        // read as a level bug for three phases because every diagnostic agreed the
+        // route was correct — which it was.
+        //
+        // Outside the circle the note below still holds and nothing changes: a bot
+        // that stopped dead at every corner would be standing still in a horde,
+        // which is a different game from the one being measured. Inside it, a
+        // second of turning on the spot is the only thing that arrives at all.
+        //
+        // `turnRadius` is the caller's own v/ω rather than a constant here,
+        // because speed is a growth option and a bot that bought four of them
+        // orbits nearly twice as wide.
+        bool inside = distance < turnRadius * 2.0f;
+
         // Advance while still turning, as long as the target is not behind.
         // Waiting for the turn to finish before moving produces a bot that stops
         // dead at every corner, which is both slower and — because it is standing
         // still in a horde while it turns — a different game from the one being
         // measured.
-        Set("move_up", aligned > 0.0f);
+        Set("move_up", aligned > 0.0f && !(inside && turning));
         Set("move_down", false);
     }
 

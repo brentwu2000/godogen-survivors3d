@@ -1699,7 +1699,24 @@ public partial class AutoPlay : SceneTree
     /// turn-and-advance the horizontal keys turn the view rather than strafing,
     /// so a direction no longer decomposes into independent axes. `BotDrive`
     /// owns the conversion and the reason.
-    private void Steer(Vector3 target) => BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f);
+    private void Steer(Vector3 target) =>
+        BotDrive.Steer(Navigate(target), _rig?.Yaw ?? 0.0f,
+                       _player.GlobalPosition.DistanceTo(target), TurnRadius());
+
+    /// The tightest arc the player can trace right now, in metres.
+    ///
+    /// Taken from the top speed rather than from the current velocity. Reading
+    /// the velocity would make the radius collapse the moment `BotDrive` stopped
+    /// to turn, which un-stops it, which starts the orbit again — a gate wired to
+    /// its own output. `MoveSpeed` already carries every growth option that
+    /// bought it, and the adrenaline multiplier is folded in unconditionally so
+    /// the answer is an over-estimate: erring wide means turning on the spot a
+    /// little sooner than strictly necessary, and erring narrow means the orbit.
+    private float TurnRadius()
+    {
+        float speed = _player.MoveSpeed * (1.0f + _player.AdrenalineBoost);
+        return speed / Mathf.DegToRad(_rig?.TurnRateDegrees ?? 150.0f);
+    }
 
     private static void Release()
     {

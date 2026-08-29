@@ -37,6 +37,16 @@ public partial class MovementProbe : SceneTree
     /// would be testing the level generator's choice of spawn point.
     private const float MovedEnough = 1.5f;
 
+    /// How far off the target of leg three sits, and how close counts as there.
+    ///
+    /// 2.0 m is inside the 2.29 m turning circle and outside the 1.8 m a crate
+    /// can be searched from, which is exactly the band the sweep lost two seeds
+    /// in. Three seconds is four times what turning ninety degrees and walking
+    /// two metres takes; the failure being tested for never arrives at all.
+    private const float OrbitRange = 2.0f;
+    private const float OrbitArrived = 1.0f;
+    private const int OrbitFrames = 180;
+
     private Player? _player;
     private CameraRig? _rig;
 
@@ -46,6 +56,9 @@ public partial class MovementProbe : SceneTree
     private Vector2 _firstLeg;
     private Vector2 _secondLeg;
     private float _turnDrift;
+    private Vector2 _orbitTarget;
+    private float _orbitClosest = float.MaxValue;
+    private int _orbitEnded;
 
     private int _frame;
     private bool _failed;
@@ -135,11 +148,61 @@ public partial class MovementProbe : SceneTree
             Input.ActionPress("move_up");
         }
 
-        if (_frame < SettleFrames + 2 * DriveFrames + TurnFrames)
+        if (_frame == SettleFrames + 2 * DriveFrames + TurnFrames)
+        {
+            Input.ActionRelease("move_up");
+            _secondLeg = Flat(_player!.GlobalPosition - _legStart);
+
+            // Leg three: something two metres away and ninety degrees off the
+            // heading, driven through `BotDrive` rather than through raw keys.
+            //
+            // **This is the one leg that is about the driver rather than the
+            // scheme.** Turn-and-advance traces arcs of radius `v/ω` — 2.29 m at
+            // 6 m/s and 150°/s — so a driver that advances while it turns settles
+            // onto that circle around anything nearer than its diameter and stays
+            // there. Two `BalanceSweep` seeds spent sixty seconds orbiting a crate
+            // 2.3 m out with the flow field pointing straight at it, and every
+            // diagnostic said the route was correct because it was.
+            //
+            // Ninety degrees off is the geometry at its worst without being the
+            // degenerate 180. From the cleared spawn, so this measures the driver
+            // and not the seed's choice of obstacle.
+            _player.GlobalPosition = Vector3.Zero;
+            _player.Velocity = Vector3.Zero;
+            Vector2 forward = CameraRig.Forward(_rig!.Yaw);
+            _orbitTarget = new Vector2(-forward.Y, forward.X) * OrbitRange;
+            _orbitClosest = float.MaxValue;
+        }
+
+        if (_frame <= SettleFrames + 2 * DriveFrames + TurnFrames)
             return false;
 
-        Input.ActionRelease("move_up");
-        _secondLeg = Flat(_player!.GlobalPosition - _legStart);
+        if (_orbitEnded == 0)
+        {
+            var at = new Vector2(_player!.GlobalPosition.X, _player.GlobalPosition.Z);
+            Vector2 toTarget = _orbitTarget - at;
+            _orbitClosest = Mathf.Min(_orbitClosest, toTarget.Length());
+
+            float radius = _player.MoveSpeed * (1.0f + _player.AdrenalineBoost)
+                           / Mathf.DegToRad(_rig!.TurnRateDegrees);
+            BotDrive.Steer(toTarget, _rig.Yaw, toTarget.Length(), radius);
+
+            if (_orbitClosest > OrbitArrived
+                && _frame < SettleFrames + 2 * DriveFrames + TurnFrames + OrbitFrames)
+            {
+                return false;
+            }
+
+            BotDrive.Release();
+            _orbitEnded = _frame;
+            return false;
+        }
+
+        // The rig lerps toward its own yaw, and leg three ends mid-turn. Reading
+        // the lag and the transform before that has caught up would fail the two
+        // checks at the bottom on a rig doing exactly what it is supposed to.
+        if (_frame < _orbitEnded + SettleFrames * 3)
+            return false;
 
         return Report();
     }
@@ -175,6 +238,11 @@ public partial class MovementProbe : SceneTree
         float between = Off(_firstLeg, _secondLeg);
         GD.Print($"the two legs are {between:F1}° apart, and the view turned {Mathf.Abs(turned):F1}°");
         Check(between > 20.0f, $"both legs ran the same way ({between:F1}° apart) — is the heading cached?");
+
+        GD.Print($"leg 3: closed to {_orbitClosest:F2}m of a target {OrbitRange:F1}m away and 90° off");
+        Check(_orbitClosest <= OrbitArrived,
+            $"never got closer than {_orbitClosest:F2}m — a driver that advances while turning "
+            + "orbits anything inside v/w and cannot close");
 
         // Turning is not translation. A small drift is allowed: the player is a
         // CharacterBody3D with momentum, so leg one's velocity is still bleeding
