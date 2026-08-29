@@ -40,6 +40,11 @@ public partial class WeaponHandler : Node3D
         public int RunUpgrades;
         public float Cooldown;
         public float ReloadRemaining;
+        public float Heat;
+        public bool Overheated;
+        public int BeamTarget = -1;
+        public float BeamDwell;
+        public Vector3 BeamLastPosition;
 
         /// Shots still owed by a burst, and the wait before the next one. Queued
         /// rather than fired all at once: a burst that lands in a single frame is
@@ -133,6 +138,8 @@ public partial class WeaponHandler : Node3D
     public int AmmoIn(int slot) => _slots[slot].Ammo;
     public int ReserveIn(int slot) => _slots[slot].Reserve;
     public bool ReloadingIn(int slot) => _slots[slot].ReloadRemaining > 0.0f;
+    public float HeatIn(int slot) => _slots[slot].Heat;
+    public bool OverheatedIn(int slot) => _slots[slot].Overheated;
 
     public bool IsDryIn(int slot) =>
         _slots[slot].Weapon is { MagazineSize: > 0 } && _slots[slot].Ammo <= 0 && _slots[slot].Reserve <= 0;
@@ -238,13 +245,13 @@ public partial class WeaponHandler : Node3D
 
     /// Practice per weapon category, so switching from a rifle to a spear does
     /// not carry the rifle's skill across.
-    private readonly int[] _proficiency = new int[4];
+    private readonly int[] _proficiency = new int[System.Enum.GetValues<WeaponCategory>().Length];
 
     /// Hits landed this run, per category. Banked into practice once at the end
     /// rather than levelled as they land: two growth curves moving at the same
     /// time are two curves the player cannot tell apart, and that nobody can
     /// balance separately.
-    private readonly int[] _hits = new int[4];
+    private readonly int[] _hits = new int[System.Enum.GetValues<WeaponCategory>().Length];
 
     public ProjectilePool Projectiles { get; private set; } = null!;
 
@@ -330,6 +337,11 @@ public partial class WeaponHandler : Node3D
         slot.Reserve = weapon.FitReserve(weapon.StartingReserve);
         slot.Cooldown = 0.0f;
         slot.ReloadRemaining = 0.0f;
+        slot.Heat = 0.0f;
+        slot.Overheated = false;
+        slot.BeamTarget = -1;
+        slot.BeamDwell = 0.0f;
+        slot.BeamLastPosition = Vector3.Zero;
         slot.RunUpgrades = 0;
 
         // The burst belongs to the weapon that started it. Left standing, the
@@ -418,7 +430,24 @@ public partial class WeaponHandler : Node3D
         if (slot.Weapon is not { } weapon)
             return;
 
+        if (weapon.FiringModel == WeaponFiringModel.Overheat)
+        {
+            slot.Heat = Mathf.Max(0.0f, slot.Heat - weapon.HeatCoolPerSecond * step);
+            if (slot.Overheated)
+            {
+                if (slot.Heat > weapon.HeatResumeFraction)
+                    return;
+                slot.Overheated = false;
+            }
+        }
+
         int level = LevelOf(slot);
+
+        if (weapon.FiringModel == WeaponFiringModel.Beam)
+        {
+            TickBeam(slot, weapon, level, step);
+            return;
+        }
 
         // A burst finishes even if the target has died or moved: the shots were
         // already fired as far as the player is concerned, and a burst that
@@ -480,6 +509,13 @@ public partial class WeaponHandler : Node3D
 
         if (weapon.MagazineSize > 0)
             slot.Ammo--;
+
+        if (weapon.FiringModel == WeaponFiringModel.Overheat)
+        {
+            slot.Heat = Mathf.Min(1.0f, slot.Heat + weapon.HeatPerShot);
+            if (slot.Heat >= 1.0f)
+                slot.Overheated = true;
+        }
     }
 
     /// Fires once, now, in a given direction, ignoring cooldown and ammo.
@@ -920,6 +956,10 @@ public partial class WeaponHandler : Node3D
             case WeaponTrait.Mark:
                 _horde!.ApplyMark(index, weapon.TraitAmount, weapon.TraitCount);
                 break;
+
+            case WeaponTrait.Shock:
+                _horde!.ApplyShock(index, weapon.TraitAmount);
+                break;
         }
     }
 
@@ -977,6 +1017,53 @@ public partial class WeaponHandler : Node3D
             Hit?.Invoke(to, category, impactDamage * ConductFraction);
             Chained?.Invoke(from, to);
         }
+    }
+
+    private void TickBeam(Slot slot, WeaponResource weapon, int level, float step)
+    {
+        slot.Cooldown -= step;
+        if (HoldFire)
+        {
+            slot.BeamTarget = -1;
+            slot.BeamDwell = 0.0f;
+            return;
+        }
+
+        Vector3 origin = GlobalPosition;
+        float range = weapon.GetEffectiveRange(level);
+        int target = _horde!.NearestWithin(origin, range);
+        if (target < 0 || !TryGetAimDirection(origin, range, out Vector2 direction))
+        {
+            slot.BeamTarget = -1;
+            slot.BeamDwell = 0.0f;
+            return;
+        }
+
+        Vector3 targetPosition = _horde.Pool.Position[target];
+
+        // Pool indices are only stable for one tick. A death elsewhere can
+        // swap a different body into the same number, so continuity also asks
+        // that the body is still where a moving body could plausibly be.
+        bool sameBody = slot.BeamTarget == target
+                        && slot.BeamLastPosition.DistanceSquaredTo(targetPosition) < 0.25f;
+        if (sameBody)
+            slot.BeamDwell += step;
+        else
+        {
+            slot.BeamTarget = target;
+            slot.BeamDwell = step;
+        }
+        slot.BeamLastPosition = targetPosition;
+
+        if (slot.BeamDwell >= weapon.BeamShockDwell)
+            _horde.ApplyShock(target, weapon.ShockSeconds);
+
+        if (slot.Cooldown > 0.0f)
+            return;
+
+        Fire(slot, origin, direction, level);
+        slot.SinceFired = 0.0f;
+        slot.Cooldown = Mathf.Max(0.01f, weapon.BeamTickSeconds) * Mods.AttackDelayScale;
     }
 
     private const float ConductRange = 5.0f;

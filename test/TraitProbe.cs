@@ -888,7 +888,7 @@ public partial class TraitProbe : SceneTree
         bool spent = repeated < 0.01f && _horde!.Pool.Burn[0] <= 0.0f;
 
         GD.Print($"  first blast: source took {_plainHit:F1}, neighbour cook-off {_markedHit:F1}; "
-               + $"second blast reached neighbour for {repeated:F1}, burn left {_horde.Pool.Burn[0]:F1}");
+               + $"second blast reached neighbour for {repeated:F1}, burn left {_horde!.Pool.Burn[0]:F1}");
 
         if (!burst)
             GD.PushError("  burning the source did not create the secondary radius");

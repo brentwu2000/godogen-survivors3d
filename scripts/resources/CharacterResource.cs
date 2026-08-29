@@ -32,6 +32,10 @@ public partial class CharacterResource : Resource
     [Export] public int CarryCapacity { get; set; } = 20;
     [Export] public float BodyHeight { get; set; } = 2.2f;
 
+    /// Authored low-poly body baked into the same vertex rig as the horde.
+    /// Empty keeps the procedural body as a deliberate fallback.
+    [Export] public string BakedBodyPath { get; set; } = "";
+
     // --- What the body looks like ---------------------------------------------
     //
     // Colour rather than shape, and that is a decision rather than laziness. The

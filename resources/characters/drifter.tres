@@ -6,3 +6,4 @@
 script = ExtResource("1_ien6x")
 CharacterName = "Drifter"
 Blurb = "no edges, no gaps; everything the shop sells is priced for this one"
+BakedBodyPath = "res://resources/bodies/drifter.res"

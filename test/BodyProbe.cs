@@ -64,7 +64,8 @@ public partial class BodyProbe : SceneTree
             case 4: return RunStage(StagePackRoundTrips, "pace and phase survive sharing one float");
             case 5: return RunStage(StageStrideFollowsWalking, "the stride advances by walking, not by being somewhere");
             case 6: return RunStage(StagePlayerHasABody, "the player is a body too, and not one of theirs");
-            case 7: return RunStage(StageBillboardsStayOff, "the billboards stay off while the bodies are on");
+            case 7: return RunStage(StageCarryMeshIsBuiltOnce, "a silhouette the player has held before is not built again");
+            case 8: return RunStage(StageBillboardsStayOff, "the billboards stay off while the bodies are on");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -468,6 +469,80 @@ public partial class BodyProbe : SceneTree
 
         return distinct;
     }
+
+    private ulong _longarmMesh;
+    private ulong _bladeMesh;
+
+    /// A silhouette is built once, and the second time it is held the same mesh
+    /// comes back.
+    ///
+    /// This is a crash test wearing an identity check. Changing what the player
+    /// holds rebuilds the body mesh, and a loadout of two melee weapons flips
+    /// between `Longarm` and `Blade` on every swap — enough `ArrayMesh` and
+    /// `Godot.Collections.Array` churn in one run to take the process down inside
+    /// `BakedBody.Build` with `Condition "gchandle.is_released()" is true`. It
+    /// killed five of the twelve sweep layouts on `fire_axe+katana`, from
+    /// `Player._PhysicsProcess`, so it was reachable by a player and not only by
+    /// the bot.
+    ///
+    /// Nothing can assert "the finaliser did not race", because what decides that
+    /// is when the GC runs. What can be asserted is that the fuel is gone: after
+    /// the first swap each way, no further build happens at all. The two
+    /// silhouettes must still differ, or a cache that returned one mesh for
+    /// everything would pass this and draw a knife as a rifle.
+    private bool? StageCarryMeshIsBuiltOnce(int tick)
+    {
+        Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+        var player = scene.GetNodeOrNull<Player>("Player");
+        var weapons = player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
+        if (player == null || weapons == null)
+        {
+            GD.PushError("  no Player or WeaponHandler");
+            return false;
+        }
+
+        // Two ticks per step: the rebuild happens in the player's own
+        // _PhysicsProcess, which may already have run this frame.
+        switch (tick)
+        {
+            case 1:
+                weapons.Equip(GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres"));
+                return null;
+
+            case 3:
+                _longarmMesh = MeshId(player);
+                weapons.Equip(GD.Load<WeaponResource>("res://resources/weapons/combat_knife.tres"));
+                return null;
+
+            case 5:
+                _bladeMesh = MeshId(player);
+                weapons.Equip(GD.Load<WeaponResource>("res://resources/weapons/fire_axe.tres"));
+                return null;
+
+            case 7:
+                break;
+
+            default:
+                return null;
+        }
+
+        ulong again = MeshId(player);
+
+        GD.Print($"  longarm mesh {_longarmMesh}, blade mesh {_bladeMesh}, back to longarm {again}");
+
+        bool differ = _longarmMesh != 0 && _bladeMesh != 0 && _longarmMesh != _bladeMesh;
+        bool reused = again == _longarmMesh;
+
+        if (!differ)
+            GD.PushError("  the two silhouettes share a mesh — the player holds the same shape whatever they carry");
+        if (!reused)
+            GD.PushError("  holding the axe again built a third mesh — the rebuild churn is back");
+
+        return differ && reused;
+    }
+
+    private static ulong MeshId(Player player) =>
+        player.Body?.Node.Multimesh?.Mesh?.GetInstanceId() ?? 0UL;
 
     /// The stride must come from walking, and nothing else.
     ///

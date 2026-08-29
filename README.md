@@ -23,8 +23,8 @@ The billboard sprite path is still there and still works, behind `Horde.SolidBod
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
 scene with it so it cannot quietly rot.
 
-Sweep clean at 44 probes; the table below lists 34 of them and is the older set. Build gate
-re-verified 2026-08-25.
+Sweep clean at 45 probes; the table below lists 34 of them and is the older set. Build gate
+re-verified 2026-08-29.
 
 ## Running it
 
@@ -450,7 +450,7 @@ Scythe beat the Fire Axe on all eight of theirs. The rifle is the one that never
 largest magazine and reserve in the game and the fastest reload, paid for with a lighter round and a
 shorter reach — and the axe went from being a worse scythe to being the opposite of one.
 
-**Two of the twelve signatures do no damage at all, and they arrived with the Sidearm shelf.** The
+**Two of the fifteen signatures do no damage at all, and they arrived with the Sidearm shelf.** The
 Hand Emitter takes 45% of a body's speed for two seconds; the Sidearm Pistol leaves it taking 20% more
 from *everything* for three. Neither is worth measuring on its own, which is the point of putting them
 in the small hand: both slots fire, so a shelf of four weapons each scored on its own damage is a
@@ -463,6 +463,52 @@ Both are per-body statuses on the machinery bleed already used, with their own c
 **`RunModifiers.Chill` is a different thing with the same name** — a gradient of sticky ground around
 the player, from a card — and the two multiply rather than replace, so being in the ring *and* shot by
 an emitter is worse than either and still never a stop.
+
+**Four reactions, and every one of them crosses the slot line.** A status that only its own weapon
+could cash in would be a second damage number wearing a story; what makes these decisions is that the
+applier and the consumer are usually in different hands, so a reaction is something a *loadout* does:
+
+| Reaction | Applied by | Consumed by | What happens |
+| :--- | :--- | :--- | :--- |
+| **Shatter** | chill — Hand Emitter, Frost Cell, the Chill card | any heavy impact | the chill is spent for `impact x chill x 1.5`, so 45% turns a 26-damage axe hit into 43.5 and the next one is 26 again |
+| **Spread** | bleed — knife, katana | a cleave sweep | the wound transfers to every *other* body in the arc; the source is excluded, or "spread" would mean "copy forever" |
+| **Cook off** | burn — molotov, the Ignite card | any blast | the burn detonates in 2.4 m for 1.5 seconds of that fire, and the same blast cannot cook it twice |
+| **Conduct** | shock — Arc Lance, Pulse Rifle | any hit on a body that is *also* chilled | 40% of the hit reaches two neighbours, one level deep, and the shock is spent |
+
+Each also has a non-weapon source — a trinket or a card — so the deck can reach a reaction the shop
+did not sell, which is what stops the shop dictating the run. And each is **spent**: a reaction that
+left its status behind would be a permanent multiplier, and the player would stop choosing when to
+trigger it. That is the failure mode `TraitProbe` asserts against, one stage per reaction, by driving
+the real applier and the real consumer rather than calling the status setter.
+
+The **War Hammer** exists to be the native Shatter consumer: 38 damage at 0.55/s through a 45-degree
+arc, the slowest and narrowest heavy on the table, with the hardest shove. Beside a Hand Emitter it is
+the biggest single number the game can produce; on its own it is a bad axe.
+
+**Two weapons pay for the trigger with something other than ammunition, and that is a fifth
+proficiency track rather than a trait.** A category says how a weapon *resolves* and which practice it
+feeds, so the Hand Emitter stayed a Firearm — it resolves like a pistol — while overheat and a held
+beam are genuinely different firing models and became `Tech`:
+
+| | Fires | Pays with | Signature |
+| :--- | :--- | :--- | :--- |
+| **Pulse Rifle** | 8/s, no magazine at all | heat: nine shots fill the bar, a full bar locks the weapon, and it resumes below 35% | Shock |
+| **Arc Lance** | a held beam, 0.1 s a tick, 12 m | nothing — it never stops | Shock, but only after 0.75 s dwelling on the *same* body |
+
+Venting is the reload, and it is a better one to read: a magazine is a number that has to be looked
+at, while a bar that fills as you hold the trigger is the thing you were already watching. The beam's
+dwell is what stops it being a rifle with the recoil turned off — it rewards staying on one target,
+which is the opposite of everything else that shoots.
+
+Both leave **Shock**, and Shock exists because Conduct needed a source that was not a growth card: a
+hit on a body carrying both Shock and Chill spends the Shock and carries 40% of it to two neighbours,
+one level deep. Pool indices are stable for exactly one tick, so the beam also asks that the body it
+thinks it is holding is still *where a moving body could be* — a death elsewhere swaps a stranger into
+the same number, and without the distance check the dwell would silently transfer to them.
+
+Old four-entry profiles load with Tech practice at zero rather than being refused. The arrays that
+count practice and hits are sized from the enum now, so the next category is a row in a table instead
+of five hard-coded fours nobody can find from the card that broke.
 
 **The largest thing the Sidearm shelf found was that the sidearm was never firing.** `WeaponHandler.Fire`
 took a slot as an argument and then read `Weapon` — which is the *active* slot's weapon — so from the
@@ -729,6 +775,30 @@ or below zero, the pool despawns an entry that was never live, and `Count` drops
 leaving. A few of those drive it negative, and then the next spawn writes to index -1 — a crash several
 seconds and one system away from the blast that caused it. `Horde.Damage` and `EnemyPool.DespawnAt`
 both refuse out-of-range indices now. The hitscan path had always guarded; the melee path never had.
+
+**A body mesh is built once per silhouette, and that is a crash fix rather than a frame-time saving.**
+Changing what the player holds rebuilds the body — a `MultiMesh` has no skeleton, so a held object is
+geometry *inside* the mesh turning on the arm's pivot — and every rebuild allocated a fresh `ArrayMesh`
+and several `Godot.Collections.Array`, all of them `RefCounted`. The two loadouts where both weapons
+are melee flip between `Longarm` and `Blade` on every swap, and that was enough churn to take the
+process down inside `BakedBody.Build`:
+
+```
+FATAL: Condition "gchandle.is_released()" is true   mono_object_disposed_baseref
+  BakedBody.Build   Player.CreateBody   Player.CarryChanged   Player._PhysicsProcess
+```
+
+Five of the twelve sweep layouts on `fire_axe+katana`, and some on `fire_axe+combat_knife`. Never the
+same frame twice, because what decides it is when the GC runs — and the stack is `Player._PhysicsProcess`,
+so it was a player's crash and not a test's. `Player` keeps one mesh per `Carry` now, which bounds a
+whole run at two builds; `SoloBody` leaves a material alone when the mesh already carries the right
+one, or the cache would have traded an `ArrayMesh` per swap for a `ShaderMaterial` per swap. Twenty-four
+runs across both double-melee pairs came back without it.
+
+Nothing can assert "the finaliser did not race", because that is a question about the GC.
+`BodyProbe.StageCarryMeshIsBuiltOnce` asserts the thing that can be checked — that holding a silhouette
+a second time returns the same mesh, and that two silhouettes are still two meshes — and it fails
+against the previous code, which is the only reason to trust it.
 
 **The touch layer had never been executed.** It was written in Phase 1 and compiled for sixteen phases
 with nothing instantiating a `VirtualStick`, `TouchStickInput` never constructed, `SetInputSource`
@@ -1304,26 +1374,32 @@ Everything the player looks at has had a pass, the numbers behind it are recorde
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
 
-- **The player body crashes the process when the carry changes often enough.** Reproducible, and it is
-  in the baked-body path rather than in anything the balance work touched:
+- **Two of the twelve sweep seeds have a crate the bot cannot close on.** It is the seed, not the
+  loadout: `0x27D4EB2F` stops 2.3 m from `Crate0` and `0xD6E8FEB1` stops 20 m from `Crate7`, on
+  `fire_axe+katana`, `fire_axe+combat_knife` and the plain starting kit alike, at the same distance
+  every time.
 
   ```
   godot --headless --fixed-fps 60 --script test/AutoPlay.cs -- \
-        linger:auto seed:3246279323 "weapon:fire_axe+katana"
-  # FATAL: Condition "gchandle.is_released()" is true   mono_object_disposed_baseref
-  #   BakedBody.Build   Player.CreateBody   Player.CarryChanged   Player._PhysicsProcess
+        linger:auto seed:668265263 weapon:scavenged_rifle
+  # AUTOPLAY FAILED — could not reach Crate0 in 60s (still 2.3m away)
+  #   flow (0.80, 0.60), moved 0.76 m in the last ten seconds
+  #   standing in a footprint = False, target in one = False; nearest block 8.6 m away
   ```
 
-  Five of the twelve sweep layouts on `fire_axe+katana`, and some on `fire_axe+combat_knife` — the two
-  loadouts where *both* weapons are melee, so the held silhouette flips between `Longarm` and `Blade`
-  and `CarryChanged` rebuilds the mesh each time. `CreateBody` re-loads the bake and `Append` allocates
-  several `Godot.Collections.Array` and a fresh `ArrayMesh` per rebuild; the fatal is a `RefCounted`
-  finalising against a released handle. Caching the built mesh per `Carry` would remove the fuel — there
-  are about five of them for a whole run — but `BakedBody.cs` and `Player.cs` are being edited by the
-  model track as this is written, so it is recorded rather than restructured.
+  Three explanations are already ruled out, which is most of what is worth knowing before guessing at
+  a fix. It is **not the route**: `(0.80, 0.60)` is the correct bearing from the bot to the crate to
+  two digits, and neither end is inside an inflated footprint. It is **not cover**: `ReportNearbyCover`
+  lists everything under `Obstacles` within ten metres and the nearest is 8.6 m away, and blocks are
+  the only colliders the arena builds — the terrain is a visual height field over a flat box. And it
+  is **not the bot deciding to leave**: `ShouldBreakContact` never fires, because health never falls
+  below its threshold and the log carries no `breaking contact` line. A correct heading, a clear
+  approach, and 0.76 m of travel in ten seconds.
 
-  It is not a test-only problem: the stack is `Player._PhysicsProcess`, so a player swapping between a
-  heavy melee weapon and a blade can hit it.
+  It surfaced while chasing the body-rebuild crash and is recorded rather than fixed. **Both seeds are
+  in `BalanceSweep`'s default set** and `Survived` is `Outcome == "Extracted"`, so a stuck run is
+  currently averaged in as a two-thirds-length failure — two of every twelve layouts the table reports
+  are measuring the driver rather than the game.
 - **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
   115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
   later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by
@@ -1331,11 +1407,21 @@ person**, not things that need code.
   forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
   thing to re-take whenever a weapon changes, and it is written here because that is the only place
   that will say so. See `WEAPONS.md`.
-- **The survivor roster has no models.** `Player.InstallCharacterModel` looks for
-  `assets/models/survivors/<name>.glb` and quietly falls back to the procedural `SoloBody` when there
-  is none, which is every survivor today: `art-src/models/build_roster.py` bakes the seven but has
-  never been run against a committed base mesh. The fallback is by design and the game looks finished
-  without it; what is missing is the roster, not the plumbing.
+- **One survivor of the seven has an authored body, and the base mesh it came from has no recorded
+  source.** `CharacterResource.BakedBodyPath` is read by `Player.CreateBody`, which loads the bake,
+  appends the held weapon's procedural silhouette to the same surface, and falls back to `SoloBody`
+  when the path is empty or the bake will not build — so a survivor without a model is an ordinary
+  state rather than an error. The Drifter is baked; the other six are not.
+
+  What blocks the rest is provenance, not modelling. `art-src/models/build_roster.py` cuts all seven
+  from `art-src/models/base/rigged_anime_girl_cc0.blend`, and that file is 10 MB of third-party
+  geometry whose only claim to a licence is its own filename — no URL, no hash, nothing anyone can
+  check. CC0 is a dedication to the public domain, so nothing here is a licence breach; what is
+  missing is the project's own record, which is the gap the OFL font had and has the same fix: an
+  `art-src/models/base/SOURCE.md` on the pattern of `art-src/fonts/SOURCE.md`, carrying the URL and
+  the sha256. **Only the source is unverifiable, and only the source is large**, so the Drifter's
+  176 KB output is committed — the game loads it — while ten megabytes of unattributable binary stays
+  out of the history until that file exists.
 
 - **The APK has never been built, let alone run.** Blocked on three installs this machine does not
   have: an Android SDK, a JDK, and an export template matching 4.7.1 (the only one present is 4.6.3).

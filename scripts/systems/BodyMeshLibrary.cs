@@ -507,6 +507,33 @@ public static class BodyMeshLibrary
         return mesh.Build();
     }
 
+    /// Only the held object, carrying the same rigid arm channel as Build3D.
+    /// This lets an authored survivor keep the procedural weapon silhouettes
+    /// without rebuilding or duplicating the authored body.
+    public static ArrayMesh BuildCarry3D(Build spec)
+    {
+        var mesh = new MeshBuilder();
+        if (spec.Held == Carry.None)
+            return mesh.Build();
+
+        float hipY = spec.Height * HipFraction;
+        float shoulderY = spec.Height * ShoulderFraction;
+        float lean = Mathf.DegToRad(spec.LeanDegrees);
+        float half = spec.ShoulderWidth * 0.5f;
+        float armRadius = spec.LimbRadius * 0.9f;
+        float chestHeight = shoulderY - hipY;
+        float x = half + armRadius * 0.35f;
+        Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
+        float armLength = chestHeight *
+            (spec.ShoulderWidth < 0.40f && spec.LeanDegrees < 20.0f ? 1.34f : 1.16f);
+        Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, -armRadius * 0.03f);
+
+        mesh.SetRig(spec.ArmSwing * 0.25f, shoulder.Y, 1.0f, spec.Bob);
+        Weapon(mesh, spec, shoulder, wrist, armRadius);
+        mesh.ClearRig();
+        return mesh.Build();
+    }
+
     /// What the right hand is holding.
     ///
     /// Drawn under the arm's rig, so it swings with the hand. Rigged rather than

@@ -6,6 +6,14 @@ public enum WeaponCategory
     MeleeLong,
     BowCrossbow,
     Firearm,
+    Tech,
+}
+
+public enum WeaponFiringModel
+{
+    Standard,
+    Overheat,
+    Beam,
 }
 
 /// A weapon's signature behaviour — the thing that makes it that weapon rather
@@ -103,6 +111,9 @@ public enum WeaponTrait
     /// has priced its two halves against each other rather than added them up.
     Mark,
 
+    /// Hits leave an electrical charge that a chilled follow-up can conduct.
+    Shock,
+
     /// A heavy impact whose signature is consuming Chill. Unlike Cleave this
     /// does not carry through a crowd; it pays for the reaction with the
     /// narrowest, slowest swing on the shelf.
@@ -119,6 +130,17 @@ public partial class WeaponResource : Resource
 {
     [Export] public string WeaponName { get; set; } = "";
     [Export] public WeaponCategory Category { get; set; } = WeaponCategory.Firearm;
+
+    /// How the trigger is paid for. Overheat weapons carry no ammunition:
+    /// firing fills a heat bar, a full bar locks the weapon, and it must cool
+    /// below HeatResumeFraction before it can fire again.
+    [Export] public WeaponFiringModel FiringModel { get; set; } = WeaponFiringModel.Standard;
+    [Export] public float HeatPerShot { get; set; } = 0.15f;
+    [Export] public float HeatCoolPerSecond { get; set; } = 0.22f;
+    [Export] public float HeatResumeFraction { get; set; } = 0.35f;
+    [Export] public float BeamTickSeconds { get; set; } = 0.1f;
+    [Export] public float BeamShockDwell { get; set; } = 0.75f;
+    [Export] public float ShockSeconds { get; set; } = 3.0f;
 
     /// Which of the two slots this can be carried in. See `WeaponSlot`.
     [Export] public WeaponSlot Slot { get; set; } = WeaponSlot.Primary;
@@ -236,7 +258,7 @@ public partial class WeaponResource : Resource
 
     public bool IsMelee => Category is WeaponCategory.MeleeShort or WeaponCategory.MeleeLong;
     public bool IsProjectile => Category == WeaponCategory.BowCrossbow;
-    public bool IsHitscan => Category == WeaponCategory.Firearm;
+    public bool IsHitscan => Category is WeaponCategory.Firearm or WeaponCategory.Tech;
 
     /// Every curve below is read at a level clamped to MaxLevel, so a ceiling is
     /// one rule applied in one place rather than five caps that drift apart.
@@ -274,7 +296,7 @@ public partial class WeaponResource : Resource
     /// should not turn a shotgun into a laser.
     public float GetEffectiveSpreadDegrees(int proficiency)
     {
-        if (Category != WeaponCategory.Firearm)
+        if (Category is not (WeaponCategory.Firearm or WeaponCategory.Tech))
             return 0.0f;
 
         return Mathf.Max(

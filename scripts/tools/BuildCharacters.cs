@@ -40,6 +40,7 @@ public partial class BuildCharacters : SceneTree
                 MoveSpeed = 6.0f,
                 CarryCapacity = 20,
                 BodyHeight = 2.2f,
+                BakedBodyPath = "res://resources/bodies/drifter.res",
                 OpensAfter = 0,
             },
 

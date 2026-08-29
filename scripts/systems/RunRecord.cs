@@ -63,7 +63,7 @@ public sealed class RunRecord
     public int BestThrowKills { get; init; }
 
     /// Practice banked by this run, indexed by WeaponCategory.
-    public int[] ProficiencyGained { get; init; } = new int[4];
+    public int[] ProficiencyGained { get; init; } = new int[System.Enum.GetValues<WeaponCategory>().Length];
 
     /// Hits landed, indexed by WeaponCategory.
     ///
@@ -73,7 +73,7 @@ public sealed class RunRecord
     /// never drew a gun both bank zero. The first version of "extract without
     /// firing a gun" read the practice and opened the bow on a seventeen-second
     /// extraction — a condition wired to a fact that resembled the right one.
-    public int[] HitsByCategory { get; init; } = new int[4];
+    public int[] HitsByCategory { get; init; } = new int[System.Enum.GetValues<WeaponCategory>().Length];
 
     /// Resource paths death took. Empty on an extraction, by the rule that only
     /// dying costs the kit.

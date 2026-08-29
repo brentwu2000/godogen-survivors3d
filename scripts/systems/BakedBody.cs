@@ -42,4 +42,33 @@ public static class BakedBody
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
         return mesh;
     }
+
+    /// Joins two non-indexed, vertex-rigged meshes into one draw surface.
+    public static ArrayMesh Append(ArrayMesh body, ArrayMesh addition)
+    {
+        if (addition.GetSurfaceCount() == 0)
+            return body;
+
+        Godot.Collections.Array a = body.SurfaceGetArrays(0);
+        Godot.Collections.Array b = addition.SurfaceGetArrays(0);
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = Join(a[(int)Mesh.ArrayType.Vertex].AsVector3Array(), b[(int)Mesh.ArrayType.Vertex].AsVector3Array());
+        arrays[(int)Mesh.ArrayType.Normal] = Join(a[(int)Mesh.ArrayType.Normal].AsVector3Array(), b[(int)Mesh.ArrayType.Normal].AsVector3Array());
+        arrays[(int)Mesh.ArrayType.Color] = Join(a[(int)Mesh.ArrayType.Color].AsColorArray(), b[(int)Mesh.ArrayType.Color].AsColorArray());
+        arrays[(int)Mesh.ArrayType.TexUV] = Join(a[(int)Mesh.ArrayType.TexUV].AsVector2Array(), b[(int)Mesh.ArrayType.TexUV].AsVector2Array());
+        arrays[(int)Mesh.ArrayType.TexUV2] = Join(a[(int)Mesh.ArrayType.TexUV2].AsVector2Array(), b[(int)Mesh.ArrayType.TexUV2].AsVector2Array());
+
+        var combined = new ArrayMesh();
+        combined.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return combined;
+    }
+
+    private static T[] Join<T>(T[] first, T[] second)
+    {
+        var joined = new T[first.Length + second.Length];
+        System.Array.Copy(first, joined, first.Length);
+        System.Array.Copy(second, 0, joined, first.Length, second.Length);
+        return joined;
+    }
 }

@@ -142,8 +142,8 @@ public partial class BakeBody : SceneTree
         Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints) ? 0 : 1);
     }
 
-    private static bool Bake(string source, string destination, float height,
-                             float legSwing, float armSwing, float bob, Color[]? tints)
+    public static bool Bake(string source, string destination, float height,
+                            float legSwing, float armSwing, float bob, Color[]? tints)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)

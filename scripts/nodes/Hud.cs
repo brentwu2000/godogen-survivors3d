@@ -433,7 +433,10 @@ public partial class Hud : CanvasLayer
             if (_weapons.WeaponIn(i) is not { } each)
                 continue;
 
-            string ammo = each.MagazineSize > 0
+            string ammo = each.FiringModel == WeaponFiringModel.Overheat
+                ? $"   heat {Mathf.RoundToInt(_weapons.HeatIn(i) * 100.0f)}%"
+                  + (_weapons.OverheatedIn(i) ? "  VENTING" : "")
+                : each.MagazineSize > 0
                 ? $"   {_weapons.AmmoIn(i)}/{_weapons.ReserveIn(i)}"
                   + (_weapons.IsDryIn(i) ? "  DRY" : _weapons.ReloadingIn(i) ? "  reloading" : "")
                 : "";

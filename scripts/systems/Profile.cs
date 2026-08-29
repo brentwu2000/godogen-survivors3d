@@ -22,7 +22,7 @@ public sealed class Profile
     public Dictionary<string, int> Stash { get; } = new();
 
     /// Indexed by WeaponCategory.
-    public int[] Proficiency { get; } = new int[4];
+    public int[] Proficiency { get; } = new int[System.Enum.GetValues<WeaponCategory>().Length];
 
     public string LoadoutWeapon { get; set; } = "res://resources/weapons/scavenged_rifle.tres";
 

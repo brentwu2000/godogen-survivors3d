@@ -47,10 +47,17 @@ public sealed class SoloBody
 
     private SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent, bool fromSpec)
     {
-        var material = new ShaderMaterial { Shader = shader };
-        material.SetShaderParameter("surface_detail",
-            GD.Load<Texture2D>("res://assets/textures/survivor_handpainted.png"));
-        mesh.SurfaceSetMaterial(0, material);
+        // Left alone when the mesh already carries the right one. A body mesh is
+        // cached per silhouette and handed back here on every rebuild, so
+        // dressing it again would allocate a `ShaderMaterial` per weapon swap —
+        // the churn the cache exists to stop.
+        if (mesh.SurfaceGetMaterial(0) is not ShaderMaterial dressed || dressed.Shader != shader)
+        {
+            var material = new ShaderMaterial { Shader = shader };
+            material.SetShaderParameter("surface_detail",
+                GD.Load<Texture2D>("res://assets/textures/survivor_handpainted.png"));
+            mesh.SurfaceSetMaterial(0, material);
+        }
 
         _multiMesh = new MultiMesh
         {

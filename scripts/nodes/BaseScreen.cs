@@ -527,7 +527,7 @@ public partial class BaseScreen : Control
         // cannot reach, and saying so on the screen is cheaper than a player
         // wondering why it is missing.
         text.AppendLine($"practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
-                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   (not for sale)");
+                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   tech {_profile.Proficiency[4]}   (not for sale)");
 
         // Where the run is going, on the shop screen rather than at launch.
         // Terrain has to be known while equipment is being bought, or the
@@ -689,7 +689,7 @@ public partial class BaseScreen : Control
                         $"      fastest out {(_profile.HasFastExtraction ? $"{_profile.FastestExtraction:F0}s" : "—")}");
         text.AppendLine();
         text.AppendLine($"  practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
-                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}");
+                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   tech {_profile.Proficiency[4]}");
         text.AppendLine();
 
         // The sets, with pieces ticked. On the records wall rather than the

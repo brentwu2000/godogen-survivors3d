@@ -90,7 +90,6 @@ public partial class Player : CharacterBody3D
     private Sprite3D _sprite = null!;
     private CameraRig? _rig;
     private SoloBody? _body;
-    private Node3D? _detailedModel;
     private WeaponHandler? _weapons;
 
     /// The silhouette the body was last built with, and the shader to rebuild
@@ -155,8 +154,7 @@ public partial class Player : CharacterBody3D
         parent.RemoveChild(_body.Node);
         _body.Node.QueueFree();
 
-        _body = new SoloBody(_bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
-        _body.Node.Visible = _detailedModel == null;
+        _body = CreateBody(_bodyShader);
 
         parent.AddChild(_body.Node);
     }
@@ -177,7 +175,6 @@ public partial class Player : CharacterBody3D
         _weapons = GetNodeOrNull<WeaponHandler>("WeaponHandler");
         _horde = GetParent()?.GetNodeOrNull<Horde>("Horde");
         ApplyCharacter();
-        InstallCharacterModel();
 
         _rig = GetParent()?.GetNodeOrNull<CameraRig>("CameraRig");
         _input ??= new KeyboardMouseInput(GetViewport().GetCamera3D());
@@ -196,8 +193,7 @@ public partial class Player : CharacterBody3D
             else
             {
                 _bodyShader = bodyShader;
-                _body = new SoloBody(bodyShader, BodySpec(), _horde?.ArenaExtent ?? 60.0f);
-                _body.Node.Visible = _detailedModel == null;
+                _body = CreateBody(bodyShader);
 
                 // Added to the parent, not to the player. The transform inside a
                 // MultiMesh is world space, so a node parented to a moving player
@@ -530,35 +526,62 @@ public partial class Player : CharacterBody3D
         Mods.SearchRadiusBonus += who.SearchRadiusBonus;
     }
 
-    /// Loads the authored silhouette belonging to the selected survivor, if one
-    /// has been baked for them.
-    ///
-    /// **Asked for, not assumed.** `GD.Load` on a path that is not there is not a
-    /// null return — it is two engine `ERROR` lines and a stack trace, on every
-    /// startup, for a file the game is designed to work without. The roster is
-    /// baked by `art-src/models/build_roster.py` and the procedural `SoloBody` is
-    /// the fallback by design, so a missing model is an ordinary state and has to
-    /// be quiet. It was not: forty-five probes carried a red pair of lines each
-    /// and stayed green, which is how a real error learns to look like scenery.
-    private void InstallCharacterModel()
-    {
-        CharacterResource who = CharacterBook.Load(GameSession.Character);
-        string slug = who.CharacterName.ToLowerInvariant();
-        string path = $"res://assets/models/survivors/{slug}.glb";
-        if (!ResourceLoader.Exists(path))
-            return;
+    /// One finished body mesh, and the height a `MultiMesh` needs to bound it.
+    private readonly record struct BodyMesh(ArrayMesh Mesh, float Height);
 
-        var scene = GD.Load<PackedScene>(path);
-        if (scene == null)
+    /// The bodies already built this run, one per silhouette.
+    ///
+    /// **The cache is the fix for a crash, not a frame-time saving.** Building a
+    /// body allocates several `Godot.Collections.Array` and an `ArrayMesh`, all
+    /// of them `RefCounted`, and the loadouts where both weapons are melee flip
+    /// between `Longarm` and `Blade` on every swap — enough rebuilds in one run
+    /// to take the process down inside `BakedBody.Build` with
+    /// `Condition "gchandle.is_released()" is true`, a finaliser running against
+    /// a handle the engine had already let go. It reproduced on five of the
+    /// twelve sweep layouts on `fire_axe+katana` and never on the same frame
+    /// twice, because what decides it is when the GC runs rather than anything
+    /// the run did. The stack was `Player._PhysicsProcess`, so it was a player's
+    /// crash and not a test's.
+    ///
+    /// There are five silhouettes and a run swaps between at most two of them,
+    /// so this bounds a whole run at two builds. Keyed on `Carry` alone because
+    /// nothing else `BodySpec` reads can change once `ApplyCharacter` has run:
+    /// the survivor is chosen before the run and their height and colours come
+    /// with them.
+    private readonly System.Collections.Generic.Dictionary<BodyMeshLibrary.Carry, BodyMesh> _bodyMeshes = new();
+
+    /// Builds the selected authored body when its bake is present, and appends
+    /// the currently held procedural weapon to the same mesh. A missing or
+    /// unsound bake falls back to the established procedural survivor.
+    private SoloBody CreateBody(Shader shader)
+    {
+        BodyMeshLibrary.Build spec = BodySpec();
+        if (!_bodyMeshes.TryGetValue(spec.Held, out BodyMesh built))
         {
-            GD.PushWarning($"Player: character model missing for {who.CharacterName}");
-            return;
+            built = BuildBodyMesh(spec);
+            _bodyMeshes[spec.Held] = built;
         }
 
-        _detailedModel = scene.Instantiate<Node3D>();
-        _detailedModel.Name = "DetailedModel";
-        _detailedModel.Scale = Vector3.One * 1.28f;
-        AddChild(_detailedModel);
+        return new SoloBody(shader, built.Mesh, built.Height, _horde?.ArenaExtent ?? 60.0f);
+    }
+
+    private BodyMesh BuildBodyMesh(BodyMeshLibrary.Build spec)
+    {
+        CharacterResource who = CharacterBook.Load(GameSession.Character);
+        if (!string.IsNullOrEmpty(who.BakedBodyPath)
+            && ResourceLoader.Exists(who.BakedBodyPath))
+        {
+            var baked = GD.Load<BakedBodyResource>(who.BakedBodyPath);
+            ArrayMesh? mesh = BakedBody.Build(baked);
+            if (mesh != null)
+            {
+                if (spec.Held != BodyMeshLibrary.Carry.None)
+                    mesh = BakedBody.Append(mesh, BodyMeshLibrary.BuildCarry3D(spec));
+                return new BodyMesh(mesh, who.BodyHeight);
+            }
+        }
+
+        return new BodyMesh(BodyMeshLibrary.Build3D(spec), BodyMeshLibrary.StandingHeight(spec));
     }
 
     public void AddMaxHealth(float amount)
@@ -789,8 +812,6 @@ public partial class Player : CharacterBody3D
         float yaw = Mathf.Atan2(-Facing.X, -Facing.Y);
 
         _body.Update(GlobalPosition, yaw, flatVelocity.Length(), delta, HurtFlash);
-        if (_detailedModel != null)
-            _detailedModel.Rotation = new Vector3(0.0f, yaw, 0.0f);
         HurtFlash = Mathf.Max(0.0f, HurtFlash - FlashFade * delta);
     }
 
