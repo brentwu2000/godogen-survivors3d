@@ -577,9 +577,17 @@ public partial class BakeBody : SceneTree
 
         if (legs == 0)
         {
-            GD.PushError("  no vertex was classified as a leg. The bone names do not look like "
-                       + "anything this knows: expected Thigh/Shin/Foot and UpperArm/LowerArm/Hand, "
-                       + $"got names like '{FirstNames(skeleton)}'");
+            // Named after whichever source the classification actually came
+            // from. A rigid-node model has no skeleton to list, and reporting an
+            // empty bone list for one would send whoever hits this looking for a
+            // rig that was never there.
+            string found = skeleton != null
+                ? $"bone names like '{FirstNames(skeleton)}'"
+                : $"mesh nodes named {string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => $"'{p.Instance.Name}'"))}";
+
+            GD.PushError("  no vertex was classified as a leg. The names do not look like anything "
+                       + "this knows: expected Thigh/Shin/Foot and UpperArm/LowerArm/Hand, got "
+                       + found);
             return false;
         }
 
