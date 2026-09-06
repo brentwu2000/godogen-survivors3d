@@ -693,6 +693,41 @@ today — so a literal default there kept serving the *first* draft of the dayli
 for a build, while the two that name their own colour looked perfect. The defaults are taken from
 `Palette` now. The probe caught it; nothing else would have.
 
+**The baker learned two things, and between them a CC0 library of 4,800 models became usable.** Both
+were predicted in `BakeBody`'s own comments and neither was needed until a real third-party character
+was put through it.
+
+It refused a model with more than one mesh node, and said why: baking the first one produces a
+*sound* bake — watertight, correctly scaled, correctly rigged, and missing a head. Kenney's characters
+ship as `body-mesh` plus `head-mesh`, which is an ordinary way to author a character rather than an
+export mistake. `Convert` walks the list now, each node in its own transform, because a head parented
+under a neck carries that offset in its node transform and applying the body's would stack it on the
+floor.
+
+The second is what actually unlocks the library. A baked body is one vertex-coloured surface and
+`body.gdshader` samples nothing — that is what puts a hundred and eighty of them in one draw call —
+so a textured model arrives as a material whose `AlbedoColor` is white and bakes a white character,
+which looks exactly like a model whose author chose white. But a large part of the free low-poly world
+does not texture in the usual sense: it maps every triangle onto a flat patch of a small palette
+image. Kenney's entire 3D library does, under the name `colormap`. Sampling that per vertex is exact
+for a flat patch, and turns those models into precisely the geometry this game already draws. It goes
+wrong visibly rather than silently on a model with real painted detail, and `--tint` still overrides
+per surface.
+
+The texel conversion is the opposite of the one beside it, and that asymmetry is the glTF spec rather
+than a preference: `COLOR_0` and `baseColorFactor` are stored linear and must *not* be converted,
+while `baseColorTexture` is required to be sRGB and must be. Getting it backwards produces a body
+about twice as bright as drawn — the exact bug the first baked stalker shipped with.
+
+**A Kenney character bakes correctly and is still the wrong shape, which is an asset decision rather
+than a pipeline one.** `character-male-a` merges to 723 triangles, classifies 424 leg and 292 arm
+vertices off bone names (`leg-left`, `arm-right`) with no changes to `Classify`, and comes through in
+full colour. Two things are left. The bake takes the model's rest pose and Kenney's is a **T-pose**, so
+the arms come out straight sideways — the fix is to apply a frame of the model's own `idle` animation
+before flattening, which the pack ships. And the Mini Characters are super-deformed: the hip lands at
+0.50 m of 1.90 m where every procedural body in this game puts it near half. Kenney's **Blocky
+Characters** are the normally-proportioned set and are the ones to try against the existing roster.
+
 **Full billboard, not Y-locked.** Under the same camera, `FixedY` is crushed to ~62% height by the
 52° pitch — characters read short and wide and the sprite's vertical resolution is wasted.
 
@@ -1566,5 +1601,12 @@ person**, not things that need code.
   against a captured run; a louder moment than any capture happened to catch would clip rather than
   compress. The four music layers are quiet enough that all of them at once peak at 0.33, which is
   measured, but it is headroom by arithmetic rather than by a compressor.
-- Third-party CC0 sources (Kenney, Quaternius) are safe to use directly; aggregators like Poly Pizza
-  license per item and would need checking per file. Nothing from either is currently in the repo.
+- **Kenney is CC0 and safe to commit; Quaternius is no longer CC0.** This line used to name both, and
+  as of 2026-08-28 Quaternius ships under the Quaternius Asset License v1.0 instead — generous about
+  *use* (commercial, no fee, no attribution) and forbidding redistribution of the assets themselves
+  "regardless of how much the Assets have been modified". Some of their pack pages still link to the
+  CC0 deed while the site-wide licence page does not. That restriction is aimed at asset resellers,
+  not games, but this repo is public and commits its assets as files, so a raw `.glb` here is closer
+  to the thing it names than to the finished product the licence permits. Fine in a build, awkward in
+  a source tree. Aggregators like Poly Pizza license per item and would need checking per file.
+  `assets/models/SOURCE.md` carries the full reasoning and the provenance record.

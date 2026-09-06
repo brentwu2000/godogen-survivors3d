@@ -154,46 +154,29 @@ public partial class BakeBody : SceneTree
 
         Node root = packed.Instantiate();
 
-        MeshInstance3D? instance = FindMesh(root);
         Skeleton3D? skeleton = FindSkeleton(root);
 
-        if (instance?.Mesh == null)
-        {
-            GD.PushError($"{source} has no mesh to bake");
-            root.Free();
-            return false;
-        }
-
-        // Refused rather than half-baked.
+        // Every mesh node, merged, each in its own space.
         //
-        // `FindMesh` returns the first `MeshInstance3D` it walks into, and the
-        // baker merges every *surface* of that one node. A model exported as
-        // separate nodes — body here, coat there, horns as a third — bakes
-        // whichever the walk reached first and silently omits the rest. What
-        // comes out is a sound bake: watertight, correctly scaled, correctly
-        // rigged, and missing a coat. That is the same shape of failure as the
-        // colour that never arrived and the ninety-six triangles read off
-        // surface zero, and both of those were found by looking at a render
-        // rather than by anything erroring.
+        // This used to refuse outright, with a comment saying the merge "is not
+        // hard — each node has its own transform and its own skin bind list, so
+        // it is the surface merge with two more lookups — but it is not needed by
+        // anything in the project yet". It is needed now: Kenney's characters
+        // ship as `body-mesh` and `head-mesh`, which is an ordinary way to author
+        // a character and not an export mistake.
         //
-        // Merging them is not hard — each node has its own transform and its
-        // own skin bind list, so it is the surface merge with two more lookups
-        // — but it is not needed by anything in the project yet, and a bake
-        // that is quietly wrong is worse than one that will not run. Refuse,
-        // name the nodes, and let whoever hits it decide.
+        // The refusal was the right call to leave in place until then, and it is
+        // why this is a feature rather than a bug report. Baking whichever node
+        // the walk reached first produces a *sound* bake — watertight, correctly
+        // scaled, correctly rigged, and missing a head. Nothing errors, every
+        // soundness check passes, and the only way to find it is to look at a
+        // render. Two earlier defects in this file had exactly that shape.
         var meshes = new System.Collections.Generic.List<MeshInstance3D>();
         CollectMeshes(root, meshes);
 
-        if (meshes.Count > 1)
+        if (meshes.Count == 0)
         {
-            var names = new System.Collections.Generic.List<string>();
-            foreach (MeshInstance3D found in meshes)
-                names.Add(found.Name);
-
-            GD.PushError($"{source} has {meshes.Count} mesh nodes ({string.Join(", ", names)}) and "
-                       + "the baker reads one. Merge them into a single mesh on export, or teach "
-                       + "Convert to walk the list — baking one of them would look correct and be "
-                       + "missing the others.");
+            GD.PushError($"{source} has no mesh to bake");
             root.Free();
             return false;
         }
@@ -209,16 +192,28 @@ public partial class BakeBody : SceneTree
 
         var baked = new BakedBodyResource { Source = source };
 
-        // The mesh node's own transform, which is not identity and cannot be
+        // Each mesh node's own transform, which is not identity and cannot be
         // ignored. Godot's glTF importer puts the Y-up conversion on the node, so
         // the arrays inside the mesh are in whatever space the exporter used — on
         // the first model baked that made the legs the highest thing in the body
         // and the hip come out above the shoulder.
-        var toRoot = Transform3D.Identity;
-        if (root is Node3D root3D)
-            toRoot = Relative(instance, root3D);
+        //
+        // Per node rather than once for the model, which is the whole reason the
+        // merge needed thinking about rather than concatenating: a head parented
+        // under a neck carries the neck's offset in its node transform, and
+        // applying the body's transform to it would stack the head on the floor.
+        var parts = new System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)>();
+        foreach (MeshInstance3D part in meshes)
+        {
+            parts.Add((part, root is Node3D root3D
+                ? Relative(part, root3D)
+                : Transform3D.Identity));
+        }
 
-        if (!Convert(instance, skeleton, baked, height, legSwing, armSwing, bob, toRoot, tints))
+        GD.Print($"  {parts.Count} mesh node(s): "
+               + string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => p.Instance.Name.ToString())));
+
+        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints))
         {
             root.Free();
             return false;
@@ -248,24 +243,11 @@ public partial class BakeBody : SceneTree
         Arm,
     }
 
-    private static bool Convert(MeshInstance3D instance, Skeleton3D skeleton, BakedBodyResource baked,
-                                float height, float legSwing, float armSwing, float bob,
-                                Transform3D toRoot, Color[]? tints)
+    private static bool Convert(
+        System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
+        Skeleton3D skeleton, BakedBodyResource baked,
+        float height, float legSwing, float armSwing, float bob, Color[]? tints)
     {
-        // Every surface, merged.
-        //
-        // **This read surface 0 and stopped, which silently threw away a third of
-        // the first model that had more than one.** A glTF splits by material, so
-        // a creature with a body material and a claw material arrives as two
-        // surfaces and looks complete in every viewer — the bake was 328 triangles
-        // of a 424-triangle model and the missing 96 were the parts that had a
-        // different colour, which is exactly the parts somebody cared about.
-        //
-        // Merging is right rather than refusing: a baked body is one vertex-
-        // coloured surface by construction, and each source surface contributes
-        // its own material's albedo to the vertices that came from it.
-        int surfaces = instance.Mesh.GetSurfaceCount();
-
         var allVertices = new System.Collections.Generic.List<Vector3>();
         var allNormals = new System.Collections.Generic.List<Vector3>();
         var allColours = new System.Collections.Generic.List<Color>();
@@ -274,105 +256,165 @@ public partial class BakeBody : SceneTree
         var allPhases = new System.Collections.Generic.List<float>();
         var perBone = new System.Collections.Generic.Dictionary<string, int>();
 
-        string[] jointNames = JointNames(instance, skeleton);
+        int surfaces = 0;
 
-        for (int surface = 0; surface < surfaces; surface++)
+        // `tints` indexes surfaces across the whole model rather than within a
+        // node, so a two-node character can still be given a palette from the
+        // command line without the caller having to know how it was split.
+        int tintSlot = 0;
+
+        foreach ((MeshInstance3D instance, Transform3D toRoot) in parts)
         {
-            Godot.Collections.Array arrays = instance.Mesh.SurfaceGetArrays(surface);
-
-            var v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
-            var n = arrays[(int)Mesh.ArrayType.Normal].AsVector3Array();
-            var c = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
-            var b = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
-            var w = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
-            var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
-
-            if (v.Length == 0)
+            if (instance.Mesh == null)
                 continue;
 
-            if (b.Length == 0 || w.Length == 0)
-            {
-                GD.PushError($"  surface {surface} has no joints or weights — it is not skinned, "
-                           + "so there is no way to tell a leg from a chest");
-                return false;
-            }
+            // Per node: each carries its own skin, and a skin's bind list is what
+            // the vertex joint indices actually address. Sharing one node's list
+            // across both would classify the head's vertices by the body's bone
+            // order — which does not error and produces a head that swings like a
+            // leg.
+            string[] jointNames = JointNames(instance, skeleton);
 
-            // Four influences per vertex is the glTF norm and what Godot hands
-            // back. Read per surface rather than once, because nothing promises
-            // two surfaces of one mesh were authored the same way.
-            int influences = b.Length / v.Length;
-            if (influences <= 0)
-            {
-                GD.PushError($"  surface {surface}: {b.Length} bone indices for {v.Length} vertices");
-                return false;
-            }
-
-            // Reported, because losing it is silent and has happened three
-            // times.
+            // Every surface, merged.
             //
-            // A surface whose material cannot be found bakes white, and white is
-            // exactly what an untinted model looks like anyway — so "the colour
-            // was lost" and "the artist chose white" are the same picture. The
-            // whole reason a model has three surfaces is that somebody wanted
-            // three colours, and the bake should say out loud which three it
-            // found.
-            Color? found = SurfaceAlbedo(instance, surface);
-
-            // The chosen palette wins over whatever the model shipped with. See
-            // the note where `tints` is parsed — fewer colours than surfaces
-            // repeats the last one.
-            Color? forced = tints is { Length: > 0 }
-                ? tints[Mathf.Min(surface, tints.Length - 1)]
-                : null;
-
-            Color surfaceAlbedo = forced ?? found ?? Colors.White;
-            int offset = allVertices.Count;
-
-            GD.Print($"    surface {surface}: "
-                   + (found.HasValue ? $"model says {found.Value.ToHtml(false)}" : "no material")
-                   + (forced.HasValue
-                        ? $", forced to {forced.Value.LinearToSrgb().ToHtml(false)}"
-                        : string.Empty));
-
-            for (int i = 0; i < v.Length; i++)
-            {
-                allVertices.Add(v[i]);
-                allNormals.Add(i < n.Length ? n[i] : Vector3.Up);
-                allColours.Add(i < c.Length ? c[i] : surfaceAlbedo);
-
-                int dominant = Dominant(b, w, i, influences);
-                string bone = dominant >= 0 && dominant < jointNames.Length
-                    ? jointNames[dominant]
-                    : string.Empty;
-
-                (Limb limb, float phase) = Classify(bone);
-                allLimbs.Add(limb);
-                allPhases.Add(phase);
-
-                perBone.TryGetValue(bone, out int seen);
-                perBone[bone] = seen + 1;
-            }
-
-            // Indices, and the case that has no index buffer.
+            // **This read surface 0 and stopped, which silently threw away a third
+            // of the first model that had more than one.** A glTF splits by
+            // material, so a creature with a body material and a claw material
+            // arrives as two surfaces and looks complete in every viewer — the bake
+            // was 328 triangles of a 424-triangle model and the missing 96 were the
+            // parts that had a different colour, which is exactly the parts
+            // somebody cared about.
             //
-            // The merge writes one global index array, so the moment *any*
-            // surface is indexed every surface has to be. A non-indexed one
-            // contributed its vertices and nothing pointing at them: the
-            // geometry was in the buffer, correctly placed and correctly
-            // coloured, and no triangle referenced it. It simply was not there.
-            //
-            // glTF exporters mix the two freely — a body mesh indexed and a
-            // strap or a horn left flat is an ordinary export — so this is not
-            // a hypothetical. Sequential indices are what "non-indexed" means.
-            if (idx.Length > 0)
+            // Merging is right rather than refusing: a baked body is one vertex-
+            // coloured surface by construction, and each source surface contributes
+            // its own material's albedo to the vertices that came from it.
+            int nodeSurfaces = instance.Mesh.GetSurfaceCount();
+            surfaces += nodeSurfaces;
+
+            for (int surface = 0; surface < nodeSurfaces; surface++)
             {
-                foreach (int index in idx)
-                    allIndices.Add(index + offset);
-            }
-            else
-            {
+                Godot.Collections.Array arrays = instance.Mesh.SurfaceGetArrays(surface);
+
+                var v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                var n = arrays[(int)Mesh.ArrayType.Normal].AsVector3Array();
+                var c = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
+                var uv = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
+                var b = arrays[(int)Mesh.ArrayType.Bones].AsInt32Array();
+                var w = arrays[(int)Mesh.ArrayType.Weights].AsFloat32Array();
+                var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+
+                int slot = tintSlot++;
+
+                if (v.Length == 0)
+                    continue;
+
+                if (b.Length == 0 || w.Length == 0)
+                {
+                    GD.PushError($"  {instance.Name} surface {surface} has no joints or weights — "
+                               + "it is not skinned, so there is no way to tell a leg from a chest");
+                    return false;
+                }
+
+                // Four influences per vertex is the glTF norm and what Godot hands
+                // back. Read per surface rather than once, because nothing promises
+                // two surfaces of one mesh were authored the same way.
+                int influences = b.Length / v.Length;
+                if (influences <= 0)
+                {
+                    GD.PushError($"  {instance.Name} surface {surface}: "
+                               + $"{b.Length} bone indices for {v.Length} vertices");
+                    return false;
+                }
+
+                // Reported, because losing it is silent and has happened three
+                // times.
+                //
+                // A surface whose material cannot be found bakes white, and white is
+                // exactly what an untinted model looks like anyway — so "the colour
+                // was lost" and "the artist chose white" are the same picture. The
+                // whole reason a model has three surfaces is that somebody wanted
+                // three colours, and the bake should say out loud which three it
+                // found.
+                Color? found = SurfaceAlbedo(instance, surface);
+
+                // A palette texture, sampled per vertex. See `PaletteImage`.
+                Image? palette = uv.Length == v.Length ? PaletteImage(instance, surface) : null;
+
+                // The chosen palette wins over whatever the model shipped with. See
+                // the note where `tints` is parsed — fewer colours than surfaces
+                // repeats the last one.
+                Color? forced = tints is { Length: > 0 }
+                    ? tints[Mathf.Min(slot, tints.Length - 1)]
+                    : null;
+
+                Color surfaceAlbedo = forced ?? found ?? Colors.White;
+                int offset = allVertices.Count;
+
+                GD.Print($"    {instance.Name} surface {surface}: "
+                       + (found.HasValue ? $"model says {found.Value.ToHtml(false)}" : "no flat albedo")
+                       + (palette != null ? $", sampling {palette.GetWidth()}x{palette.GetHeight()} texture" : string.Empty)
+                       + (forced.HasValue
+                            ? $", forced to {forced.Value.LinearToSrgb().ToHtml(false)}"
+                            : string.Empty));
+
                 for (int i = 0; i < v.Length; i++)
-                    allIndices.Add(offset + i);
+                {
+                    // Into the model root's space here rather than once at the
+                    // end, because each node has its own transform.
+                    allVertices.Add(toRoot * v[i]);
+                    allNormals.Add(i < n.Length
+                        ? (toRoot.Basis * n[i]).Normalized()
+                        : Vector3.Up);
+
+                    // Order of preference: a forced tint, then the mesh's own
+                    // vertex colours, then a sampled palette texel, then the
+                    // material's flat albedo.
+                    Color vertexColour;
+                    if (forced.HasValue)
+                        vertexColour = forced.Value;
+                    else if (i < c.Length)
+                        vertexColour = c[i];
+                    else if (palette != null)
+                        vertexColour = Sample(palette, uv[i]);
+                    else
+                        vertexColour = surfaceAlbedo;
+
+                    allColours.Add(vertexColour);
+
+                    int dominant = Dominant(b, w, i, influences);
+                    string bone = dominant >= 0 && dominant < jointNames.Length
+                        ? jointNames[dominant]
+                        : string.Empty;
+
+                    (Limb limb, float phase) = Classify(bone);
+                    allLimbs.Add(limb);
+                    allPhases.Add(phase);
+
+                    perBone.TryGetValue(bone, out int seen);
+                    perBone[bone] = seen + 1;
+                }
+
+                // Indices, and the case that has no index buffer.
+                //
+                // The merge writes one global index array, so the moment *any*
+                // surface is indexed every surface has to be. A non-indexed one
+                // contributed its vertices and nothing pointing at them: the
+                // geometry was in the buffer, correctly placed and correctly
+                // coloured, and no triangle referenced it. It simply was not there.
+                //
+                // glTF exporters mix the two freely — a body mesh indexed and a
+                // strap or a horn left flat is an ordinary export — so this is not
+                // a hypothetical. Sequential indices are what "non-indexed" means.
+                if (idx.Length > 0)
+                {
+                    foreach (int index in idx)
+                        allIndices.Add(index + offset);
+                }
+                else
+                {
+                    for (int i = 0; i < v.Length; i++)
+                        allIndices.Add(offset + i);
+                }
             }
         }
 
@@ -397,15 +439,11 @@ public partial class BakeBody : SceneTree
         // so the lowest sits at zero. Both matter: the enemy table is balanced
         // against a height, and a body whose feet are not at its origin is planted
         // through the floor by everything that draws it.
-        // Into the model root's space first. Everything below — the extents, the
-        // pivots, the placed vertices — is measured there, because that is the
-        // space the game will draw the body in.
-        for (int i = 0; i < vertices.Length; i++)
-            vertices[i] = toRoot * vertices[i];
-
-        for (int i = 0; i < normals.Length; i++)
-            normals[i] = (toRoot.Basis * normals[i]).Normalized();
-
+        // Already in the model root's space — each node's own transform was
+        // applied as its vertices were read, because with several nodes there is
+        // no single transform to apply here. Everything below — the extents, the
+        // pivots, the placed vertices — is measured in that space, because it is
+        // the space the game will draw the body in.
         float low = float.MaxValue;
         float high = float.MinValue;
         foreach (Vector3 vertex in vertices)
@@ -439,7 +477,7 @@ public partial class BakeBody : SceneTree
         // artist chose the colour of and a white one. White is the last resort and
         // is deliberately loud about it — nothing else in this game is white, so a
         // white variant on screen says the colour was lost rather than chosen.
-        Color fallback = Albedo(instance) ?? Colors.White;
+        Color fallback = Albedo(parts[0].Instance) ?? Colors.White;
 
         var rig = new Vector2[vertices.Length];
         var rig2 = new Vector2[vertices.Length];
@@ -815,6 +853,99 @@ public partial class BakeBody : SceneTree
     /// Checked on the instance override first and the surface second, because a
     /// glTF import puts it on the surface and anything hand-assembled tends to
     /// put it on the node.
+    /// A surface's base-colour texture, ready to sample, or null if it has none.
+    ///
+    /// **This is what makes a whole class of free asset usable, and it is not a
+    /// general texture-mapping feature.** A baked body is one vertex-coloured
+    /// surface and `body.gdshader` samples nothing — that is what lets a hundred
+    /// and eighty of them draw in one call. So a textured model normally arrives
+    /// here as a material whose `AlbedoColor` is plain white, and bakes a white
+    /// character, which looks exactly like a model whose author chose white.
+    ///
+    /// The rescue is that a large part of the free low-poly world does not texture
+    /// in the usual sense: it maps every triangle onto a flat patch of a small
+    /// palette image, so the "texture" is a colour lookup and each vertex's UV
+    /// names one colour. Kenney's entire 3D library is authored this way, under
+    /// the name `colormap`. Sampling that per vertex is not an approximation of
+    /// the texture — for a flat patch it is exact, and it turns those models into
+    /// precisely the vertex-coloured geometry this game already draws.
+    ///
+    /// It goes wrong, and goes wrong visibly rather than silently, on a model with
+    /// real texture detail: a face painted into a head's texture becomes whatever
+    /// single colour each of the head's few vertices happens to land on. That is a
+    /// judgement about the source asset rather than something to guard here, and
+    /// `--tint` overrides it per surface for anything that needs rescuing.
+    private static Image? PaletteImage(MeshInstance3D instance, int surface)
+    {
+        BaseMaterial3D? material = SurfaceMaterial(instance, surface);
+        if (material?.AlbedoTexture is not Texture2D texture)
+            return null;
+
+        Image? image = texture.GetImage();
+        if (image == null || image.IsEmpty())
+            return null;
+
+        // Compressed imports cannot be read pixel by pixel. Godot imports a glTF's
+        // embedded PNG as VRAM-compressed by default on some presets, and
+        // `GetPixel` on one of those returns garbage rather than failing.
+        if (image.IsCompressed() && image.Decompress() != Error.Ok)
+        {
+            GD.PushWarning($"  {instance.Name} surface {surface}: the albedo texture is compressed "
+                         + "and would not decompress — falling back to the material's flat colour");
+            return null;
+        }
+
+        return image;
+    }
+
+    /// One texel, in the space the shader wants.
+    ///
+    /// **The conversion is the opposite of what the neighbouring code does, and
+    /// the asymmetry is the specification rather than a preference.** `Tint`
+    /// converts a hand-typed hex from sRGB and deliberately does *not* convert the
+    /// model's own `COLOR_0` or `baseColorFactor`, because glTF stores those
+    /// linear. `baseColorTexture` is the other way round: glTF requires it to be
+    /// sRGB-encoded. So a texel has to be converted and a factor must not be, out
+    /// of the same file, and getting this backwards produces a body about twice as
+    /// bright as the artist drew — which is exactly the bug the first baked
+    /// stalker shipped with, through a bake that passed every soundness check.
+    ///
+    /// Nearest-neighbour, not bilinear. The whole point is that a UV lands inside
+    /// a flat patch; interpolating would blend in the neighbouring patch for any
+    /// vertex near a boundary, which is where UVs on this kind of model tend to
+    /// sit.
+    private static Color Sample(Image image, Vector2 uv)
+    {
+        int width = image.GetWidth();
+        int height = image.GetHeight();
+
+        // Wrapped rather than clamped: glTF's default sampler repeats, and a
+        // palette atlas is often addressed at exactly 1.0 along an edge.
+        float u = uv.X - Mathf.Floor(uv.X);
+        float v = uv.Y - Mathf.Floor(uv.Y);
+
+        int x = Mathf.Clamp((int)(u * width), 0, width - 1);
+        int y = Mathf.Clamp((int)(v * height), 0, height - 1);
+
+        return image.GetPixel(x, y).SrgbToLinear();
+    }
+
+    /// The material a surface actually draws with, through the override chain.
+    private static BaseMaterial3D? SurfaceMaterial(MeshInstance3D instance, int surface)
+    {
+        if (instance.GetSurfaceOverrideMaterial(surface) is BaseMaterial3D over)
+            return over;
+
+        if (instance.MaterialOverride is BaseMaterial3D node)
+            return node;
+
+        if (instance.Mesh != null && surface < instance.Mesh.GetSurfaceCount()
+            && instance.Mesh.SurfaceGetMaterial(surface) is BaseMaterial3D material)
+            return material;
+
+        return null;
+    }
+
     private static Color? Albedo(MeshInstance3D instance) => SurfaceAlbedo(instance, 0);
 
     /// The albedo of one surface's material.
