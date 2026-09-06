@@ -174,7 +174,78 @@ public static class PropLibrary
         CullMode = BaseMaterial3D.CullModeEnum.Back,
     };
 
-    public static ArrayMesh Build(PropKind kind) => kind switch
+    /// Kinds whose geometry comes from an authored model rather than from boxes.
+    ///
+    /// **The same trick the bodies use, and legal for the same reason.** The note
+    /// on `PropRenderer` says the props are boxes because a `MultiMesh` loses an
+    /// *imported* mesh on pack/save — which is true, and is about a mesh resource
+    /// owned by another file. A bake stops one step short of that: the arrays live
+    /// in a `.res` and `BakedBody.Build` constructs the `ArrayMesh` at runtime, so
+    /// the mesh is owned by nobody and the MultiMesh keeps it. `PropRenderer`
+    /// builds its MultiMeshes per run rather than packing them into a scene, so
+    /// nothing here is ever saved.
+    ///
+    /// Empty is the ordinary state. A kind with no entry is built from boxes, so
+    /// this table grows one prop at a time and every prop that is not in it is
+    /// exactly what it was.
+    ///
+    /// **Height is not taken from the model.** `Height(kind)` below is what the
+    /// arena was blocked out against and what the camera framing assumes; the bake
+    /// is scaled to it. A biome swaps furniture and must not swap the fight.
+    /// Empty, and deliberately shipped that way for now: the models this was
+    /// built against are Quaternius', whose licence moved off CC0 and restricts
+    /// redistributing the assets — see `assets/models/SOURCE.md`. The mechanism
+    /// is licence-neutral and proven; the content decision is separate. An entry
+    /// looks like:
+    ///
+    ///     { PropKind.Container, "res://resources/props/container.res" },
+    ///
+    /// baked with `BakeBody.cs -- <model> <out.res> <Height(kind)> prop`.
+    private static readonly System.Collections.Generic.Dictionary<PropKind, string> Baked = new();
+
+    /// The authored mesh for a kind, or null if it is built from boxes.
+    ///
+    /// **Built fresh every time, and the cache that used to be here is why.**
+    /// Holding the `ArrayMesh` in a static dictionary is the obvious
+    /// optimisation and it survives exactly one run: the mesh is handed to a
+    /// `MultiMesh` that belongs to the arena, the arena is freed at the end of
+    /// the run, the resource goes with it, and the next run gets a C# wrapper
+    /// around a disposed object. `LevelProbe` generates a hundred levels in one
+    /// process and turned into a wall of `ObjectDisposedException` — a single run
+    /// never sees it.
+    ///
+    /// There is nothing to optimise anyway. `PropRenderer` asks once per kind per
+    /// run, which is seven calls, and `BakedBody.Build` is an array copy.
+    private static ArrayMesh? Authored(PropKind kind)
+    {
+        if (!Baked.TryGetValue(kind, out string? path))
+            return null;
+
+        // `CacheMode.Ignore`, so each load owns its own copy.
+        //
+        // The default hands back Godot's cached instance, which several arenas
+        // then share. The arena is freed at the end of a run, the shared resource
+        // goes with it, and the next run is holding a wrapper around something
+        // that has been released — which surfaced as an intermittent native crash
+        // rather than as an exception, passing one run in two.
+        var resource = ResourceLoader.Load<BakedBodyResource>(path, "", ResourceLoader.CacheMode.Ignore);
+        ArrayMesh? mesh = resource == null ? null : BakedBody.Build(resource);
+
+        if (mesh == null)
+        {
+            // Named and dropped rather than silently falling back. A prop that
+            // quietly reverts to boxes looks like the model was never wired up,
+            // which is a much longer thing to diagnose than a missing file.
+            GD.PushWarning($"PropLibrary: {kind} names {path} and it did not build — using boxes");
+            return null;
+        }
+
+        return mesh;
+    }
+
+    public static ArrayMesh Build(PropKind kind) => Authored(kind) ?? BuildFromBoxes(kind);
+
+    private static ArrayMesh BuildFromBoxes(PropKind kind) => kind switch
     {
         PropKind.Container => Container(),
         PropKind.Barrier => Barrier(),

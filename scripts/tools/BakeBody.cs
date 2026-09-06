@@ -76,10 +76,17 @@ public partial class BakeBody : SceneTree
         // here, because it is the one argument that is usually absent and would
         // otherwise have to sit behind three floats and a palette to be reached.
         string pose = string.Empty;
+        bool asProp = false;
         foreach (string argument in args)
         {
             if (argument.StartsWith("pose:", System.StringComparison.Ordinal))
                 pose = argument[5..];
+
+            // Scenery rather than a creature: no rig is derived, no skeleton is
+            // required, and the mesh is normalised into the unit footprint the
+            // arena scales cover by.
+            if (argument == "prop")
+                asProp = true;
         }
 
         // Defaults matched to the walker, which is the variant everything else is
@@ -107,7 +114,7 @@ public partial class BakeBody : SceneTree
         // colours and the mistake was about argument order, which is the worst
         // combination for anybody reading it.
         Color[]? tints = null;
-        if (args.Length > 6 && !args[6].StartsWith("pose:", System.StringComparison.Ordinal))
+        if (args.Length > 6 && !args[6].StartsWith("pose:", System.StringComparison.Ordinal) && args[6] != "prop")
         {
             // Refused rather than ignored. A colour that cannot be read is a
             // typo, and a bake that quietly keeps the model's white is the one
@@ -157,7 +164,7 @@ public partial class BakeBody : SceneTree
             tints = chosen;
         }
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose) ? 0 : 1);
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose, asProp) ? 0 : 1);
     }
 
     /// Puts the model into one frame of one of its own animations before the
@@ -245,7 +252,7 @@ public partial class BakeBody : SceneTree
 
     public static bool Bake(string source, string destination, float height,
                             float legSwing, float armSwing, float bob, Color[]? tints,
-                            string pose = "")
+                            string pose = "", bool asProp = false)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -359,7 +366,7 @@ public partial class BakeBody : SceneTree
         GD.Print($"  {parts.Count} mesh node(s): "
                + string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => p.Instance.Name.ToString())));
 
-        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed))
+        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed, asProp))
         {
             root.Free();
             return false;
@@ -392,7 +399,7 @@ public partial class BakeBody : SceneTree
     private static bool Convert(
         System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
         Skeleton3D? skeleton, BakedBodyResource baked,
-        float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed)
+        float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed, bool asProp)
     {
         var allVertices = new System.Collections.Generic.List<Vector3>();
         var allNormals = new System.Collections.Generic.List<Vector3>();
@@ -754,6 +761,62 @@ public partial class BakeBody : SceneTree
             // every footfall — four centimetres of gap that reads as a body coming
             // apart.
             rig2[i] = new Vector2(phases[i], bob);
+        }
+
+        // A prop has no legs and is not supposed to. Everything above this point
+        // is shared with a body — the node merge, the palette sampling, the
+        // colour rules — and everything below is about a rig, so this is where
+        // the two part company.
+        //
+        // **Normalised into a unit footprint, which a body is not.** The arena
+        // authors cover with X and Z running -0.5 to 0.5 and Y in real metres,
+        // because `LevelGenerator` scales each instance to the footprint the
+        // layout picked and leaves Y near 1. A model baked at its own size would
+        // be stretched by that scale to whatever the layout wanted, so a barrel
+        // arrives as a barrel-shaped smear across four metres of ground.
+        //
+        // The height is the caller's, not the model's, and that is the same rule
+        // the enemy table has: `PropLibrary.Height` is what the fight was tuned
+        // against, and a model that is "really" three metres tall does not get to
+        // change what the player can see over.
+        if (asProp)
+        {
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minZ = float.MaxValue, maxZ = float.MinValue;
+            foreach (Vector3 vertex in vertices)
+            {
+                minX = Mathf.Min(minX, vertex.X); maxX = Mathf.Max(maxX, vertex.X);
+                minZ = Mathf.Min(minZ, vertex.Z); maxZ = Mathf.Max(maxZ, vertex.Z);
+            }
+
+            float centreX = (minX + maxX) * 0.5f, centreZ = (minZ + maxZ) * 0.5f;
+
+            // The larger horizontal extent maps to 1.0 and the other follows the
+            // same factor, so the footprint is unit-sized and the plan shape is
+            // preserved. Fitting each axis separately would square up every
+            // rectangular object.
+            float widest = Mathf.Max(Mathf.Max(maxX - minX, maxZ - minZ), 0.0001f);
+            float flat = 1.0f / widest;
+
+            for (int i = 0; i < vertices.Length; i++)
+            {
+                vertices[i] = new Vector3(
+                    (vertices[i].X - centreX) * flat,
+                    (vertices[i].Y - low) * scale,
+                    (vertices[i].Z - centreZ) * flat);
+            }
+
+            baked.Vertices = vertices;
+            baked.Normals = normals.Length == vertices.Length ? normals : RecomputeNormals(vertices, indices);
+            baked.Colours = colours;
+            baked.Rig = new Vector2[vertices.Length];
+            baked.Rig2 = new Vector2[vertices.Length];
+            baked.Indices = indices;
+            baked.StandingHeight = height;
+
+            GD.Print($"  prop: unit footprint {(maxX - minX) * flat:F2} x {(maxZ - minZ) * flat:F2}, "
+                   + $"{height:F2} m tall");
+            return true;
         }
 
         if (legs == 0)
