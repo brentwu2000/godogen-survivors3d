@@ -67,9 +67,19 @@ public partial class BakeBody : SceneTree
         if (args.Length < 3 || !float.TryParse(args[2], out float height))
         {
             GD.PushError("usage: BakeBody.cs -- <source.glb> <out.res> <height metres> "
-                       + "[swing] [armSwing] [bob] [rrggbb,rrggbb,...]");
+                       + "[swing] [armSwing] [bob] [rrggbb,rrggbb,...] [pose:<animation>[@seconds]]");
             Quit(1);
             return;
+        }
+
+        // Positional everywhere else in this argument list, and a named flag
+        // here, because it is the one argument that is usually absent and would
+        // otherwise have to sit behind three floats and a palette to be reached.
+        string pose = string.Empty;
+        foreach (string argument in args)
+        {
+            if (argument.StartsWith("pose:", System.StringComparison.Ordinal))
+                pose = argument[5..];
         }
 
         // Defaults matched to the walker, which is the variant everything else is
@@ -88,8 +98,16 @@ public partial class BakeBody : SceneTree
         // line said otherwise. `Color.FromHtml` is happy either way; only the
         // shell cares. Both forms are accepted here — the point of the note is
         // the shell, not the parser.
+        // The `pose:` flag is skipped here, and finding that out cost a run.
+        //
+        // Every other argument is positional, so the natural way to pass a pose
+        // without a palette is an empty string in the palette's slot — and a
+        // shell eats an empty argument, sliding `pose:idle` into slot six where
+        // this parser reads it as a colour and refuses it. The message was about
+        // colours and the mistake was about argument order, which is the worst
+        // combination for anybody reading it.
         Color[]? tints = null;
-        if (args.Length > 6)
+        if (args.Length > 6 && !args[6].StartsWith("pose:", System.StringComparison.Ordinal))
         {
             // Refused rather than ignored. A colour that cannot be read is a
             // typo, and a bake that quietly keeps the model's white is the one
@@ -139,11 +157,95 @@ public partial class BakeBody : SceneTree
             tints = chosen;
         }
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints) ? 0 : 1);
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose) ? 0 : 1);
+    }
+
+    /// Puts the model into one frame of one of its own animations before the
+    /// geometry is read.
+    ///
+    /// **A rigged model's bind pose is a T-pose, and a T-pose is not a body.**
+    /// Every skinned character tried here — Kenney's Mini set, all of
+    /// Quaternius' survivors and zombies — bakes with its arms straight out
+    /// sideways, because that is the pose the vertices are stored in and the
+    /// baker was reading them raw. It is not a defect in those models; it is
+    /// where riggers put the rest pose, and the animations are what put the arms
+    /// down. So the fix is to run one.
+    ///
+    /// `pose:idle` takes the first frame of the animation named `idle`, matched
+    /// case-insensitively because packs disagree (`Idle`, `idle`, `Idle_Gun`).
+    /// `pose:idle@0.4` takes it 0.4 s in, which matters for a cycle whose first
+    /// frame is the extreme rather than the middle.
+    ///
+    /// Returns false only if a pose was asked for and could not be applied.
+    /// Silence here would mean shipping a T-posed body from a command line that
+    /// says otherwise — the exact failure this argument exists to end.
+    private static bool ApplyPose(Node root, string request)
+    {
+        string name = request;
+        float at = 0.0f;
+
+        int marker = request.IndexOf('@');
+        if (marker >= 0)
+        {
+            name = request[..marker];
+            float.TryParse(request[(marker + 1)..], out at);
+        }
+
+        AnimationPlayer? player = FindPlayer(root);
+        if (player == null)
+        {
+            GD.PushError($"  pose:{request} was asked for and {root.Name} has no AnimationPlayer");
+            return false;
+        }
+
+        // Case-insensitive, and reported when it misses. A name that does not
+        // match leaves the skeleton at rest, which looks exactly like not having
+        // passed the argument at all.
+        string? chosen = null;
+        foreach (string candidate in player.GetAnimationList())
+        {
+            if (string.Equals(candidate, name, System.StringComparison.OrdinalIgnoreCase))
+            {
+                chosen = candidate;
+                break;
+            }
+        }
+
+        if (chosen == null)
+        {
+            GD.PushError($"  no animation called '{name}'. This model has: "
+                       + string.Join(", ", player.GetAnimationList()));
+            return false;
+        }
+
+        // `Seek` with update:true is what actually writes the pose onto the
+        // skeleton. Playing without it advances nothing in a headless tool that
+        // never runs a frame.
+        player.CurrentAnimation = chosen;
+        player.Seek(at, update: true);
+
+        GD.Print($"  posed from '{chosen}' at {at:F2}s");
+        return true;
+    }
+
+    private static AnimationPlayer? FindPlayer(Node node)
+    {
+        if (node is AnimationPlayer player)
+            return player;
+
+        foreach (Node child in node.GetChildren())
+        {
+            AnimationPlayer? found = FindPlayer(child);
+            if (found != null)
+                return found;
+        }
+
+        return null;
     }
 
     public static bool Bake(string source, string destination, float height,
-                            float legSwing, float armSwing, float bob, Color[]? tints)
+                            float legSwing, float armSwing, float bob, Color[]? tints,
+                            string pose = "")
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -155,6 +257,32 @@ public partial class BakeBody : SceneTree
         Node root = packed.Instantiate();
 
         Skeleton3D? skeleton = FindSkeleton(root);
+        bool posed = false;
+
+        if (!string.IsNullOrEmpty(pose))
+        {
+            // In the tree, because an AnimationPlayer resolves its tracks by
+            // NodePath and reaches nothing from a detached subtree. Godot does
+            // not error on that — it applies no keys and leaves the skeleton at
+            // rest, which is indistinguishable from the pose having been applied
+            // and the model simply being T-posed.
+            if (Engine.GetMainLoop() is not SceneTree tree)
+            {
+                GD.PushError("  pose was asked for outside a SceneTree");
+                root.Free();
+                return false;
+            }
+
+            tree.Root.AddChild(root);
+
+            if (!ApplyPose(root, pose))
+            {
+                root.QueueFree();
+                return false;
+            }
+
+            posed = true;
+        }
 
         // Every mesh node, merged, each in its own space.
         //
@@ -215,18 +343,23 @@ public partial class BakeBody : SceneTree
         // merge needed thinking about rather than concatenating: a head parented
         // under a neck carries the neck's offset in its node transform, and
         // applying the body's transform to it would stack the head on the floor.
+        //
+        // A posed bake takes the **skeleton's** transform instead, because
+        // skinning lands the vertex in skeleton space rather than in the mesh
+        // node's. See `SkinMatrices`.
         var parts = new System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)>();
         foreach (MeshInstance3D part in meshes)
         {
+            Node3D from = posed && skeleton != null && part.Skin != null ? skeleton : part;
             parts.Add((part, root is Node3D root3D
-                ? Relative(part, root3D)
+                ? Relative(from, root3D)
                 : Transform3D.Identity));
         }
 
         GD.Print($"  {parts.Count} mesh node(s): "
                + string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => p.Instance.Name.ToString())));
 
-        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints))
+        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed))
         {
             root.Free();
             return false;
@@ -259,7 +392,7 @@ public partial class BakeBody : SceneTree
     private static bool Convert(
         System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
         Skeleton3D? skeleton, BakedBodyResource baked,
-        float height, float legSwing, float armSwing, float bob, Color[]? tints)
+        float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed)
     {
         var allVertices = new System.Collections.Generic.List<Vector3>();
         var allNormals = new System.Collections.Generic.List<Vector3>();
@@ -297,6 +430,13 @@ public partial class BakeBody : SceneTree
             // fallback: there is nothing to be dominant over, because the author
             // already separated the mesh exactly where the rig bends.
             (Limb nodeLimb, float nodePhase) = Classify(instance.Name);
+
+            // Only built when a pose was asked for, so the default path stays the
+            // arithmetic it always was and every `.res` already on disk rebakes
+            // bit-identical.
+            Transform3D?[]? skinMatrices = posed && skeleton != null
+                ? SkinMatrices(instance, skeleton)
+                : null;
 
             // Every surface, merged.
             //
@@ -336,6 +476,31 @@ public partial class BakeBody : SceneTree
                 // to allow, and deciding it here is what keeps the vertex loop
                 // from having to know.
                 bool skinned = b.Length > 0 && w.Length > 0;
+
+                // **On a rigged model, an unskinned mesh is an accessory.**
+                //
+                // The two authoring styles are not a spectrum, and treating them
+                // as one is how the merge became too eager. A rigid-node model
+                // has no skeleton at all and every node is a limb. A rigged model
+                // has one skin covering the body, and anything left outside it is
+                // a thing the character can hold — Quaternius ships a survivor as
+                // a skinned body plus ten separate weapon meshes in the same
+                // file, which is why the pack also ships `_SingleWeapon` copies.
+                //
+                // Merging those produced a character wielding an axe, a guitar, a
+                // pistol, a rifle, a shotgun, an SMG, a spear, two bats and a
+                // knife simultaneously, welded into the torso because none of
+                // their names classify as a limb. Nothing errored.
+                //
+                // Skipped rather than refused, because a held weapon is not a
+                // defect in the model and this game draws weapons itself — see
+                // `BodyMeshLibrary.Carry`, which appends the silhouette of
+                // whatever is actually equipped.
+                if (!skinned && skeleton != null)
+                {
+                    GD.Print($"    {instance.Name}: unskinned on a rigged model — an accessory, skipped");
+                    continue;
+                }
 
                 // Four influences per vertex is the glTF norm and what Godot hands
                 // back. Read per surface rather than once, because nothing promises
@@ -398,10 +563,26 @@ public partial class BakeBody : SceneTree
                 {
                     // Into the model root's space here rather than once at the
                     // end, because each node has its own transform.
-                    allVertices.Add(toRoot * v[i]);
-                    allNormals.Add(i < n.Length
-                        ? (toRoot.Basis * n[i]).Normalized()
-                        : Vector3.Up);
+                    //
+                    // Two different spaces, and which one applies depends on
+                    // whether the vertex went through the skin: a skinned vertex
+                    // lands in the skeleton's space, an unskinned one is still in
+                    // its own node's. `toRoot` was resolved accordingly.
+                    if (skinMatrices != null && skinned)
+                    {
+                        Transform3D skinTo = Blend(skinMatrices, b, w, i, influences);
+                        allVertices.Add(toRoot * (skinTo * v[i]));
+                        allNormals.Add(i < n.Length
+                            ? (toRoot.Basis * (skinTo.Basis * n[i])).Normalized()
+                            : Vector3.Up);
+                    }
+                    else
+                    {
+                        allVertices.Add(toRoot * v[i]);
+                        allNormals.Add(i < n.Length
+                            ? (toRoot.Basis * n[i]).Normalized()
+                            : Vector3.Up);
+                    }
 
                     // Order of preference: a forced tint, then the mesh's own
                     // vertex colours, then a sampled palette texel, then the
@@ -779,6 +960,93 @@ public partial class BakeBody : SceneTree
         }
 
         return names;
+    }
+
+    /// The skinning matrix for each joint slot, for a skeleton already posed.
+    ///
+    /// `GetBoneGlobalPose(bone) * GetBindPose(i)` is what Godot's own renderer
+    /// multiplies a vertex by, and the result is in **skeleton space** rather
+    /// than in the mesh node's — which is why a posed bake takes the skeleton's
+    /// transform to the root and an unposed one takes the mesh node's. Getting
+    /// that pair the wrong way round produces a body that is correctly posed and
+    /// standing somewhere else.
+    ///
+    /// Null for a slot that resolves to no bone, so the caller can leave that
+    /// vertex where the model put it rather than collapsing it to the origin.
+    private static Transform3D?[] SkinMatrices(MeshInstance3D instance, Skeleton3D skeleton)
+    {
+        Skin? skin = instance.Skin;
+
+        if (skin == null)
+        {
+            var direct = new Transform3D?[skeleton.GetBoneCount()];
+            for (int i = 0; i < direct.Length; i++)
+                direct[i] = skeleton.GetBoneGlobalPose(i) * skeleton.GetBoneGlobalRest(i).AffineInverse();
+
+            return direct;
+        }
+
+        var matrices = new Transform3D?[skin.GetBindCount()];
+
+        for (int i = 0; i < matrices.Length; i++)
+        {
+            int bone = skin.GetBindBone(i);
+
+            // Bound by name rather than by index, which is the other half of the
+            // case `JointNames` already handles.
+            if (bone < 0)
+            {
+                string bound = skin.GetBindName(i);
+                bone = string.IsNullOrEmpty(bound) ? -1 : skeleton.FindBone(bound);
+            }
+
+            if (bone < 0 || bone >= skeleton.GetBoneCount())
+                continue;
+
+            matrices[i] = skeleton.GetBoneGlobalPose(bone) * skin.GetBindPose(i);
+        }
+
+        return matrices;
+    }
+
+    /// One vertex through the skin, weights normalised.
+    ///
+    /// Normalised because exporters do not always hand back weights that sum to
+    /// one, and a set summing to 0.98 shrinks the body toward the origin by two
+    /// per cent — which reads as the model being slightly the wrong scale rather
+    /// than as an arithmetic bug.
+    private static Transform3D Blend(Transform3D?[] matrices, int[] bones, float[] weights,
+                                     int vertex, int influences)
+    {
+        var basis = new Basis(Vector3.Zero, Vector3.Zero, Vector3.Zero);
+        Vector3 origin = Vector3.Zero;
+        float total = 0.0f;
+
+        for (int i = 0; i < influences; i++)
+        {
+            int at = vertex * influences + i;
+            if (at >= bones.Length || at >= weights.Length)
+                break;
+
+            float weight = weights[at];
+            int slot = bones[at];
+            if (weight <= 0.0f || slot < 0 || slot >= matrices.Length || matrices[slot] is not Transform3D m)
+                continue;
+
+            basis = new Basis(basis.X + m.Basis.X * weight,
+                              basis.Y + m.Basis.Y * weight,
+                              basis.Z + m.Basis.Z * weight);
+            origin += m.Origin * weight;
+            total += weight;
+        }
+
+        if (total <= 0.0001f)
+            return Transform3D.Identity;
+
+        float scale = 1.0f / total;
+        return new Transform3D(
+            new Basis(basis.X * scale, basis.Y * scale, basis.Z * scale),
+            origin * scale);
     }
 
     /// Where a kind of limb stops, in placed space.
