@@ -192,16 +192,31 @@ public static class PropLibrary
     /// **Height is not taken from the model.** `Height(kind)` below is what the
     /// arena was blocked out against and what the camera framing assumes; the bake
     /// is scaled to it. A biome swaps furniture and must not swap the fight.
-    /// Empty, and deliberately shipped that way for now: the models this was
-    /// built against are Quaternius', whose licence moved off CC0 and restricts
-    /// redistributing the assets — see `assets/models/SOURCE.md`. The mechanism
-    /// is licence-neutral and proven; the content decision is separate. An entry
-    /// looks like:
+    /// Baked with `BakeBody.cs -- <model> <out.res> <Height(kind)> prop`, and the
+    /// height column of that command is `Height(kind)` below rather than anything
+    /// the model measures. Sources and licence: `assets/models/SOURCE.md`.
     ///
-    ///     { PropKind.Container, "res://resources/props/container.res" },
+    /// **The `Wall` role is deliberately absent and every structure kind is too.**
+    /// A Wall block is long and thin and the generator scales cover along its
+    /// footprint, so a modelled object in that slot is stretched to whatever
+    /// length the layout picked — the exact smear the unit-footprint
+    /// normalisation exists to bound. Boxes stretch gracefully; a water tower
+    /// does not. The same goes for the structures, which fill whole layout blocks.
     ///
-    /// baked with `BakeBody.cs -- <model> <out.res> <Height(kind)> prop`.
-    private static readonly System.Collections.Generic.Dictionary<PropKind, string> Baked = new();
+    /// The laboratory's furniture has no entry either: an outdoor apocalypse kit
+    /// has no server rack, and a wrong object is worse than a plain one.
+    private static readonly System.Collections.Generic.Dictionary<PropKind, string> Baked = new()
+    {
+        { PropKind.Container, "res://resources/props/container.res" },
+        { PropKind.Rubble, "res://resources/props/rubble.res" },
+        { PropKind.Barrier, "res://resources/props/barrier.res" },
+        { PropKind.Dumpster, "res://resources/props/dumpster.res" },
+        { PropKind.WaterTower, "res://resources/props/watertower.res" },
+        { PropKind.Billboard, "res://resources/props/billboard.res" },
+
+        { PropKind.CarWreck, "res://resources/props/carwreck.res" },
+        { PropKind.TrafficBarrier, "res://resources/props/trafficbarrier.res" },
+    };
 
     /// The authored mesh for a kind, or null if it is built from boxes.
     ///

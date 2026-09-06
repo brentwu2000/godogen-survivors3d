@@ -719,6 +719,27 @@ than a preference: `COLOR_0` and `baseColorFactor` are stored linear and must *n
 while `baseColorTexture` is required to be sRGB and must be. Getting it backwards produces a body
 about twice as bright as drawn — the exact bug the first baked stalker shipped with.
 
+**Cover can come from a model now, and the reason it could not is narrower than it looked.**
+`PropRenderer` says the props are boxes because a MultiMesh loses an imported mesh on pack/save. True,
+and it is about a mesh resource *owned by another file* — the same escape hatch the horde already uses
+applies: the arrays live in a `.res` and the `ArrayMesh` is built at runtime, so it is owned by
+nobody, and `PropRenderer` builds per run rather than packing. Eight kinds are authored models; `Wall`
+and every structure stay boxes because the generator stretches cover along its footprint and boxes
+stretch gracefully where a water tower does not.
+
+**A modelled prop is normalised into a unit footprint, and the height is never the model's.** Cover is
+authored with X and Z in -0.5..0.5 and Y in real metres because the layout scales each instance to the
+footprint it picked. `Height(kind)` is what the fight was tuned against, so a biome swaps furniture
+without swapping what the player can see over — the same rule the enemy table has.
+
+**Two lifetime bugs, both invisible in a single run.** Caching the built `ArrayMesh` statically
+survives exactly one arena: the mesh goes to a MultiMesh the arena owns, the arena is freed, and the
+next run holds a wrapper around a disposed object — a hundred levels in one process turned into a wall
+of `ObjectDisposedException`. Then loading with the default cache mode hands back Godot's *shared*
+instance, so arenas share one resource and the first teardown releases it under the others; that one
+did not throw at all, it was an intermittent native crash passing one run in two. `CacheMode.Ignore`,
+and no cache.
+
 **There is a second way to author a body, and it is the better match for this shader.** A skinned
 model says which vertices are a leg through joints and weights; a **rigid-node** model says it through
 the node tree — one mesh per limb, named `leg-left` and `arm-right`, animated by moving node

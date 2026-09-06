@@ -79,6 +79,67 @@ sha256sum kenney_mini-characters.zip     # must match the table above
 unzip -p kenney_mini-characters.zip "Models/GLB format/character-male-a.glb" | sha256sum
 ```
 
+## Quaternius — Zombie Apocalypse Kit
+
+Cover and scenery. Baked into `resources/props/*.res` by
+`BakeBody.cs ... prop`; `PropLibrary.Baked` maps each to a `PropKind`.
+
+| | |
+| :--- | :--- |
+| Pack | Zombie Apocalypse Kit (60 models), dated 2024-03-14 |
+| Author | Quaternius — <https://quaternius.com> |
+| Page | <https://quaternius.com/packs/zombieapocalypsekit.html> |
+| Download | the page's button opens a Google Drive folder: <https://drive.google.com/drive/folders/1mWP6sCHun7OUMHQeDNZLrXTteXlzWg_t> |
+| Licence | **Quaternius Asset License (QAL) v1.0** — <https://quaternius.com/license.html> |
+| Attribution | Not required. This file is the project's own record, not a licence obligation. |
+
+| In repo | From | sha256 | Used as |
+| :--- | :--- | :--- | :--- |
+| `props/Container_Red.gltf` | `Environment/glTF/` | `181c71d3b35f00043ace29301cd664bdedabc13e9b761efbcfa0b96556571cde` | `Container` |
+| `props/Wheels_Stack.gltf` | `Environment/glTF/` | `3297d1566d40a6d2d0d8cb765ec83050633a535b13a2181c067999f6e989b466` | `Rubble` |
+| `props/TrafficBarrier_1.gltf` | `Environment/glTF/` | `3594493dc95e87cf9fac68d6b56f9e269f44d01cdb31bded10b34fa300beb2de` | `Barrier` |
+| `props/Barrel.gltf` | `Environment/glTF/` | `c05a1b4e43c4779e3d0311d02cb5eb735d6ede9c629d41b25e46f73f0b36b096` | `Dumpster` |
+| `props/WaterTower.gltf` | `Environment/glTF/` | `8ace4fa799796c942433659d0c31046d4854e2ce6da6cbc7ba20b358fc386a12` | `WaterTower` |
+| `props/TownSign.gltf` | `Environment/glTF/` | `2cc983ee4a4ab0aa9f71605acaaf8371badb5a3d971aa92c6541924054b1b03b` | `Billboard` |
+| `props/PlasticBarrier.gltf` | `Environment/glTF/` | `78407ae2ee697c2be2c59cd1e71a23f0acda2c6b23521d57a6837e71a0163ec3` | `TrafficBarrier` |
+| `props/Vehicle_Pickup.gltf` | `Vehicles/glTF/` | `b0f522dc1fbc8daafb4df1a7e86d9d7df087c04b06a012f05d48a49b0a99655a` | `CarWreck` |
+
+**No archive hash, and that is a gap worth naming.** The Kenney entries above cite
+the sha256 of the published `.zip`, so anyone can re-download and verify the
+chain end to end. Quaternius delivers through a Google Drive folder that
+re-packs on the fly, so the archive has no stable hash to record. The per-file
+hashes are of the files as committed; they prove those files have not changed
+since, and they do not prove what was downloaded matched what Quaternius
+published. If that matters later, the fix is to obtain the pack from a source
+that publishes a stable archive.
+
+**The `.gltf` files carry their textures inside them** as base64 buffers, so
+there is no `Textures/` sibling to lose — unlike the Kenney models above, where
+forgetting `colormap.png` bakes a white character.
+
+### Why these are committed even though the licence is not CC0
+
+The section below is the reasoning; this is the decision.
+
+QAL §2 permits incorporating the assets into a product and distributing that
+product commercially. §3(a) forbids redistributing the assets themselves "as a
+standalone asset, asset pack, stock file, template, or similar product …
+regardless of how much the Assets have been modified". A public source tree that
+commits raw `.gltf` files sits closer to §3(a) than a shipped build does, which
+is why the decision was taken explicitly rather than by default.
+
+Two things weigh the other way and are worth writing down. The pack pages —
+including this one — still carry a CC0 badge linking to the CC0 deed, while the
+site-wide licence page says QAL v1.0 as of 2026-08-28; the two contradict each
+other and the more permissive one is the page the asset is actually offered on.
+And this repository is a game, not an asset pack: the files are here to be
+compiled into a build, alongside the code that consumes them.
+
+If Quaternius ever objects, the remedy is small and known: the models feed
+`resources/props/*.res` through one table in `PropLibrary`, and removing the
+`.gltf` sources leaves the game running on the procedural boxes it shipped with
+for its first twenty phases. Nothing depends on them structurally.
+
 ## A note on Quaternius, who used to be the other safe source
 
 `README.md` listed Kenney and Quaternius together as CC0 and safe to use
