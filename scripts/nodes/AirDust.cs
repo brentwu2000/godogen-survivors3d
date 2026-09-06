@@ -48,7 +48,7 @@ public partial class AirDust : Node3D
         material.SetShaderParameter("slab", SlabSize);
 
         var builder = new MeshBuilder();
-        builder.Box(Vector3.Zero, Vector3.One * Size, Colors.White);
+        builder.Box(Vector3.Zero, Vector3.One * Size, Palette.Dust);
         ArrayMesh mesh = builder.Build();
         mesh.SurfaceSetMaterial(0, material);
 

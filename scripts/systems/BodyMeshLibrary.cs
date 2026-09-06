@@ -121,27 +121,23 @@ public static class BodyMeshLibrary
         // Gaunt and slightly stooped. The baseline everything else reads against,
         // so it is deliberately the least distinctive silhouette in the set.
         "walker" => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
-            new Color(0.36f, 0.40f, 0.34f), new Color(0.44f, 0.42f, 0.38f),
-            new Color(0.62f, 0.58f, 0.50f), false),
+            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
 
         // Thin, leaning hard into the run, arms back. Recognisable from the
         // silhouette alone before the speed is apparent, which is the whole point
         // — by the time the speed is apparent it is next to you.
         "runner" => new Build(height, 0.36f, 0.045f, 0.16f, 26.0f, 0.95f, 0.48f, 0.055f,
-            new Color(0.46f, 0.30f, 0.28f), new Color(0.52f, 0.36f, 0.32f),
-            new Color(0.66f, 0.50f, 0.42f), false),
+            Palette.RunnerTorso, Palette.RunnerLimb, Palette.RunnerHead, false),
 
         // Shoulders wider than a doorway, short stride. Bulk reads as slowness at
         // any distance, which is honest: it is the slowest thing in the game.
         "brute" => new Build(height, 0.78f, 0.115f, 0.38f, -4.0f, 0.32f, 0.24f, 0.045f,
-            new Color(0.30f, 0.29f, 0.31f), new Color(0.38f, 0.35f, 0.34f),
-            new Color(0.50f, 0.44f, 0.40f), false),
+            Palette.BruteTorso, Palette.BruteLimb, Palette.BruteHead, false),
 
         // A belly on legs. Nothing else in the set is round, so roundness alone
         // is enough to mean "do not stand next to this".
         "bloater" => new Build(height, 0.46f, 0.085f, 0.30f, 4.0f, 0.30f, 0.30f, 0.075f,
-            new Color(0.44f, 0.46f, 0.30f), new Color(0.40f, 0.42f, 0.32f),
-            new Color(0.56f, 0.56f, 0.40f), true),
+            Palette.BloaterTorso, Palette.BloaterLimb, Palette.BloaterHead, true),
 
         // Wider than it is tall, and that is the entire idea.
         //
@@ -155,8 +151,7 @@ public static class BodyMeshLibrary
         // it the health and the knockback resistance; the shape has to be what
         // says so before the player has been hit once.
         "bulwark" => new Build(height, 1.62f, 0.16f, 0.44f, -8.0f, 0.20f, 0.16f, 0.030f,
-            new Color(0.26f, 0.25f, 0.24f), new Color(0.33f, 0.30f, 0.27f),
-            new Color(0.42f, 0.38f, 0.33f), true),
+            Palette.BulwarkTorso, Palette.BulwarkLimb, Palette.BulwarkHead, true),
 
         // Dark, and carrying a light.
         //
@@ -171,26 +166,22 @@ public static class BodyMeshLibrary
         // brightest thing on screen and the creature around it has to be nearly
         // nothing, or what approaches is a lit man rather than a light.
         "lantern" => new Build(height, 0.40f, 0.052f, 0.19f, 16.0f, 0.50f, 0.34f, 0.045f,
-            new Color(0.13f, 0.14f, 0.16f), new Color(0.16f, 0.16f, 0.18f),
-            new Color(0.20f, 0.21f, 0.22f), false,
+            Palette.LanternTorso, Palette.LanternLimb, Palette.LanternHead, false,
             Carry.None, true, new Color(0.55f, 0.92f, 0.72f, 0.0f)),
 
         // Long-armed and narrow, because it fights at eight metres and the reach
         // is the tell.
         "spitter" => new Build(height, 0.38f, 0.050f, 0.18f, 12.0f, 0.45f, 0.38f, 0.030f,
-            new Color(0.28f, 0.42f, 0.38f), new Color(0.34f, 0.48f, 0.42f),
-            new Color(0.48f, 0.62f, 0.52f), false),
+            Palette.SpitterTorso, Palette.SpitterLimb, Palette.SpitterHead, false),
 
         // Everything larger, and darker than anything around it. A boss that
         // shared the horde's value range would disappear into it at exactly the
         // moment the horde is thickest.
         "boss" => new Build(height, 1.10f, 0.150f, 0.50f, 0.0f, 0.40f, 0.34f, 0.060f,
-            new Color(0.20f, 0.18f, 0.22f), new Color(0.26f, 0.22f, 0.24f),
-            new Color(0.40f, 0.30f, 0.30f), false),
+            Palette.BossTorso, Palette.BossLimb, Palette.BossHead, false),
 
         _ => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
-            new Color(0.36f, 0.40f, 0.34f), new Color(0.44f, 0.42f, 0.38f),
-            new Color(0.62f, 0.58f, 0.50f), false),
+            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
     };
 
     /// Upright, squarer, and in colours nothing in the horde uses.
@@ -202,8 +193,7 @@ public static class BodyMeshLibrary
 
     public static Build ForPlayer(float height, Carry held) =>
         ForPlayer(height, held,
-                  new Color(0.22f, 0.34f, 0.52f), new Color(0.26f, 0.30f, 0.38f),
-                  new Color(0.72f, 0.60f, 0.48f));
+                  Palette.PlayerTorso, Palette.PlayerLimb, Palette.PlayerHead);
 
     /// A named survivor, in their own colours.
     ///

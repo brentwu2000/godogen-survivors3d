@@ -70,8 +70,8 @@ public partial class BuildMain : SceneTree
         {
             Name = "Sun",
             RotationDegrees = new Vector3(-55.0f, -35.0f, 0.0f),
-            LightColor = new Color(1.0f, 0.94f, 0.83f),
-            LightEnergy = 1.25f,
+            LightColor = Palette.Sun,
+            LightEnergy = Palette.SunEnergy,
             ShadowEnabled = true,
 
             // Long, soft shadows across a flat plane read as late afternoon and
@@ -218,9 +218,11 @@ public partial class BuildMain : SceneTree
 
             // Cool, because the sun is warm. Shadowed faces picking up sky colour
             // instead of simply being darker is the single cheapest thing that
-            // makes geometry look lit rather than shaded.
-            AmbientLightColor = new Color(0.42f, 0.50f, 0.62f),
-            AmbientLightEnergy = 0.55f,
+            // makes geometry look lit rather than shaded — and outdoors at midday
+            // it is a much larger share of the light than it was at dusk, which is
+            // why the energy went up with the colour.
+            AmbientLightColor = Palette.Ambient,
+            AmbientLightEnergy = Palette.AmbientEnergy,
 
             // Filmic rather than linear: linear clips anything bright to flat
             // white, which is what made the concrete tops read as paper. The
@@ -231,10 +233,10 @@ public partial class BuildMain : SceneTree
 
             AdjustmentEnabled = true,
             AdjustmentContrast = 1.08f,
-            AdjustmentSaturation = 1.12f,
+            AdjustmentSaturation = 1.18f,
             AdjustmentBrightness = 1.0f,
 
-            // Distance goes dark, and this is the whole reason the game has a
+            // Distance goes away, and this is the whole reason the game has a
             // horizon worth looking at.
             //
             // Without it a perspective camera shows every enemy in the arena at
@@ -245,9 +247,18 @@ public partial class BuildMain : SceneTree
             FogEnabled = true,
             FogMode = Godot.Environment.FogModeEnum.Depth,
 
-            // Near-black rather than atmospheric grey. The game is set at dusk
-            // and the point is losing sight of things, not haze.
-            FogLightColor = new Color(0.05f, 0.05f, 0.07f),
+            // Bright haze rather than near-black, and the distances below did not
+            // move an inch to pay for it.
+            //
+            // This is the change the whole phase turns on. Fog that hides by being
+            // dark only hides dark things: brighten the air and leave the horde
+            // where it was and the far half of the spawn ring becomes a row of
+            // legible silhouettes, which is a difficulty cut nobody asked for
+            // wearing an art change's clothes. Fog hides by *washing out contrast*,
+            // and it does that in either direction — so the horde moved into the
+            // same band as the air it walks out of, and `test/PaletteProbe.cs`
+            // measures the result at the ring rather than trusting the argument.
+            FogLightColor = Palette.Fog,
             FogLightEnergy = 1.0f,
 
             // **One, not zero.** Depth mode computes its falloff from the range
@@ -256,11 +267,22 @@ public partial class BuildMain : SceneTree
             // nothing. Every number here would look right in the inspector.
             FogDensity = 1.0f,
 
-            // The sky takes the fog colour too. Without this the ground fades to
-            // near-black and meets a sky that did not, and the horizon becomes a
-            // hard bright line — worse than the black void it replaced, because
-            // it looks deliberate.
-            FogSkyAffect = 1.0f,
+            // Half, where it used to be all of it.
+            //
+            // At 1.0 the sky *is* the fog colour at every altitude, which was the
+            // only way to avoid a seam when the two were a near-black fog and a
+            // dark slate sky that had been chosen separately. It is also why the
+            // first daylight build had no sky: a carefully mixed blue was being
+            // overwritten by grey haze across the whole dome, and the frame's top
+            // third — the largest single area of colour in the game — came out a
+            // flat pale wall.
+            //
+            // The seam it was guarding against cannot happen any more, because
+            // `SkyHorizonColor` is now literally `Palette.Fog` rather than
+            // something near it. The two agree at the horizon by construction, and
+            // what this number now controls is only how fast the blue comes back
+            // as the eye goes up.
+            FogSkyAffect = 0.3f,
 
             // No sun scattering. It would put a bright bloom in the fog on
             // whichever side the sun is, which is a lovely effect in a landscape
@@ -295,32 +317,52 @@ public partial class BuildMain : SceneTree
     /// rather than as distance being dangerous.
     private const float FogCurve = 1.6f;
 
-    /// A dusk sky that agrees with the fog at the horizon.
+    /// A daylight sky that agrees with the fog at the horizon.
     ///
-    /// Every colour here is dark. A sky bright enough to be pretty would put the
-    /// brightest thing in the frame directly behind whatever is walking toward
-    /// the player, and silhouettes are the only channel left at that distance.
+    /// The old note here said a bright sky "would put the brightest thing in the
+    /// frame directly behind whatever is walking toward the player, and
+    /// silhouettes are the only channel left at that distance". That is a correct
+    /// argument about a dark game and it does not survive the horde being bright:
+    /// a pale walker against a pale sky has no silhouette to protect, and the
+    /// channel doing the work at thirty metres is now the same one doing it at
+    /// five — hue against a hazed-out background. The sky is a third of the frame
+    /// and it was black; making it blue is most of what a player sees change.
     private static Sky BuildSky() => new()
     {
         SkyMaterial = new ProceduralSkyMaterial
         {
-            SkyTopColor = new Color(0.07f, 0.09f, 0.14f),
+            SkyTopColor = Palette.SkyTop,
 
-            // Meets the fog colour. `FogSkyAffect` above pushes the sky toward
-            // the fog near the horizon, and starting close to it means the two
-            // blend rather than crossfade through a third colour.
-            SkyHorizonColor = new Color(0.11f, 0.11f, 0.13f),
-            SkyCurve = 0.15f,
+            // Meets the fog colour, and is now literally it. `FogSkyAffect` above
+            // pushes the sky toward the fog near the horizon; starting *at* it
+            // means the two cannot disagree, which is the seam that used to show
+            // as a hard bright line along the horizon whenever either moved.
+            SkyHorizonColor = Palette.SkyHorizon,
+
+            // 0.1, and the direction of this parameter is the opposite of what it
+            // reads like. Godot's procedural sky mixes horizon toward top by
+            // `1 - pow(1 - c, 1/sky_curve)`, so a *smaller* curve puts a larger
+            // exponent on the horizon term and the top colour takes over almost
+            // immediately. The first attempt at getting blue back raised this to
+            // 0.3 and made the sky greyer.
+            //
+            // It matters more here than in most games: the camera tilts 26° down
+            // with a 60° field, so it never looks more than a few degrees above
+            // horizontal. The only sky this game ever shows is the band right
+            // above the horizon — if the blue does not arrive within a few
+            // degrees, it may as well not be in the material.
+            SkyCurve = 0.1f,
             SkyEnergyMultiplier = 1.0f,
 
             // The ground half of the sky is only ever seen past the edge of the
             // terrain, so it is the fog colour and nothing else.
-            GroundBottomColor = new Color(0.05f, 0.05f, 0.07f),
-            GroundHorizonColor = new Color(0.09f, 0.09f, 0.11f),
+            GroundBottomColor = Palette.Fog,
+            GroundHorizonColor = Palette.Fog,
             GroundCurve = 0.02f,
 
-            // No sun disc. There is a directional light for shape, but a visible
-            // sun would date the scene to an hour the rest of the palette denies.
+            // Still no sun disc. A visible sun would date the scene to an hour,
+            // and every biome moves the sun to suit its own place — so the disc
+            // and the shadows would point in different directions in four of five.
             SunAngleMax = 0.0f,
             SunCurve = 0.0f,
         },

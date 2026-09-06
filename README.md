@@ -630,6 +630,69 @@ weapon proficiency survive.
 
 ## Decisions, and the numbers that settled them
 
+**The game is played in daylight, and the fog is the reason that was hard.** Every authored colour
+now lives in `scripts/systems/Palette.cs` — nineteen prop materials that were private to
+`PropLibrary`, twenty-four body colours that were inline in `BodyMeshLibrary`'s switch, and the light
+rig `BuildMain` hard-codes and five biomes override. They were consistent only by hand, which was
+survivable while they all agreed on dusk.
+
+The naive version of this change — invert every value, near-black fog becomes near-white haze —
+builds clean, passes all forty-odd probes, and **cuts how well the fog hides the approaching horde by
+3.3x**. Fog does not hide things by being dark; it hides them by washing out contrast, and it does
+that in *both* directions. Put the air above the brightest body and every enemy at thirty metres is a
+legible dark shape on a pale field. The dusk rig's real trick was never the darkness — it was that
+the horde and the air were the same darkness. So the daylight air sits in the **middle** of the
+horde's luminance range instead of above it, and the bulwark came up furthest because it was the
+darkest ordinary variant and therefore the one setting where the fog had to sit.
+
+`test/PaletteProbe.cs` measures this per biome at that biome's own spawn ring, against the dusk
+rig's recorded numbers. All five land within 13%:
+
+| Place | Ring | Dusk | Daylight | |
+| :--- | ---: | ---: | ---: | ---: |
+| Rail Yard | 30.0 m | 0.0492 | 0.0528 | 1.07x |
+| Old Town | 23.4 m | 0.1034 | 0.1110 | 1.07x |
+| The Flats | 30.0 m | 0.0492 | 0.0528 | 1.07x |
+| Ash District | 26.4 m | 0.1189 | 0.1225 | 1.03x |
+| Cold Storage | 22.2 m | 0.0632 | 0.0716 | 1.13x |
+
+**The sun's energy did not move, and holding it still is what makes that table mean anything.** The
+first draft raised it to 1.5 alongside every albedo, on the reasoning that midday is brighter than
+dusk — both halves true, and doing both is double-counting: concrete, chalk and panel clipped to
+white, and a prop at the arena's edge read as a sheet of paper standing on grass. The scene is
+brighter because the things in it are. The probe compares authored colours rather than rendered
+pixels, so it is only faithful while every body and every fog is lit by the same lamp at the same
+strength; moving the energy would leave it passing while measuring a scene the game does not draw.
+
+**The way to a blue sky was a blue air, and four attempts went past that.** The camera tilts 26° down
+with a 60° field, so it never looks more than about ten degrees above horizontal — the only sky this
+game draws is the band right above the horizon, and `LevelGenerator` assigns the biome's fog to
+exactly that band. Attempts one to three moved `FogSkyAffect`, then `SkyCurve` (whose direction is
+inverted from how it reads — a *smaller* curve makes the top colour dominate), then `SkyTop` itself,
+and all three were adjusting a gradient that was being overwritten. Attempt four decoupled the
+horizon from the fog and produced a blue sky with **white slabs floating in it**: the skyline ring at
+sixty metres, fully fogged, correctly drawn, and no longer the colour of what was behind it. Anything
+past `FogEnd` *is* the fog colour, so the sky and the air cannot disagree. The fog is now
+`(0.55, 0.68, 0.86)` — a sky blue that still lands at 1.07x on the table above.
+
+**Hue was the wrong measure for "the player must never be mistaken for one of them".** A rule the
+game had in prose and never in code. Written the obvious way — sixty degrees of separation — it
+failed on its first run: the player at 219° against the **brute** at 218°. Both readings correct, the
+conclusion nonsense, because the brute is a blue-*grey* at 0.11 saturation and hue is meaningless
+just above zero saturation. The probe compares chroma vectors instead, saturation as the length and
+hue as the angle, so two greys are near each other and far from anything saturated. The horde's
+nearest approach is the lantern at 0.53 against a floor of 0.35.
+
+**The air dust stopped being white.** White is right when the air behind it is black — dust is seen
+because it catches light. Against a bright haze the same specks read as falling snow. Real motes
+against a bright sky are silhouettes, so they are now darker than the air and warm.
+
+**A `.tres` omits any property equal to its class default, which made one bug invisible.** Three of
+the five biomes say nothing about their air and are re-read against whatever `BiomeResource` declares
+today — so a literal default there kept serving the *first* draft of the daylight fog to those three
+for a build, while the two that name their own colour looked perfect. The defaults are taken from
+`Palette` now. The probe caught it; nothing else would have.
+
 **Full billboard, not Y-locked.** Under the same camera, `FixedY` is crushed to ~62% height by the
 52° pitch — characters read short and wide and the sprite's vertical resolution is wasted.
 

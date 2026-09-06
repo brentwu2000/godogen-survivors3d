@@ -57,7 +57,17 @@ public partial class BuildGroundTexture : SceneTree
                 // gradient. Unfiltered hash: adjacent pixels must not correlate.
                 float speckle = Hash(unchecked((uint)x * 374761393u + (uint)y * 668265263u + 0x27D4EB2Fu));
 
-                float value = 0.34f + patch * 0.22f + (grit - 0.5f) * 0.11f + (speckle - 0.5f) * 0.06f;
+                // 0.56 rather than 0.34, and this one number is why the biome
+                // tints below it did not have to be rewritten.
+                //
+                // The floor is a grey texture multiplied by a per-biome tint near
+                // 1.0, so its brightness is set here and its colour is set there.
+                // Under a dusk sun 0.34 was asphalt; under a midday one it is
+                // asphalt photographed at night, and every prop standing on it —
+                // all of them now above 0.5 — reads as lit scenery on unlit
+                // ground. Raising the base keeps all five tints, and the ratios
+                // between them, exactly as they were tuned.
+                float value = 0.56f + patch * 0.22f + (grit - 0.5f) * 0.11f + (speckle - 0.5f) * 0.06f;
 
                 // Faintly warm where it is bright and cool where it is dark; a
                 // perfectly neutral ground looks like a debug material.

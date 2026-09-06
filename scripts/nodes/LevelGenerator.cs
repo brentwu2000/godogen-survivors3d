@@ -660,8 +660,14 @@ public partial class LevelGenerator : Node3D
         // sign. A `.tres` edited by hand is one typo away from that.
         env.FogDepthEnd = Mathf.Max(Biome.FogEnd, Biome.FogBegin + 1.0f);
 
-        // The sky takes the fog colour, so an interior's near-black fog pulls the
-        // horizon down with it and there is no dusk visible through the ceiling.
+        // The sky takes the fog colour, so an interior's air pulls the horizon
+        // down with it and there is no outdoors visible through the ceiling.
+        //
+        // This also has to hold in the other direction, which is what a daylight
+        // palette makes expensive to get wrong: anything past `FogEnd` is drawn in
+        // exactly the fog colour, so a horizon that is not the fog turns the whole
+        // skyline ring into flat cut-outs hanging in the sky. It is a blue sky now
+        // because the *air* is blue, not because this line was relaxed.
         if (env.Sky?.SkyMaterial is ProceduralSkyMaterial sky)
         {
             sky.SkyHorizonColor = Biome.FogColour;

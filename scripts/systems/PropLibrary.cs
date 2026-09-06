@@ -115,40 +115,51 @@ public enum PropRole
 /// models would have.
 public static class PropLibrary
 {
-    // Pitched against the ground, not in the abstract. The first pass used values
-    // around 0.6 and the props came out near-white on an asphalt floor sitting
-    // around 0.35 — the cover read as polystyrene. Everything here is a little
-    // above the floor and no more, so a container is a solid object on a road
-    // rather than a cut-out laid over one.
-    private static readonly Color Steel = new(0.30f, 0.32f, 0.34f);
-    private static readonly Color Concrete = new(0.46f, 0.45f, 0.43f);
-    private static readonly Color ConcreteDark = new(0.34f, 0.335f, 0.32f);
-    private static readonly Color Rust = new(0.38f, 0.21f, 0.14f);
-    private static readonly Color PaintRed = new(0.42f, 0.17f, 0.14f);
-    private static readonly Color PaintBlue = new(0.17f, 0.25f, 0.33f);
-    private static readonly Color PaintGreen = new(0.19f, 0.27f, 0.20f);
-    private static readonly Color Tar = new(0.12f, 0.12f, 0.13f);
-    private static readonly Color Board = new(0.55f, 0.52f, 0.45f);
+    // Aliases onto `Palette`, which is where the art direction lives now.
+    //
+    // These were nineteen literals here, pitched against a near-black fog and an
+    // asphalt floor at 0.34 — "anything brighter than about 0.55 stops looking
+    // like a painted object under this sun and starts looking like a light
+    // source" was true of that sun and is false of this one. Moving the values
+    // rather than the names is what made the change reviewable: two hundred call
+    // sites below are untouched, so the diff is the palette and nothing else, and
+    // every relationship the builders encode — a container is steel with a rust
+    // stripe, a kiosk is panel with a chalk fascia — is preserved by construction.
+    private static readonly Color Steel = Palette.Steel;
+    private static readonly Color Concrete = Palette.Concrete;
+    private static readonly Color ConcreteDark = Palette.ConcreteDark;
+    private static readonly Color Rust = Palette.Rust;
+    private static readonly Color PaintRed = Palette.PaintRed;
+    private static readonly Color PaintBlue = Palette.PaintBlue;
+    private static readonly Color PaintGreen = Palette.PaintGreen;
+    private static readonly Color Tar = Palette.Tar;
+    private static readonly Color Board = Palette.Board;
 
-    // The city's additions, pitched into the same band as everything above. The
-    // temptation with a street is to reach for saturated paint — a yellow bus, a
-    // red bus shelter — and it is the same mistake the props made the first time:
-    // anything brighter than about 0.55 stops looking like a painted object under
-    // this sun and starts looking like a light source.
-    private static readonly Color Glass = new(0.10f, 0.13f, 0.16f);
-    private static readonly Color PaintYellow = new(0.44f, 0.36f, 0.13f);
-    private static readonly Color PaintOrange = new(0.52f, 0.26f, 0.08f);
-    private static readonly Color Chalk = new(0.54f, 0.53f, 0.50f);
-    private static readonly Color Brick = new(0.34f, 0.22f, 0.18f);
+    private static readonly Color Glass = Palette.Glass;
+    private static readonly Color PaintYellow = Palette.PaintYellow;
+    private static readonly Color PaintOrange = Palette.PaintOrange;
+    private static readonly Color Chalk = Palette.Chalk;
+    private static readonly Color Brick = Palette.Brick;
 
     // The laboratory. Cooler and cleaner than anything above, which is the whole
     // job: an interior that borrows the outdoor palette reads as a yard with the
-    // lights off. Still inside the same band — a white lab is a lab made of paper.
-    private static readonly Color Panel = new(0.50f, 0.52f, 0.50f);
-    private static readonly Color PanelTrim = new(0.29f, 0.33f, 0.34f);
-    private static readonly Color Fluid = new(0.20f, 0.44f, 0.43f);
-    private static readonly Color Cable = new(0.13f, 0.12f, 0.14f);
-    private static readonly Color Amber = new(0.50f, 0.34f, 0.10f);
+    // lights off.
+    private static readonly Color Panel = Palette.Panel;
+    private static readonly Color PanelTrim = Palette.PanelTrim;
+    private static readonly Color Fluid = Palette.Fluid;
+    private static readonly Color Cable = Palette.Cable;
+    private static readonly Color Amber = Palette.Amber;
+
+    /// Every colour this library can emit, for the probe that checks the band.
+    /// A list rather than reflection over the fields: reflection would pass
+    /// silently on the day someone inlines a literal into a builder, which is
+    /// exactly the mistake worth catching.
+    public static Color[] Materials() => new[]
+    {
+        Steel, Concrete, ConcreteDark, Rust, PaintRed, PaintBlue, PaintGreen,
+        Tar, Board, Glass, PaintYellow, PaintOrange, Chalk, Brick,
+        Panel, PanelTrim, Fluid, Cable, Amber,
+    };
 
     /// One shared material for every prop. Vertex colour is the albedo, so the
     /// palette lives in the geometry and this never has to grow a variant.

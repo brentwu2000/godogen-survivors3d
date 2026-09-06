@@ -36,6 +36,15 @@ public partial class BuildBiomes : SceneTree
                 TileWeights = new[] { 1.0f, 1.0f, 1.0f, 1.0f },
                 CrateCount = 8,
                 DepthRarityBias = 1.9f,
+
+                // The one biome that used to take every default, and the defaults
+                // are no longer neutral about what kind of ground this is. A rail
+                // yard is ballast and the weeds coming up through it — warm and
+                // green rather than the grey the shared texture is — and being
+                // the *green* place is what separates it from Old Town's setts and
+                // The Flats' dust now that all three are lit the same way.
+                GroundTint = new Color(0.92f, 1.04f, 0.74f),
+                PropTint = new Color(1.0f, 1.0f, 1.0f),
             },
 
             // Cover everywhere and almost nothing to shoot down. Rubble is many
@@ -74,8 +83,8 @@ public partial class BuildBiomes : SceneTree
                 // ground with a wide one is a map nothing ever reaches you on.
                 SpawnRingScale = 0.78f,
 
-                GroundTint = new Color(0.82f, 0.80f, 0.86f),
-                PropTint = new Color(0.88f, 0.87f, 0.92f),
+                GroundTint = new Color(0.90f, 0.88f, 0.94f),
+                PropTint = new Color(0.94f, 0.93f, 0.97f),
 
                 // Setts rather than poured bays. Small and dark-jointed, which
                 // also does something the layout cannot: a floor with a fine grain
@@ -117,7 +126,7 @@ public partial class BuildBiomes : SceneTree
                 // away. The ring stays where it is and the terrain does the work.
                 SpawnRingScale = 1.0f,
 
-                GroundTint = new Color(1.06f, 1.02f, 0.90f),
+                GroundTint = new Color(1.10f, 1.02f, 0.72f),
                 PropTint = new Color(1.04f, 1.0f, 0.92f),
 
                 // Barely a floor at all. Nine metres between joints and a seam
@@ -169,22 +178,27 @@ public partial class BuildBiomes : SceneTree
                 PropSet = System.Array.ConvertAll(PropLibrary.CitySet, kind => (int)kind),
                 StructureSet = System.Array.ConvertAll(PropLibrary.CityStructureSet, kind => (int)kind),
 
-                GroundTint = new Color(0.86f, 0.86f, 0.90f),
-                PropTint = new Color(0.94f, 0.93f, 0.96f),
+                GroundTint = new Color(0.90f, 0.89f, 0.92f),
+                PropTint = new Color(0.96f, 0.95f, 0.97f),
 
-                // Later in the evening than the yard, and dirtier. The sun is
-                // low and orange because it is going down behind the blocks, and
-                // the fog is warm rather than near-black — a city burns, and the
-                // haze over one is lit from underneath by whatever is still
-                // alight. It is the same trick as the yard's dusk, one hour on.
-                SunAngleDegrees = new Vector2(-28.0f, 62.0f),
-                SunColour = new Color(1.0f, 0.78f, 0.55f),
+                // Later in the day than the yard, and dustier. The sun is lower
+                // and warmer because it is coming down the length of the street
+                // between the blocks, and the haze is a warm sandy grey rather
+                // than the yard's clean blue — a city that has been standing open
+                // for a year has its own air. Same trick as before, one hour on;
+                // the hour is simply no longer nine at night.
+                // Angle and energy are the dusk rig's; only the colours moved.
+                SunAngleDegrees = new Vector2(-38.0f, 62.0f),
+                SunColour = new Color(1.0f, 0.88f, 0.70f),
                 SunEnergy = 1.05f,
 
-                AmbientColour = new Color(0.34f, 0.36f, 0.48f),
+                AmbientColour = new Color(0.52f, 0.60f, 0.78f),
                 AmbientEnergy = 0.5f,
 
-                FogColour = new Color(0.10f, 0.07f, 0.06f),
+                // Near the yard's haze in brightness, warmer in hue. The
+                // luminance is the difficulty setting and the hue is the set
+                // dressing, so a city's air may be sandy and may not be brighter.
+                FogColour = new Color(0.70f, 0.66f, 0.58f),
 
                 // Slightly further out than the default. Streets are the one
                 // place a long shot is supposed to land, and fog at 35 m would
@@ -250,8 +264,8 @@ public partial class BuildBiomes : SceneTree
                 // has until E3, so an interior has to be sold by the palette —
                 // and a blue-grey floor under blue-grey props is as close as two
                 // multipliers get to "the sun is not in here".
-                GroundTint = new Color(0.72f, 0.76f, 0.84f),
-                PropTint = new Color(0.80f, 0.84f, 0.90f),
+                GroundTint = new Color(0.84f, 0.89f, 0.96f),
+                PropTint = new Color(0.90f, 0.94f, 1.0f),
 
                 // The one that makes this an interior rather than a field with
                 // partitions on it, and it is three numbers.
@@ -269,13 +283,15 @@ public partial class BuildBiomes : SceneTree
                 // can still walk all of it, but they can only ever see the room
                 // they are in, so the map is discovered rather than surveyed.
                 SunAngleDegrees = new Vector2(-78.0f, 15.0f),
-                SunColour = new Color(0.80f, 0.88f, 0.95f),
+                SunColour = new Color(0.88f, 0.94f, 1.0f),
                 SunEnergy = 0.85f,
 
                 // Up, and blue. Indoors the ambient is most of the light there
                 // is: with the sun overhead every vertical face is in shadow, and
-                // at the outdoor 0.55 the partitions came out as silhouettes.
-                AmbientColour = new Color(0.40f, 0.48f, 0.58f),
+                // at the outdoor value the partitions came out as silhouettes.
+                // It stays *above* the outdoor number for that reason even now
+                // that the outdoor number has itself gone up.
+                AmbientColour = new Color(0.60f, 0.70f, 0.84f),
                 AmbientEnergy = 0.78f,
 
                 // Not black — a lit room full of dust. Black fog indoors reads as
@@ -288,7 +304,12 @@ public partial class BuildBiomes : SceneTree
                 // that breaks the horizon was already black, so the arena closed
                 // down without ever showing what was closing it — which is the
                 // same picture as an empty field at night, only darker.
-                FogColour = new Color(0.09f, 0.11f, 0.13f),
+                // Strip-lit air rather than a lit room's daylight: the coolest
+                // and dimmest fog in the game, because this is the only place the
+                // haze is not sky. Still nowhere near black — black fog indoors
+                // reads as the level having an edge, which is the exact failure
+                // the sky was added to fix.
+                FogColour = new Color(0.60f, 0.68f, 0.78f),
                 FogBegin = 7.0f,
                 FogEnd = 28.0f,
 
@@ -317,7 +338,7 @@ public partial class BuildBiomes : SceneTree
                 // and a wall poking through the roof is only invisible because
                 // the roof is opaque from below, which is not a reason.
                 CeilingHeight = 9.0f,
-                CeilingColour = new Color(0.15f, 0.17f, 0.19f),
+                CeilingColour = new Color(0.56f, 0.60f, 0.64f),
 
                 // Tile, and this is doing as much work as the fog is.
                 //

@@ -113,10 +113,44 @@ public partial class WorldProbe : SceneTree
 
         Report("the fog begins past the fighting", startsClear);
 
-        // Without sky affect the ground fades to the fog colour and meets a sky
-        // that did not, and the horizon becomes a hard bright line — worse than
-        // the black void it replaced, because it looks deliberate.
-        Report("the fog reaches the sky too", env.FogSkyAffect > 0.99f);
+        // The sky at the horizon has to be the fog colour, or the ground fades to
+        // one colour and meets a sky that is another and the horizon becomes a
+        // hard line — worse than the black void it replaced, because it looks
+        // deliberate.
+        //
+        // **Asserted on the colours, where it used to be asserted on
+        // `FogSkyAffect > 0.99`.** That knob is one way to reach this and it is
+        // the blunt one: it drags the *entire* dome to the fog colour, which is
+        // why the daylight build had no sky until the sky material and the air
+        // were made to agree directly. What matters was never that a particular
+        // parameter was at 1.0 — it is that a skyline prop past `FogEnd`, drawn in
+        // exactly the fog colour, cannot be picked out from what is behind it.
+        //
+        // Measured after `LevelGenerator` has applied the biome, because that is
+        // where the horizon is actually assigned; reading the packed scene would
+        // check a value the game overwrites before the first frame.
+        var sky = env.Sky?.SkyMaterial as ProceduralSkyMaterial;
+        if (sky == null)
+        {
+            GD.PushError("  no procedural sky — the horizon cannot be checked");
+            Report("the sky meets the fog at the horizon", false);
+            return;
+        }
+
+        // Generous, and deliberately so: this is a "these are the same colour"
+        // check, not a tuning constraint. Anything a player could see as an edge
+        // is far outside it.
+        const float Tolerance = 0.04f;
+        Color horizon = sky.SkyHorizonColor;
+        Color air = env.FogLightColor;
+        float apart = Mathf.Max(Mathf.Abs(horizon.R - air.R),
+                       Mathf.Max(Mathf.Abs(horizon.G - air.G), Mathf.Abs(horizon.B - air.B)));
+
+        if (apart > Tolerance)
+            GD.PushError($"  the horizon is {horizon} and the air is {air}, {apart:F3} apart — "
+                         + "everything past the fog will read as a cut-out against the sky");
+
+        Report("the sky meets the fog at the horizon", apart <= Tolerance);
     }
 
     private void CheckCamera(Camera3D camera)

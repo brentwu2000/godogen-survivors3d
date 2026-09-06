@@ -229,7 +229,7 @@ public partial class BiomeResource : Resource
     /// camera is in the wrong place.
     [Export] public float CeilingHeight { get; set; }
 
-    [Export] public Color CeilingColour { get; set; } = new(0.16f, 0.18f, 0.20f);
+    [Export] public Color CeilingColour { get; set; } = new(0.58f, 0.62f, 0.66f);
 
     // --- Ground -----------------------------------------------------------------
     //
@@ -278,14 +278,14 @@ public partial class BiomeResource : Resource
     /// signal that a space is enclosed is that the shadows fall straight down.
     [Export] public Vector2 SunAngleDegrees { get; set; } = new(-55.0f, -35.0f);
 
-    [Export] public Color SunColour { get; set; } = new(1.0f, 0.94f, 0.83f);
-    [Export] public float SunEnergy { get; set; } = 1.25f;
+    [Export] public Color SunColour { get; set; } = Palette.Sun;
+    [Export] public float SunEnergy { get; set; } = Palette.SunEnergy;
 
     /// Cool, because the sun is warm. Shadowed faces picking up sky colour rather
     /// than simply being darker is the cheapest thing that makes geometry look
     /// lit — and indoors it is most of the light there is.
-    [Export] public Color AmbientColour { get; set; } = new(0.42f, 0.50f, 0.62f);
-    [Export] public float AmbientEnergy { get; set; } = 0.55f;
+    [Export] public Color AmbientColour { get; set; } = Palette.Ambient;
+    [Export] public float AmbientEnergy { get; set; } = Palette.AmbientEnergy;
 
     /// What distance looks like here.
     ///
@@ -294,7 +294,20 @@ public partial class BiomeResource : Resource
     /// is also the one lever that changes difficulty without changing a single
     /// number in the enemy table, so it moves with the layout rather than for
     /// looks — a place that hides the crowd has to give something back.
-    [Export] public Color FogColour { get; set; } = new(0.05f, 0.05f, 0.07f);
+    /// Bright haze. **A biome may pick its air's hue and may not pick its
+    /// brightness** — how far the fog's luminance sits from the horde's is what
+    /// decides how much of the spawn ring the player can read, which is the same
+    /// lever the two distances below are, reached by a different handle.
+    /// `test/PaletteProbe.cs` measures it per biome.
+    ///
+    /// Taken from `Palette` rather than repeated, and the three biomes that say
+    /// nothing about their air are why. A `.tres` omits any property equal to its
+    /// class default, so those three carry no `FogColour` line at all and are
+    /// re-read against whatever this says today — which meant a literal here went
+    /// on quietly serving the *first* draft of the daylight fog to three of the
+    /// five places for one build. The probe found it; nothing else would have,
+    /// because the two biomes that name their own colour looked perfect.
+    [Export] public Color FogColour { get; set; } = Palette.Fog;
     [Export] public float FogBegin { get; set; } = 10.0f;
     [Export] public float FogEnd { get; set; } = 35.0f;
 
