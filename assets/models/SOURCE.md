@@ -29,6 +29,35 @@ Files taken from `Models/GLB format/` in that archive:
 | `kenney_survivor_a.glb` | `character-male-a.glb` | `77572792bfe2773b715b8cd8e18644b52b3e1f155fe10450254b50f9c364382a` |
 | `Textures/colormap.png` | `Models/GLB format/Textures/colormap.png` | shipped alongside; the `.glb` references it by relative path |
 
+## Kenney — Blocky Characters 2.0
+
+| | |
+| :--- | :--- |
+| Page | <https://kenney.nl/assets/blocky-characters> |
+| Archive | <https://kenney.nl/media/pages/assets/blocky-characters/8369c0cf30-1749547469/kenney_blocky-characters_20.zip> |
+| sha256 (archive) | `5e123859aa0c1598342b600c6db197024a1d63eb9ec531398b310725f589887e` |
+| Licence | CC0 1.0 — same terms as above |
+
+| In repo | From | sha256 |
+| :--- | :--- | :--- |
+| `kenney_blocky_a.glb` | `Models/GLB format/character-a.glb` | `8ee5dae167ec589863f6bba222467eb90ace8be357a4c5abfcab289290181616` |
+| `Textures/texture-a.png` | `Models/GLB format/Textures/texture-a.png` | `257e944c582ce7cda206fbd8ceb717be648f9721756baf377a36478c11c0059a` |
+
+**Unlike the Mini set this one is not skinned**, and its texture is a painted skin rather than a
+palette. Both facts matter to the baker and are the reason both models are kept: between them they
+exercise the skinned-plus-palette path and the rigid-node-plus-`--tint` path, which is every way a
+body can currently enter this game. Its bake is:
+
+```bash
+godot --headless --script scripts/tools/BakeBody.cs -- \
+  res://assets/models/kenney_blocky_a.glb res://resources/bodies/kenney_blocky_a.res \
+  2.2 0.55 0.30 0.035 "3a5fdb,3a5fdb,2fa05a,e8b98c,e8b98c,d9a06a"
+```
+
+Six tints for six surfaces, in node order: both legs, torso, both arms, head. Sampling
+`texture-a.png` instead gives one colour per box corner and a gradient across every face — correct
+behaviour for a texture with real detail in it, and not what this game draws.
+
 **`Textures/colormap.png` is not optional and is not a texture in the usual
 sense.** The `.glb` references it externally rather than embedding it, so
 importing the model without it succeeds, logs one `Can't open file from path`

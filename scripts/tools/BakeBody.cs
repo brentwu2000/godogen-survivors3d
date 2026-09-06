@@ -181,14 +181,27 @@ public partial class BakeBody : SceneTree
             return false;
         }
 
+        // A missing skeleton is no longer fatal, because there is a second way to
+        // author a body and it is arguably the better match for this game.
+        //
+        // A skinned model says which vertices are a leg through joints and
+        // weights. A **rigid-node** model says it through the node tree: one mesh
+        // per limb, named `leg-left` and `arm-right`, moved by animating the node
+        // transforms rather than by deforming anything. Minecraft-shaped
+        // characters are built this way, and Kenney's Blocky Characters ship
+        // exactly like that — six meshes, no skin at all.
+        //
+        // It fits better than skinning does. `body.gdshader` turns whole limbs
+        // rigidly about a pivot; it cannot express a bending knee and never
+        // tried to. A rigid-node model *is* that rig already, so the conversion
+        // is the identity rather than the lossy "take the dominant joint"
+        // approximation the skinned path has to make.
+        //
+        // The failure this replaces was loud and unhelpful: "no Skeleton3D —
+        // there is nothing to derive a rig from", refusing a model that names its
+        // limbs more plainly than any rig does.
         if (skeleton == null)
-        {
-            GD.PushError($"{source} has no Skeleton3D — there is nothing to derive a rig from. "
-                       + "An unskinned model can be used as a landmark or a prop; the horde needs "
-                       + "to know which vertices are legs.");
-            root.Free();
-            return false;
-        }
+            GD.Print("  no skeleton — reading limbs from the mesh node names instead");
 
         var baked = new BakedBodyResource { Source = source };
 
@@ -245,7 +258,7 @@ public partial class BakeBody : SceneTree
 
     private static bool Convert(
         System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
-        Skeleton3D skeleton, BakedBodyResource baked,
+        Skeleton3D? skeleton, BakedBodyResource baked,
         float height, float legSwing, float armSwing, float bob, Color[]? tints)
     {
         var allVertices = new System.Collections.Generic.List<Vector3>();
@@ -273,7 +286,17 @@ public partial class BakeBody : SceneTree
             // across both would classify the head's vertices by the body's bone
             // order — which does not error and produces a head that swings like a
             // leg.
-            string[] jointNames = JointNames(instance, skeleton);
+            string[] jointNames = skeleton != null
+                ? JointNames(instance, skeleton)
+                : System.Array.Empty<string>();
+
+            // What this whole node is, when there are no joints to ask.
+            //
+            // The node name is the limb on a rigid-node model, and it is a
+            // *better* source than a skinned model's dominant joint rather than a
+            // fallback: there is nothing to be dominant over, because the author
+            // already separated the mesh exactly where the rig bends.
+            (Limb nodeLimb, float nodePhase) = Classify(instance.Name);
 
             // Every surface, merged.
             //
@@ -308,22 +331,36 @@ public partial class BakeBody : SceneTree
                 if (v.Length == 0)
                     continue;
 
-                if (b.Length == 0 || w.Length == 0)
-                {
-                    GD.PushError($"  {instance.Name} surface {surface} has no joints or weights — "
-                               + "it is not skinned, so there is no way to tell a leg from a chest");
-                    return false;
-                }
+                // Skinned or rigid-node, decided per surface rather than per
+                // model. Mixing the two in one file is unusual and costs nothing
+                // to allow, and deciding it here is what keeps the vertex loop
+                // from having to know.
+                bool skinned = b.Length > 0 && w.Length > 0;
 
                 // Four influences per vertex is the glTF norm and what Godot hands
                 // back. Read per surface rather than once, because nothing promises
                 // two surfaces of one mesh were authored the same way.
-                int influences = b.Length / v.Length;
-                if (influences <= 0)
+                int influences = skinned ? b.Length / v.Length : 0;
+                if (skinned && influences <= 0)
                 {
                     GD.PushError($"  {instance.Name} surface {surface}: "
                                + $"{b.Length} bone indices for {v.Length} vertices");
                     return false;
+                }
+
+                if (!skinned && nodeLimb == Limb.Torso
+                    && !instance.Name.ToString().Contains("torso", System.StringComparison.OrdinalIgnoreCase)
+                    && !instance.Name.ToString().Contains("head", System.StringComparison.OrdinalIgnoreCase)
+                    && !instance.Name.ToString().Contains("body", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    // Named something this cannot read, on a model with no rig to
+                    // fall back on. Warned rather than refused: a `Mesh_001` that
+                    // really is part of the torso is a perfectly ordinary export,
+                    // and the whole-model check below still catches a body that
+                    // ended up with no legs at all.
+                    GD.PushWarning($"  {instance.Name} is not skinned and its name says nothing about "
+                                 + "which limb it is — treating it as torso. Rename it to something "
+                                 + "containing leg/arm/hand/foot if it should move.");
                 }
 
                 // Reported, because losing it is silent and has happened three
@@ -381,12 +418,26 @@ public partial class BakeBody : SceneTree
 
                     allColours.Add(vertexColour);
 
-                    int dominant = Dominant(b, w, i, influences);
-                    string bone = dominant >= 0 && dominant < jointNames.Length
-                        ? jointNames[dominant]
-                        : string.Empty;
+                    string bone;
+                    Limb limb;
+                    float phase;
 
-                    (Limb limb, float phase) = Classify(bone);
+                    if (skinned)
+                    {
+                        int dominant = Dominant(b, w, i, influences);
+                        bone = dominant >= 0 && dominant < jointNames.Length
+                            ? jointNames[dominant]
+                            : string.Empty;
+
+                        (limb, phase) = Classify(bone);
+                    }
+                    else
+                    {
+                        bone = instance.Name;
+                        limb = nodeLimb;
+                        phase = nodePhase;
+                    }
+
                     allLimbs.Add(limb);
                     allPhases.Add(phase);
 

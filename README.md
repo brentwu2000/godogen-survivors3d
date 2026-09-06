@@ -719,14 +719,36 @@ than a preference: `COLOR_0` and `baseColorFactor` are stored linear and must *n
 while `baseColorTexture` is required to be sRGB and must be. Getting it backwards produces a body
 about twice as bright as drawn — the exact bug the first baked stalker shipped with.
 
-**A Kenney character bakes correctly and is still the wrong shape, which is an asset decision rather
-than a pipeline one.** `character-male-a` merges to 723 triangles, classifies 424 leg and 292 arm
-vertices off bone names (`leg-left`, `arm-right`) with no changes to `Classify`, and comes through in
-full colour. Two things are left. The bake takes the model's rest pose and Kenney's is a **T-pose**, so
-the arms come out straight sideways — the fix is to apply a frame of the model's own `idle` animation
-before flattening, which the pack ships. And the Mini Characters are super-deformed: the hip lands at
-0.50 m of 1.90 m where every procedural body in this game puts it near half. Kenney's **Blocky
-Characters** are the normally-proportioned set and are the ones to try against the existing roster.
+**There is a second way to author a body, and it is the better match for this shader.** A skinned
+model says which vertices are a leg through joints and weights; a **rigid-node** model says it through
+the node tree — one mesh per limb, named `leg-left` and `arm-right`, animated by moving node
+transforms rather than by deforming anything. `body.gdshader` turns whole limbs rigidly about a pivot
+and cannot express a bending knee, so a rigid-node model *is* that rig already: the conversion is the
+identity rather than the "take the dominant joint" approximation the skinned path has to make. The
+baker used to refuse these with "no Skeleton3D — there is nothing to derive a rig from", which is a
+poor thing to tell a model that names its limbs more plainly than any rig does.
+
+**Two Kenney sets were tried and they fail in opposite directions, which is what makes the pair worth
+keeping as fixtures.**
+
+| | Mini Characters | Blocky Characters |
+| :--- | :--- | :--- |
+| Rig | skinned, 7 joints | 6 rigid nodes |
+| Colour | 512² `colormap` palette | 1024² painted skin |
+| Merged | 723 tris, 1259 verts | **72 tris**, 143 verts |
+| Hip / shoulder of height | 0.50 / 1.04 m at 1.90 m | 0.81 / 1.55 m at 2.20 m |
+| Bakes | colour exactly; **T-pose** arms | pose correctly; **colour smears** |
+
+The Mini set's bind pose is a T-pose, so the arms come out straight sideways — fixable by applying a
+frame of the `idle` animation the pack ships before flattening. The Blocky set has no such problem
+because its rest pose has no rotations at all, but its texture is a painted skin rather than a
+palette, so per-vertex sampling gives one colour per box corner and each face becomes a gradient —
+exactly the failure `PaletteImage` documents. **The fix for that one needed no new code**: six
+surfaces, one per limb, and `--tint` already forces a flat colour per surface. Seventy-two triangles
+against the procedural bodies' five hundred, in the game's own palette.
+
+Which set the survivors should use is a taste decision and is not made here. Both are committed as
+bake fixtures because between them they exercise both code paths.
 
 **Full billboard, not Y-locked.** Under the same camera, `FixedY` is crushed to ~62% height by the
 52° pitch — characters read short and wide and the sprite's vertical resolution is wasted.
