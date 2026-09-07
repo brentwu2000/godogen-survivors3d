@@ -64,6 +64,7 @@ public partial class BodyShot : SceneTree
     private string _baked = string.Empty;
     private bool _carry;
     private bool _roster;
+    private bool _raw;
     private int _frame;
 
     public override void _Initialize()
@@ -102,6 +103,15 @@ public partial class BodyShot : SceneTree
 
             if (argument == "roster")
                 _roster = true;
+
+            // `raw` ignores every bake and draws the procedural body instead.
+            //
+            // The bakes and `BodyMeshLibrary` are two answers to the same
+            // question, and which one is better is a judgement no probe makes.
+            // Comparing them means seeing them at the same size under the same
+            // light, which until now meant editing this file.
+            if (argument == "raw")
+                _raw = true;
         }
 
         var shader = GD.Load<Shader>("res://assets/shaders/body.gdshader");
@@ -330,7 +340,7 @@ public partial class BodyShot : SceneTree
     ///
     /// Same lesson as the hand-written array of six names it replaced: a tool
     /// that quietly narrows what it shows is worse than one that fails.
-    private static ArrayMesh? MeshFor(string name, out float height)
+    private ArrayMesh? MeshFor(string name, out float height)
     {
         height = 1.8f;
 
@@ -340,7 +350,7 @@ public partial class BodyShot : SceneTree
 
         height = type.DesignHeightMeters;
 
-        if (!string.IsNullOrEmpty(type.BakedBodyPath))
+        if (!_raw && !string.IsNullOrEmpty(type.BakedBodyPath))
         {
             var baked = GD.Load<BakedBodyResource>(type.BakedBodyPath);
             if (baked != null)

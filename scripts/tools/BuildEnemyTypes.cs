@@ -70,22 +70,26 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "walker",
 
-                // Drawn from an authored model rather than from `MeshBuilder`.
+                // **No `BakedBodyPath`, and that is a reversal.** Seven humanoids
+                // were pointed at `assets/models/*.glb` — walker, runner, brute,
+                // bloater, spitter, boss, lantern — authored offline in three.js
+                // and baked in. Stood in a row by `BodyShot` they were plainly
+                // worse than the `MeshBuilder` bodies they replaced: the runner
+                // came apart into scattered sticks, the boss wore its head and
+                // both arms detached from the shoulders, the bloater lost its
+                // legs and head and was a bare ball, and the brute was an
+                // unreadable dark mass. The bake was faithful — `bake_vs_raw`
+                // shows a bake that reproduces its input exactly, and the same
+                // baker turns Kenney and Quaternius models into good-looking
+                // bodies. The three.js humanoids were simply bad models.
                 //
-                // The procedural walker was correct in every proportion and
-                // still read as stacked primitives, because that is what it was.
-                // The baker exists so a modelled body can enter a `MultiMesh`,
-                // the stalker proved it, and this is the first of the humanoids
-                // to follow — 448 triangles, three surfaces, rigged with the bone
-                // names `BakeBody.Classify` matches.
+                // So the humanoids go back to `MeshBuilder`, which is where
+                // `README` said the characters lived all along, and the two bakes
+                // that earned their place stay: the stalker, whose quadruped
+                // silhouette `MeshBuilder` cannot express, and nothing else.
                 //
-                // Its proportions are the ones this table and
-                // `BodyMeshLibrary.ForVariant` already agreed on: hip at 46% of
-                // height, shoulder at 80%, hands just below the hip. The model
-                // was rebuilt once because the first attempt had arms to the
-                // knees, which is what happens when a modelling brief carries a
-                // reference picture and no numbers.
-                BakedBodyPath = "res://resources/bodies/walker.res",
+                // `BodyRenderer.MeshFor` needs no change for this. An empty path
+                // *is* the procedural path.
                 SpriteLayer = 0,
                 DesignHeightMeters = 2.0f,
                 MaxHealth = 14.0f,
@@ -103,20 +107,6 @@ public partial class BuildEnemyTypes : SceneTree
             {
                 TypeName = "runner",
 
-                // Authored, like every humanoid in the table now.
-                //
-                // `MeshBuilder` still builds these variants and the procedural
-                // path is still the fallback — `BodyRenderer.MeshFor` drops back
-                // to it, loudly, if a bake is missing or stands at the wrong
-                // height. What changed is which one the game draws.
-                //
-                // The models are authored offline in three.js
-                // (`art-src/models/`) against the proportions in
-                // `BodyMeshLibrary.ForVariant`, which is why swapping them is
-                // safe: hip at 46% of height and shoulder at 80% either way, so
-                // the rig, the reach and the fog silhouette are unchanged and
-                // only the surface between the joints is different.
-                BakedBodyPath = "res://resources/bodies/runner.res",
                 SpriteLayer = 1,
                 DesignHeightMeters = 1.8f,
                 MaxHealth = 13.0f,
@@ -133,7 +123,6 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "brute",
-                BakedBodyPath = "res://resources/bodies/brute.res",
                 SpriteLayer = 2,
                 DesignHeightMeters = 3.0f,
                 MaxHealth = 60.0f,
@@ -152,7 +141,6 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "bloater",
-                BakedBodyPath = "res://resources/bodies/bloater.res",
                 SpriteLayer = 3,
                 DesignHeightMeters = 2.4f,
                 MaxHealth = 25.0f,
@@ -172,7 +160,6 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "spitter",
-                BakedBodyPath = "res://resources/bodies/spitter.res",
                 SpriteLayer = 4,
                 DesignHeightMeters = 2.0f,
                 MaxHealth = 13.0f,
@@ -199,7 +186,6 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "boss",
-                BakedBodyPath = "res://resources/bodies/boss.res",
                 SpriteLayer = 5,
                 DesignHeightMeters = 5.5f,
                 MaxHealth = 1600.0f,
@@ -338,7 +324,6 @@ public partial class BuildEnemyTypes : SceneTree
             new()
             {
                 TypeName = "lantern",
-                BakedBodyPath = "res://resources/bodies/lantern.res",
                 SpriteLayer = 8,
                 DesignHeightMeters = 1.9f,
                 MaxHealth = 14.0f,

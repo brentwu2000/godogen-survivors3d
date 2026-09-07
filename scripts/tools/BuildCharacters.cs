@@ -40,7 +40,19 @@ public partial class BuildCharacters : SceneTree
                 MoveSpeed = 6.0f,
                 CarryCapacity = 20,
                 BodyHeight = 2.2f,
-                BakedBodyPath = "res://resources/bodies/drifter.res",
+
+                // **No bake, for the same reason the horde lost its seven.** The
+                // Drifter was the one survivor drawn from a model, and stood next
+                // to the other two in `BodyShot -- roster` it was the worst body
+                // of the three: a small head, arms welded to the torso, no hands,
+                // and none of the kit that `CHARACTERS.md` says a survivor is
+                // supposed to be wearing. It also carried the provenance gap
+                // README names — `assets/models/survivors/drifter.glb` was cut
+                // from a 10 MB blend whose only claim to a licence is its own
+                // filename, and the `.glb` is not in the tree.
+                //
+                // Three survivors, one shape, procedurally built. The bake stays
+                // on disk and `BakeProbe` keeps checking it; nothing loads it.
                 OpensAfter = 0,
             },
 

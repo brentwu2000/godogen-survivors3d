@@ -1598,21 +1598,32 @@ person**, not things that need code.
   forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
   thing to re-take whenever a weapon changes, and it is written here because that is the only place
   that will say so. See `WEAPONS.md`.
-- **One survivor of the seven has an authored body, and the base mesh it came from has no recorded
-  source.** `CharacterResource.BakedBodyPath` is read by `Player.CreateBody`, which loads the bake,
-  appends the held weapon's procedural silhouette to the same surface, and falls back to `SoloBody`
-  when the path is empty or the bake will not build — so a survivor without a model is an ordinary
-  state rather than an error. The Drifter is baked; the other six are not.
+- **Nothing in the roster or the horde is drawn from an authored humanoid any more, and that is a
+  reversal.** Eight bodies were: seven horde variants cut in three.js, and the Drifter cut from the
+  blend below. Stood in a row by `BodyShot` every one of them was worse than the `MeshBuilder` body
+  it replaced — the runner came apart into scattered sticks, the boss wore its head and both arms
+  detached from the shoulders, the bloater lost its legs and was a bare ball, and the Drifter had no
+  hands and its arms welded to its torso. The baker is not at fault: `screenshots/bake_vs_raw.png`
+  shows a bake reproducing its input exactly, and the same baker turns Kenney and Quaternius models
+  into good-looking bodies. The models were bad.
 
-  What blocks the rest is provenance, not modelling. `art-src/models/build_roster.py` cuts all seven
+  `CharacterResource.BakedBodyPath` and `EnemyTypeResource.BakedBodyPath` still work and are still
+  read — `Player.CreateBody` loads the bake, appends the held weapon's procedural silhouette to the
+  same surface, and falls back to `SoloBody` when the path is empty or the bake will not build; an
+  empty path *is* the procedural path. **The stalker is the one bake still pointed at**, because a
+  quadruped is a silhouette `MeshBuilder` cannot express. The eight `.res` files stay on disk and
+  `BakeProbe` keeps checking them; nothing loads them.
+
+  What blocks re-authoring is provenance, not modelling. `art-src/models/build_roster.py` cuts all seven
   from `art-src/models/base/rigged_anime_girl_cc0.blend`, and that file is 10 MB of third-party
   geometry whose only claim to a licence is its own filename — no URL, no hash, nothing anyone can
   check. CC0 is a dedication to the public domain, so nothing here is a licence breach; what is
   missing is the project's own record, which is the gap the OFL font had and has the same fix: an
   `art-src/models/base/SOURCE.md` on the pattern of `art-src/fonts/SOURCE.md`, carrying the URL and
   the sha256. **Only the source is unverifiable, and only the source is large**, so the Drifter's
-  176 KB output is committed — the game loads it — while ten megabytes of unattributable binary stays
-  out of the history until that file exists.
+  176 KB output is committed while ten megabytes of unattributable binary stays out of the history
+  until that file exists. Nothing loads that output now, which makes the gap a smaller one than it
+  was: it blocks a *better* body arriving, not the body the game draws.
 
 - **The APK has never been built, let alone run.** Blocked on three installs this machine does not
   have: an Android SDK, a JDK, and an export template matching 4.7.1 (the only one present is 4.6.3).

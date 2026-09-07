@@ -109,7 +109,41 @@ public static class BodyMeshLibrary
 
         /// What the organ burns, when `Lantern` is set. Its alpha is the glow,
         /// so this wants an alpha near zero.
-        Color Sac = default);
+        Color Sac = default,
+
+        /// Arm length, as a multiple of the chest.
+        ///
+        /// **This used to be inferred and the inference was a landmine.** The
+        /// arm was long when `ShoulderWidth < 0.40 && LeanDegrees < 20`, which
+        /// selected the spitter and nothing else — by arithmetic that held only
+        /// while every other narrow body happened to lean more than twenty
+        /// degrees. Widening the shoulders by eight centimetres, which is a
+        /// decision about the *chest*, silently took the spitter's reach away;
+        /// and the spitter fights at eight metres, so its reach is the tell that
+        /// says so before the first glob lands.
+        ///
+        /// A body that wants long arms now says it wants long arms.
+        float Reach = 1.16f,
+
+        /// A cap over the crown, and a brim in front of it.
+        ///
+        /// **This is the survivor rule, built.** `CHARACTERS.md` says a survivor
+        /// is *manufactured* and the horde is *grown* — straight edges, bilateral
+        /// symmetry, hard kit with a flat face on it — and until the heads grew
+        /// there was nothing on a head large enough to put kit on. Now there is,
+        /// and a bare skull was the last thing the player and a walker still had
+        /// in common: at fifteen metres the strongest read on any body is the
+        /// blob at the top of it, and both blobs were the same bare dome in a
+        /// skin colour.
+        ///
+        /// Nothing in the horde sets this, and nothing in the horde may. It is
+        /// hue's partner rather than its replacement — hue wins at a distance
+        /// where a twelve-triangle cap is four pixels, and the cap wins in the
+        /// press of bodies where every colour is half in shadow.
+        ///
+        /// It stays under `HeadFraction + HeadRadiusFraction`, so it changes no
+        /// standing height and `BodyProbe` does not care that it exists.
+        bool Cap = false);
 
     /// The variants, by the same names `Horde.TypeNames` uses.
     ///
@@ -120,23 +154,23 @@ public static class BodyMeshLibrary
     {
         // Gaunt and slightly stooped. The baseline everything else reads against,
         // so it is deliberately the least distinctive silhouette in the set.
-        "walker" => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
+        "walker" => new Build(height, 0.50f, 0.095f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
             Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
 
         // Thin, leaning hard into the run, arms back. Recognisable from the
         // silhouette alone before the speed is apparent, which is the whole point
         // — by the time the speed is apparent it is next to you.
-        "runner" => new Build(height, 0.36f, 0.045f, 0.16f, 26.0f, 0.95f, 0.48f, 0.055f,
+        "runner" => new Build(height, 0.44f, 0.078f, 0.16f, 26.0f, 0.95f, 0.48f, 0.055f,
             Palette.RunnerTorso, Palette.RunnerLimb, Palette.RunnerHead, false),
 
         // Shoulders wider than a doorway, short stride. Bulk reads as slowness at
         // any distance, which is honest: it is the slowest thing in the game.
-        "brute" => new Build(height, 0.78f, 0.115f, 0.38f, -4.0f, 0.32f, 0.24f, 0.045f,
+        "brute" => new Build(height, 0.78f, 0.180f, 0.38f, -4.0f, 0.32f, 0.24f, 0.045f,
             Palette.BruteTorso, Palette.BruteLimb, Palette.BruteHead, false),
 
         // A belly on legs. Nothing else in the set is round, so roundness alone
         // is enough to mean "do not stand next to this".
-        "bloater" => new Build(height, 0.46f, 0.085f, 0.30f, 4.0f, 0.30f, 0.30f, 0.075f,
+        "bloater" => new Build(height, 0.54f, 0.140f, 0.30f, 4.0f, 0.30f, 0.30f, 0.075f,
             Palette.BloaterTorso, Palette.BloaterLimb, Palette.BloaterHead, true),
 
         // Wider than it is tall, and that is the entire idea.
@@ -150,7 +184,7 @@ public static class BodyMeshLibrary
         // It exists to block rather than to chase. The numbers in the table give
         // it the health and the knockback resistance; the shape has to be what
         // says so before the player has been hit once.
-        "bulwark" => new Build(height, 1.62f, 0.16f, 0.44f, -8.0f, 0.20f, 0.16f, 0.030f,
+        "bulwark" => new Build(height, 1.62f, 0.24f, 0.44f, -8.0f, 0.20f, 0.16f, 0.030f,
             Palette.BulwarkTorso, Palette.BulwarkLimb, Palette.BulwarkHead, true),
 
         // Dark, and carrying a light.
@@ -165,22 +199,23 @@ public static class BodyMeshLibrary
         // The body is the darkest in the set on purpose. The sac has to be the
         // brightest thing on screen and the creature around it has to be nearly
         // nothing, or what approaches is a lit man rather than a light.
-        "lantern" => new Build(height, 0.40f, 0.052f, 0.19f, 16.0f, 0.50f, 0.34f, 0.045f,
+        "lantern" => new Build(height, 0.47f, 0.090f, 0.19f, 16.0f, 0.50f, 0.34f, 0.045f,
             Palette.LanternTorso, Palette.LanternLimb, Palette.LanternHead, false,
             Carry.None, true, new Color(0.55f, 0.92f, 0.72f, 0.0f)),
 
         // Long-armed and narrow, because it fights at eight metres and the reach
         // is the tell.
-        "spitter" => new Build(height, 0.38f, 0.050f, 0.18f, 12.0f, 0.45f, 0.38f, 0.030f,
-            Palette.SpitterTorso, Palette.SpitterLimb, Palette.SpitterHead, false),
+        "spitter" => new Build(height, 0.44f, 0.082f, 0.18f, 12.0f, 0.45f, 0.38f, 0.030f,
+            Palette.SpitterTorso, Palette.SpitterLimb, Palette.SpitterHead, false,
+            Reach: 1.34f),
 
         // Everything larger, and darker than anything around it. A boss that
         // shared the horde's value range would disappear into it at exactly the
         // moment the horde is thickest.
-        "boss" => new Build(height, 1.10f, 0.150f, 0.50f, 0.0f, 0.40f, 0.34f, 0.060f,
+        "boss" => new Build(height, 1.26f, 0.240f, 0.50f, 0.0f, 0.40f, 0.34f, 0.060f,
             Palette.BossTorso, Palette.BossLimb, Palette.BossHead, false),
 
-        _ => new Build(height, 0.42f, 0.055f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
+        _ => new Build(height, 0.50f, 0.095f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
             Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
     };
 
@@ -205,8 +240,8 @@ public static class BodyMeshLibrary
     /// of them would lose it — there is exactly one shape in this game that
     /// reads as "not one of them", and all three get it.
     public static Build ForPlayer(float height, Carry held, Color torso, Color limb, Color head) =>
-        new(height, 0.48f, 0.065f, 0.24f, 4.0f, 0.60f, 0.33f, 0.040f,
-            torso, limb, head, false, held);
+        new(height, 0.56f, 0.108f, 0.24f, 4.0f, 0.60f, 0.33f, 0.040f,
+            torso, limb, head, false, held, Cap: true);
 
     /// Which silhouette a weapon category carries.
     ///
@@ -230,15 +265,43 @@ public static class BodyMeshLibrary
     /// each and a body assembled from two slightly different ideas of where the
     /// hip is comes apart when it walks.
     private const float HipFraction = 0.46f;
-    private const float ShoulderFraction = 0.80f;
 
-    // The centre and radius still sum to one design height. Taking half a per
-    // cent from the radius and giving it to the centre exposes the neck without
-    // changing StandingHeight; the tube ends half a per cent of design height
-    // inside the head so the newly visible joint cannot open when viewed uphill.
-    private const float NeckFraction = 0.875f;
-    private const float HeadFraction = 0.935f;
-    private const float HeadRadiusFraction = 0.065f;
+    /// **The heads were anatomically correct and that was the problem.**
+    ///
+    /// A human head is about an eighth of a person, and at 0.065 of design
+    /// height these were exactly that — 26 cm on a 2 m walker, twelve pixels at
+    /// the distance the game is played from, and nothing whatever to look at.
+    /// Every low-poly character that reads as a *character* rather than as a
+    /// mannequin does the same thing to escape it: the head goes to a fifth of
+    /// the body and the limbs thicken to match. It is not a cartoon convention,
+    /// it is a resolution one. The head is where the eye goes, it is the part
+    /// that says which way a body faces, and at this triangle budget it has to
+    /// be large enough to hold a jaw and a brow and still be a shape.
+    ///
+    /// Height is preserved exactly, because `StandingHeight` is
+    /// `HeadFraction + HeadRadiusFraction` at zero lean and `BodyProbe` asserts
+    /// every variant stands at the number the balance table names. The two moved
+    /// against each other by the same 0.035 and their sum is still one.
+    private const float HeadFraction = 0.900f;
+    private const float HeadRadiusFraction = 0.100f;
+
+    /// The shoulder came down to make room for the neck.
+    ///
+    /// A head this size has its underside at `0.900 - 0.100 = 0.80`, which is
+    /// precisely where the shoulder line used to be — so the skull sat straight
+    /// on the collarbone and the neck tube was drawing inside the head. Dropping
+    /// the shoulders to 0.76 buys four per cent of design height of visible neck,
+    /// which is 8 cm on a walker and the thing that keeps a big head reading as a
+    /// head rather than as a helmet.
+    ///
+    /// It shortens the chest and therefore the arms, both measured from
+    /// `shoulderY - hipY`. That is the same direction the head moved in and it is
+    /// wanted: short limbs under a large head is the whole proportion.
+    private const float ShoulderFraction = 0.76f;
+
+    // Ends inside the skull. The head's underside is at 0.80 and the tube stops
+    // 4.5% of design height above it, so no camera angle can open the joint.
+    private const float NeckFraction = 0.845f;
 
     /// How tall this body actually stands, which is not its design height.
     ///
@@ -309,8 +372,12 @@ public static class BodyMeshLibrary
             // for something nobody will see at this distance — the taper alone
             // carries it.
             mesh.Tube(ankle, knee, spec.LimbRadius * 0.62f, spec.LimbRadius * 0.92f, spec.Limb);
-            mesh.Box(new Vector3(x, 0.04f, -spec.LimbRadius * 1.25f),
-                     new Vector3(spec.LimbRadius * 2.15f, 0.08f, spec.LimbRadius * 3.9f),
+            // A foot is a multiple of the ankle it sits on, so it grew with the
+            // limbs and grew too far: at 3.9 radii deep the boss was standing on
+            // two ninety-centimetre skis. Retuned against the thicker leg so the
+            // proportion is the one it was before, not the arithmetic.
+            mesh.Box(new Vector3(x, 0.05f, -spec.LimbRadius * 0.85f),
+                     new Vector3(spec.LimbRadius * 1.55f, 0.10f, spec.LimbRadius * 2.60f),
                      Darken(spec.Limb, 0.62f));
         }
 
@@ -331,13 +398,13 @@ public static class BodyMeshLibrary
             // and much wider than it is deep. See `MeshBuilder.Barrel` — the box
             // this replaces was four hard vertical edges catching the light in
             // four flat bands, which is most of why these read as furniture.
-            float waist = spec.ShoulderWidth * 0.30f;
-            float chest = spec.ShoulderWidth * 0.45f;
+            float waist = spec.ShoulderWidth * 0.38f;
+            float chest = spec.ShoulderWidth * 0.56f;
 
             mesh.Barrel(Lean(new Vector3(0.0f, hipY + chestHeight * 0.24f, 0.0f), lean, hipY),
                         Lean(new Vector3(0.0f, hipY + chestHeight * 0.96f, 0.0f), lean, hipY),
-                        new Vector2(waist, spec.TorsoDepth * 0.42f),
-                        new Vector2(chest, spec.TorsoDepth * 0.54f),
+                        new Vector2(waist, spec.TorsoDepth * 0.52f),
+                        new Vector2(chest, spec.TorsoDepth * 0.66f),
                         spec.Torso);
         }
 
@@ -349,8 +416,8 @@ public static class BodyMeshLibrary
         // what gives a body a middle, and a middle is what a box never had.
         mesh.Barrel(Lean(new Vector3(0.0f, hipY - chestHeight * 0.06f, 0.0f), lean, hipY),
                     Lean(new Vector3(0.0f, hipY + chestHeight * 0.26f, 0.0f), lean, hipY),
-                    new Vector2(spec.ShoulderWidth * 0.34f, spec.TorsoDepth * 0.46f),
-                    new Vector2(spec.ShoulderWidth * 0.29f, spec.TorsoDepth * 0.40f),
+                    new Vector2(spec.ShoulderWidth * 0.42f, spec.TorsoDepth * 0.56f),
+                    new Vector2(spec.ShoulderWidth * 0.36f, spec.TorsoDepth * 0.50f),
                     trousers);
         // The shoulder line, across rather than up. A barrel lying on its side:
         // the axis runs from one shoulder to the other, so the taper is the
@@ -390,7 +457,14 @@ public static class BodyMeshLibrary
                   spec.LimbRadius * 1.35f, spec.LimbRadius * 0.95f, spec.Limb);
 
         Vector3 head = Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY);
-        mesh.Ball(head, headRadius, spec.Head, 6, 4);
+
+        // Eight around and five up, against the six-and-four the small head had.
+        // Faceting is a style here rather than an artefact, but the facet has to
+        // be smaller than the feature sitting on it: at six segments a head this
+        // size is a hexagonal prism and the brow spans a whole flat face, so the
+        // jaw and the brow stop being a jaw and a brow and become two ledges.
+        // Sixteen more triangles on the one part of the body anyone looks at.
+        mesh.Ball(head, headRadius, spec.Head, 8, 5);
 
         // These project beyond the sphere rather than being decoration painted
         // onto it. The jaw survives as a profile from the side; the brow stays
@@ -399,8 +473,64 @@ public static class BodyMeshLibrary
         mesh.Box(head + new Vector3(0.0f, -headRadius * 0.48f, -headRadius * 0.50f),
                  new Vector3(headRadius * 1.18f, headRadius * 0.62f, headRadius * 0.72f),
                  Darken(spec.Head, 0.78f));
-        mesh.Box(head + new Vector3(0.0f, headRadius * 0.12f, -headRadius * 0.82f),
-                 new Vector3(headRadius * 1.16f, headRadius * 0.24f, headRadius * 0.22f), shadow);
+        // Two sockets with a bridge between them, rather than one bar across.
+        //
+        // The bar was right when the head was 26 cm: at that size it is a line of
+        // shadow under a brow and there is no room for anything with structure in
+        // it. On a head twice as wide the same box spans the whole face at a
+        // constant height, and what a horizontal dark band across a face reads as
+        // is a visor — the boss in particular arrived wearing sunglasses. Two
+        // patches either side of a lit bridge is the smallest thing that reads as
+        // a face instead, and it costs the same twelve triangles.
+        foreach (int eye in new[] { -1, 1 })
+        {
+            mesh.Box(head + new Vector3(eye * headRadius * 0.40f, headRadius * 0.10f,
+                                        -headRadius * 0.80f),
+                     new Vector3(headRadius * 0.42f, headRadius * 0.26f, headRadius * 0.24f),
+                     shadow);
+        }
+
+        // The cap, on the survivors and on nothing else.
+        if (spec.Cap)
+        {
+            Color kit = Darken(spec.Limb, 0.88f);
+
+            // **Two segments, because one cone cannot cover a sphere.** The
+            // first attempt was a single truncated cone from the temple to the
+            // crown, and what it produced was a headband: a cone's radius falls
+            // linearly and a sphere's falls as a cosine, so above the brow the
+            // skull is *wider* than any straight-sided cap over it and poked
+            // through everywhere except at the very bottom ring. Following the
+            // sphere in two steps, six per cent proud at each ring, is a cap.
+            //
+            // Radii are the sphere's own at each height, `sqrt(1 - y²)`, times
+            // 1.06. The top ring stops one per cent short of the crown, which is
+            // what keeps `StandingHeight` — computed as centre plus radius — the
+            // truth about how tall this body stands.
+            //
+            // It starts at 0.30 of a radius, just above the eye sockets at 0.10,
+            // so the cap sits on a face rather than replacing one.
+            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.30f, 0.0f),
+                        head + new Vector3(0.0f, headRadius * 0.72f, 0.0f),
+                        new Vector2(headRadius * 1.011f, headRadius * 1.011f),
+                        new Vector2(headRadius * 0.735f, headRadius * 0.735f),
+                        kit, 8);
+
+            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.72f, 0.0f),
+                        head + new Vector3(0.0f, headRadius * 0.99f, 0.0f),
+                        new Vector2(headRadius * 0.735f, headRadius * 0.735f),
+                        new Vector2(headRadius * 0.200f, headRadius * 0.200f),
+                        kit, 8);
+
+            // A peak, on the brimline. Bilateral symmetry and a straight edge are
+            // two thirds of the survivor rule, and this is the only flat plane on
+            // a head made of spheres — it is what says the shape was *made*, and
+            // it points the way the body is facing from behind as well as in
+            // front.
+            mesh.Box(head + new Vector3(0.0f, headRadius * 0.30f, -headRadius * 1.00f),
+                     new Vector3(headRadius * 1.24f, headRadius * 0.14f, headRadius * 0.62f),
+                     Darken(kit, 0.82f));
+        }
 
         // --- arms ------------------------------------------------------------
         // Counter-phased against the leg on the same side, which is what stops a
@@ -415,11 +545,7 @@ public static class BodyMeshLibrary
             // silhouette at horde distance.
             float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius * 0.35f);
             Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
-            // Width alone also selects the runner, whose swept-back compact arms
-            // are part of its arrowhead outline. The modest lean cutoff leaves
-            // the narrow, stooped spitter as the only body reaching below its hip.
-            float armLength = chestHeight *
-                (spec.ShoulderWidth < 0.40f && spec.LeanDegrees < 20.0f ? 1.34f : 1.16f);
+            float armLength = chestHeight * spec.Reach;
             // Twelve per cent of a radius shows which way the elbow faces in
             // profile without moving the hand away from the hip. Animation
             // supplies the gesture; the resting mesh only supplies the anatomy.
@@ -442,8 +568,10 @@ public static class BodyMeshLibrary
             // arm read as one line. A second absolute pivot cannot behave like a
             // child bone and was turning the small resting bend into a doll kink.
             mesh.Tube(elbow, wrist, armRadius * 0.9f, armRadius * 0.66f, spec.Head);
-            mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.75f, -armRadius * 0.10f),
-                     new Vector3(armRadius * 1.65f, armRadius * 1.75f, armRadius * 1.25f),
+            // Same correction as the foot. A hand is barely wider than the wrist
+            // it is on; at 1.65 radii on the new arm it was a mitten.
+            mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.62f, -armRadius * 0.10f),
+                     new Vector3(armRadius * 1.32f, armRadius * 1.40f, armRadius * 1.15f),
                      spec.Head);
 
             // The weapon rides the same rig as the hand holding it. Rigged
