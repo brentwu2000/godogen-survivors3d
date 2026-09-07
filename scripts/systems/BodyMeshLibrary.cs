@@ -527,12 +527,19 @@ public static class BodyMeshLibrary
         // the two overlap rather than meet. Twelve triangles cheaper, too.
         float halfSpan = spec.ShoulderWidth * 0.5f;
         float armX = halfSpan - armRadius * 0.25f;
-        Color deltoid = Darken(spec.Torso, 0.92f);
+
+        // The limb's colour, not the torso's. A shoulder belongs to the arm
+        // hanging off it — painting the ball from the torso palette and the arm
+        // from the limb palette put a colour break exactly at the joint, which is
+        // the one place a body must not have one, and turned a deltoid into a
+        // pauldron. On the brute, where the two palettes are a grey and a pale
+        // green, it was somebody else's arm again.
+        Color deltoid = Darken(spec.Limb, 0.94f);
 
         // Reaches to `halfSpan + 1.35` arm radii, which is where the old barrel
         // plus the arm hanging off it reached. The brute's warning is its width
         // and nothing here narrows it.
-        float deltoidRadius = armRadius * 1.60f;
+        float deltoidRadius = armRadius * 1.45f;
 
         foreach (int side in new[] { -1, 1 })
         {
@@ -569,9 +576,9 @@ public static class BodyMeshLibrary
         // onto it. The jaw survives as a profile from the side; the brow stays
         // inside the crown's narrow low-poly silhouette so darkness, rather than
         // a mushroom cap, survives when the face is three pixels tall.
-        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.48f, -headRadius * 0.50f),
-                 new Vector3(headRadius * 1.18f, headRadius * 0.62f, headRadius * 0.72f),
-                 Darken(spec.Head, 0.78f));
+        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.44f, -headRadius * 0.52f),
+                 new Vector3(headRadius * 1.10f, headRadius * 0.52f, headRadius * 0.66f),
+                 Darken(spec.Head, 0.88f));
         // Two sockets with a bridge between them, rather than one bar across.
         //
         // The bar was right when the head was 26 cm: at that size it is a line of
@@ -696,7 +703,11 @@ public static class BodyMeshLibrary
             float swing = carrying ? spec.ArmSwing * 0.25f : spec.ArmSwing;
 
             mesh.SetRig(swing, shoulder.Y, phase, spec.Bob);
-            mesh.Tube(shoulder, elbow, armRadius * 1.15f, armRadius * 0.86f, spec.Limb);
+            // Thicker at the top than it was, so the step from the deltoid ball
+            // down to the arm is 0.15 of a radius rather than 0.45. Below about
+            // that the two read as one shoulder; above it the ball reads as
+            // something resting on the arm.
+            mesh.Tube(shoulder, elbow, armRadius * 1.30f, armRadius * 0.86f, spec.Limb);
 
             // One shoulder rotation keeps the elbow sealed and lets a hanging
             // arm read as one line. A second absolute pivot cannot behave like a

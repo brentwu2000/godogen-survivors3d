@@ -65,6 +65,8 @@ public partial class BodyShot : SceneTree
     private bool _carry;
     private bool _roster;
     private bool _raw;
+    private string _only = string.Empty;
+    private float _pad = 1.0f;
     private int _frame;
 
     public override void _Initialize()
@@ -103,6 +105,30 @@ public partial class BodyShot : SceneTree
 
             if (argument == "roster")
                 _roster = true;
+
+            // `one:walker` stands exactly one body in the frame, and the
+            // existing framing arithmetic then fills it.
+            //
+            // The lineup is the right picture for judging a *roster* — scale,
+            // palette and silhouette only mean anything side by side — and the
+            // wrong one for judging a body: ten figures across a 1920 frame is
+            // 150 pixels each, which is about what the game gives them and far
+            // less than a decision about a jawline needs.
+            if (argument.StartsWith("one:"))
+                _only = argument[4..];
+
+            // `pad:1.8` backs the camera off by that much again.
+            //
+            // The framing is computed from the row's width and the *tallest*
+            // body, which is right for a lineup of upright figures and wrong for
+            // the two that are not: the stalker is 1.3 m tall and about three
+            // long, so a camera framed on 1.3 m puts its shoulders past both
+            // edges. Rather than teach the framing about mesh bounds — which it
+            // would then have to get from a `SoloBody` it does not keep — the
+            // caller says how much room the subject needs.
+            if (argument.StartsWith("pad:")
+                && float.TryParse(argument[4..], out float pad) && pad > 0.0f)
+                _pad = pad;
 
             // `raw` ignores every bake and draws the procedural body instead.
             //
@@ -190,12 +216,20 @@ public partial class BodyShot : SceneTree
             carried.Clear();
         }
 
-        int slots = _roster ? roster.Count : _carry ? carried.Count : 1 + names.Length;
+        if (_only == "player")
+            names = System.Array.Empty<string>();
+
+        int slots = _roster ? roster.Count
+                  : _carry ? carried.Count
+                  : carried.Count + names.Length;
         float span = slots * Spacing;
         float x = -span * 0.5f;
 
         // The player first, on the left, because the question the lineup exists
         // to answer is whether it can be told from the horde at a glance.
+        if (!string.IsNullOrEmpty(_only) && _only != "player")
+            carried.Clear();
+
         foreach (BodyMeshLibrary.Carry held in carried)
         {
             Add(shader, BodyMeshLibrary.ForPlayer(1.75f, held), root, x);
@@ -259,14 +293,37 @@ public partial class BodyShot : SceneTree
         foreach (BodyMeshLibrary.Build spec in _specs)
             tallest = Mathf.Max(tallest, BodyMeshLibrary.StandingHeight(spec));
 
-        float halfSpan = span * 0.5f + Spacing * 0.5f;
+        // Centred on what was actually placed, and framed to it.
+        //
+        // The row used to start at `-span/2` and step forward, which leaves its
+        // last body half a spacing short of `+span/2` — so every lineup this
+        // file has ever produced sat half a slot left of the aim point, and a
+        // one-body shot sat a whole metre off it with the subject small in the
+        // corner. Measuring the placements instead is right in both cases and
+        // needs no arithmetic about how many were added or by which branch.
+        float lowest = float.MaxValue;
+        float highest = float.MinValue;
+        foreach (Vector3 spot in _placements)
+        {
+            lowest = Mathf.Min(lowest, spot.X);
+            highest = Mathf.Max(highest, spot.X);
+        }
+
+        float centre = (lowest + highest) * 0.5f;
+        for (int i = 0; i < _placements.Count; i++)
+            _placements[i] -= new Vector3(centre, 0.0f, 0.0f);
+
+        // Half a spacing of air on each end, which is the margin the row was
+        // designed with. On a single body that is the whole framing, and it is
+        // what makes `one:` fill the frame rather than reuse the ten-body camera.
+        float halfSpan = (highest - lowest) * 0.5f + Spacing * 0.5f;
 
         // Whichever axis needs the camera further away wins. The vertical extent
         // is measured about the aim point, so it is half the tallest body rather
         // than all of it.
         float forWidth = halfSpan / Mathf.Tan(Mathf.DegToRad(HorizontalHalfAngle));
         float forHeight = tallest * 0.5f / Mathf.Tan(Mathf.DegToRad(VerticalHalfAngle));
-        float distance = Mathf.Max(forWidth, forHeight) * Margin;
+        float distance = Mathf.Max(forWidth, forHeight) * Margin * _pad;
 
         // Aimed at the middle of the tallest body, then backed off along the
         // tilt. The tilt is the game's, so the foreshortening is the game's —
@@ -320,8 +377,11 @@ public partial class BodyShot : SceneTree
     /// Baked variants are skipped, and that is not the same oversight: they are
     /// not built by `BodyMeshLibrary` at all, so there is no `Build` spec to
     /// stand up. `BodyShot -- baked:res://...` shows those, one at a time.
-    private static string[] Variants()
+    private string[] Variants()
     {
+        if (!string.IsNullOrEmpty(_only))
+            return new[] { _only };
+
         var names = new System.Collections.Generic.List<string>();
         foreach (string name in Horde.TypeNames)
             names.Add(name);
