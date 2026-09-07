@@ -25,10 +25,80 @@ public partial class ModelReport : SceneTree
             return;
         }
 
+        // `tree` after the paths prints the node tree instead of only the totals.
+        //
+        // A pack is not a model. `polyart_zombies.glb` is ten zombies in one
+        // file, and the totals — 15 meshes, 18,840 triangles, 10 skeletons —
+        // describe the *file*, which is the one thing nobody wants to import.
+        // What the question actually is, every time, is "which node is the third
+        // zombie and how big is it on its own".
+        bool tree = System.Array.IndexOf(args, "tree") >= 0;
+
         foreach (string path in args)
+        {
+            if (path == "tree")
+                continue;
+
             Report(path);
 
+            if (tree)
+                PrintTree(path);
+        }
+
         Quit();
+    }
+
+    /// Every node, indented, with what it costs and where it stands.
+    ///
+    /// Triangles per node rather than per file, because that is the number that
+    /// decides whether a thing can join a `MultiMesh` horde — the cost of a
+    /// variant is its own mesh times how many are on screen, and a pack's total
+    /// is a number no draw call ever pays.
+    private static void PrintTree(string path)
+    {
+        Node root = GD.Load<PackedScene>(path)?.Instantiate()!;
+        if (root == null)
+            return;
+
+        GD.Print("tree:");
+        Descend(root, 0);
+        GD.Print("");
+    }
+
+    private static void Descend(Node node, int depth)
+    {
+        string pad = new(' ', 2 + depth * 2);
+        string extra = string.Empty;
+
+        if (node is MeshInstance3D { Mesh: not null } instance)
+        {
+            int triangles = 0;
+            for (int s = 0; s < instance.Mesh.GetSurfaceCount(); s++)
+            {
+                Godot.Collections.Array arrays = instance.Mesh.SurfaceGetArrays(s);
+                var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
+                var vertices = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
+                triangles += (indices.Length > 0 ? indices.Length : vertices.Length) / 3;
+            }
+
+            Aabb box = instance.GetAabb();
+            extra = $"  {triangles} tris, "
+                  + $"{box.Size.X:F2} x {box.Size.Y:F2} x {box.Size.Z:F2} m"
+                  + (instance.Skin != null ? ", skinned" : string.Empty);
+        }
+        else if (node is Skeleton3D skeleton)
+        {
+            extra = $"  {skeleton.GetBoneCount()} bones";
+        }
+        else if (node is AnimationPlayer player)
+        {
+            extra = $"  {string.Join(", ", player.GetAnimationList())}";
+        }
+
+        GD.Print($"{pad}{node.Name} ({node.GetType().Name}){extra}");
+
+        foreach (Node child in node.GetChildren())
+            Descend(child, depth + 1);
     }
 
     private void Report(string path)

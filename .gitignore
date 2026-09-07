@@ -35,3 +35,17 @@ art-src/models/node_modules/
 # Python bytecode from the art-src plate scripts.
 __pycache__/
 *.pyc
+
+# Sketchfab "Free Standard" content, which is not CC0 and not CC-BY.
+#
+# The licence permits using the model in a product, commercially, worldwide, in
+# any derivative work — and forbids redistributing the file itself as a
+# standalone asset. A raw .glb committed to a public repository is exactly that,
+# so the *source* stays out of the history and only the bake goes in.
+#
+# `assets/models/SOURCE.md` carries the download URL and the sha256, so the file
+# is one download away rather than lost. This is the same call the project made
+# about `rigged_anime_girl_cc0.blend` and for a licence reason rather than a
+# size one.
+assets/models/polyart_zombies.glb
+assets/models/polyart_zombies.glb.import

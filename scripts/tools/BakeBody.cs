@@ -76,11 +76,39 @@ public partial class BakeBody : SceneTree
         // here, because it is the one argument that is usually absent and would
         // otherwise have to sit behind three floats and a palette to be reached.
         string pose = string.Empty;
+        string only = string.Empty;
+        float yaw = 0.0f;
         bool asProp = false;
         foreach (string argument in args)
         {
             if (argument.StartsWith("pose:", System.StringComparison.Ordinal))
                 pose = argument[5..];
+
+            // `node:lpMale_zombie_C` bakes one character out of a pack.
+            //
+            // **A pack is not a model.** The Polyart set is ten zombies, ten
+            // skeletons and a floor tile in one file: 18,840 triangles that
+            // describe the *file* and no draw call anybody wants. Without this
+            // the baker merges all of it, refuses for having several skeletons,
+            // and there is nothing the caller can do about it from a command
+            // line.
+            //
+            // Applied after the pose, because the `AnimationPlayer` is above the
+            // character in the tree and narrowing first would hide it.
+            if (argument.StartsWith("node:", System.StringComparison.Ordinal))
+                only = argument[5..];
+
+            // `yaw:180` turns the finished body about Y.
+            //
+            // This game's bodies face -Z, because that is where `BodyRenderer`
+            // points an enemy walking toward the player. An authored model faces
+            // wherever its author left it, and one facing +Z walks at you
+            // backwards — which reads as a rig bug rather than as a sign
+            // convention, and is the kind of thing that gets "fixed" by rotating
+            // the whole horde.
+            if (argument.StartsWith("yaw:", System.StringComparison.Ordinal)
+                && float.TryParse(argument[4..], out float turn))
+                yaw = turn;
 
             // Scenery rather than a creature: no rig is derived, no skeleton is
             // required, and the mesh is normalised into the unit footprint the
@@ -114,7 +142,9 @@ public partial class BakeBody : SceneTree
         // colours and the mistake was about argument order, which is the worst
         // combination for anybody reading it.
         Color[]? tints = null;
-        if (args.Length > 6 && !args[6].StartsWith("pose:", System.StringComparison.Ordinal) && args[6] != "prop")
+        if (args.Length > 6 && !args[6].StartsWith("pose:", System.StringComparison.Ordinal)
+            && !args[6].StartsWith("node:", System.StringComparison.Ordinal)
+            && !args[6].StartsWith("yaw:", System.StringComparison.Ordinal) && args[6] != "prop")
         {
             // Refused rather than ignored. A colour that cannot be read is a
             // typo, and a bake that quietly keeps the model's white is the one
@@ -164,7 +194,7 @@ public partial class BakeBody : SceneTree
             tints = chosen;
         }
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose, asProp) ? 0 : 1);
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose, asProp, only, yaw) ? 0 : 1);
     }
 
     /// Puts the model into one frame of one of its own animations before the
@@ -235,6 +265,27 @@ public partial class BakeBody : SceneTree
         return true;
     }
 
+    /// The first descendant with this name, case-insensitively.
+    ///
+    /// By name rather than by path, because a pack's path is exporter noise —
+    /// `Sketchfab_Scene/Sketchfab_model/<hash>_fbx/Object_2/RootNode/
+    /// lpMale_zombie_C` — and the only part of it anybody ever typed is the
+    /// last one.
+    private static Node? FindNamed(Node node, string name)
+    {
+        if (string.Equals(node.Name, name, System.StringComparison.OrdinalIgnoreCase))
+            return node;
+
+        foreach (Node child in node.GetChildren())
+        {
+            Node? found = FindNamed(child, name);
+            if (found != null)
+                return found;
+        }
+
+        return null;
+    }
+
     private static AnimationPlayer? FindPlayer(Node node)
     {
         if (node is AnimationPlayer player)
@@ -252,7 +303,7 @@ public partial class BakeBody : SceneTree
 
     public static bool Bake(string source, string destination, float height,
                             float legSwing, float armSwing, float bob, Color[]? tints,
-                            string pose = "", bool asProp = false)
+                            string pose = "", bool asProp = false, string only = "", float yaw = 0.0f)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -306,6 +357,27 @@ public partial class BakeBody : SceneTree
         // scaled, correctly rigged, and missing a head. Nothing errors, every
         // soundness check passes, and the only way to find it is to look at a
         // render. Two earlier defects in this file had exactly that shape.
+        // Held before any narrowing, because a pack's orientation lives above the
+        // character and `Relative` has to be measured against it.
+        Node scene = root;
+
+        // Narrowed to one character, if the caller named one. After the pose,
+        // which needs the `AnimationPlayer` that sits above it.
+        if (!string.IsNullOrEmpty(only))
+        {
+            Node? picked = FindNamed(root, only);
+            if (picked == null)
+            {
+                GD.PushError($"  no node called '{only}'. Run "
+                           + "`ModelReport.cs -- <model> tree` to see what is in there.");
+                return false;
+            }
+
+            GD.Print($"  narrowed to '{picked.Name}'");
+            root = picked;
+            skeleton = FindSkeleton(root);
+        }
+
         var meshes = new System.Collections.Generic.List<MeshInstance3D>();
         CollectMeshes(root, meshes);
 
@@ -354,19 +426,34 @@ public partial class BakeBody : SceneTree
         // A posed bake takes the **skeleton's** transform instead, because
         // skinning lands the vertex in skeleton space rather than in the mesh
         // node's. See `SkinMatrices`.
+        // **Measured against the *scene* root, not the narrowed one.**
+        //
+        // A pack's characters sit under one or two nodes that carry the whole
+        // file's orientation — a Sketchfab FBX conversion puts the Z-up-to-Y-up
+        // turn up there, above every rig in the file. Narrowing to one character
+        // and then resolving transforms against *that* leaves the turn behind,
+        // and the symptom is exactly the one this whole block is about: the hip
+        // comes out at 1.91 m and the shoulder at 1.48, because the body is
+        // baked lying on its face.
+        //
+        // It only shows on the posed path, which is worth knowing before
+        // debugging the next one. An unposed bake reads the mesh's own vertices,
+        // and those are stored Y-up whatever the scene does with them; a posed
+        // vertex lands in *skeleton* space, and the skeleton is where the file's
+        // orientation lives.
         var parts = new System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)>();
         foreach (MeshInstance3D part in meshes)
         {
             Node3D from = posed && skeleton != null && part.Skin != null ? skeleton : part;
-            parts.Add((part, root is Node3D root3D
-                ? Relative(from, root3D)
+            parts.Add((part, scene is Node3D scene3D
+                ? Relative(from, scene3D)
                 : Transform3D.Identity));
         }
 
         GD.Print($"  {parts.Count} mesh node(s): "
                + string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => p.Instance.Name.ToString())));
 
-        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed, asProp))
+        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed, asProp, yaw))
         {
             root.Free();
             return false;
@@ -399,7 +486,8 @@ public partial class BakeBody : SceneTree
     private static bool Convert(
         System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
         Skeleton3D? skeleton, BakedBodyResource baked,
-        float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed, bool asProp)
+        float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed, bool asProp,
+        float yaw = 0.0f)
     {
         var allVertices = new System.Collections.Generic.List<Vector3>();
         var allNormals = new System.Collections.Generic.List<Vector3>();
@@ -694,6 +782,28 @@ public partial class BakeBody : SceneTree
         float span = Mathf.Max(0.0001f, high - low);
         float scale = height / span;
 
+        // Centred on its own footprint, which a body taken out of a pack is not.
+        //
+        // Ten zombies in one file stand in a grid, so the third one is three
+        // metres along X of its own scene — and a `MultiMesh` instance transform
+        // puts the *origin* where the enemy is, not the geometry. A body baked
+        // off-centre walks three metres to the side of itself, dodges nothing,
+        // and is hit by everything, because the simulation is at the origin and
+        // only the drawing moved.
+        //
+        // On X and Z only. Y is the ground: `low` is already subtracted below so
+        // the feet land at zero, and centring height would bury it.
+        float leftX = float.MaxValue, rightX = float.MinValue;
+        float nearZ = float.MaxValue, farZ = float.MinValue;
+        foreach (Vector3 vertex in vertices)
+        {
+            leftX = Mathf.Min(leftX, vertex.X); rightX = Mathf.Max(rightX, vertex.X);
+            nearZ = Mathf.Min(nearZ, vertex.Z); farZ = Mathf.Max(farZ, vertex.Z);
+        }
+
+        float middleX = (leftX + rightX) * 0.5f;
+        float middleZ = (nearZ + farZ) * 0.5f;
+
         // Where the limbs turn about, measured off the *vertices* rather than off
         // the skeleton's rest pose.
         //
@@ -727,9 +837,9 @@ public partial class BakeBody : SceneTree
 
         for (int i = 0; i < vertices.Length; i++)
         {
-            placed[i] = new Vector3(vertices[i].X * scale,
+            placed[i] = new Vector3((vertices[i].X - middleX) * scale,
                                     (vertices[i].Y - low) * scale,
-                                    vertices[i].Z * scale);
+                                    (vertices[i].Z - middleZ) * scale);
 
             // `colours` is what the surface loop already resolved — the forced
             // palette when one was given, the model's own albedo otherwise — so
@@ -848,6 +958,21 @@ public partial class BakeBody : SceneTree
 
         if (arms == 0)
             GD.PushWarning("  no vertex was classified as an arm — the body will walk without swinging");
+
+        // Turned last, after everything that measures heights and pivots — a yaw
+        // changes none of them, and doing it here means the pivot arithmetic
+        // above never has to know the model was facing the wrong way.
+        if (yaw != 0.0f)
+        {
+            var turn = new Basis(Vector3.Up, Mathf.DegToRad(yaw));
+            for (int i = 0; i < placed.Length; i++)
+                placed[i] = turn * placed[i];
+
+            for (int i = 0; i < normals.Length; i++)
+                normals[i] = turn * normals[i];
+
+            GD.Print($"  turned {yaw:F0} degrees about Y");
+        }
 
         baked.Vertices = placed;
         baked.Normals = normals.Length == vertices.Length ? normals : RecomputeNormals(placed, indices);

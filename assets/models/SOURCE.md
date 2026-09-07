@@ -71,6 +71,48 @@ rather than onto drawn detail, which is the convention across Kenney's whole 3D
 library. `BakeBody` samples it per vertex, and for a flat patch that is exact
 rather than approximate — see `PaletteImage` there.
 
+## Sketchfab — Polyart Zombies with Animations Free Pack
+
+| | |
+| :--- | :--- |
+| Pack | Polyart Zombies with Animations Free Pack |
+| Author | Denys Almaral — <https://sketchfab.com/denysalmaral> |
+| Page | <https://sketchfab.com/3d-models/polyart-zombies-with-animations-free-pack-d9bcfdd88f5348549bc947226af7c314> |
+| Downloaded | 2026-09-08, GLB, texture size 256 |
+| sha256 | `17b40fbdc717423184872f6bbfe3bdc92ca2390f6d32947e7ee433a67e278e73` |
+| Licence | **Sketchfab Free Standard** — not CC0, not CC BY |
+| Contents | ten zombies, 18,840 triangles in total (1,588–1,990 each plus hair), one 7.4 s animation `Take 001`, 405 bones across ten skeletons |
+
+**The `.glb` is deliberately not committed.** The Standard licence permits using
+the model in a product — commercially, worldwide, in any derivative work — and
+forbids redistributing the file itself as a standalone asset. A raw `.glb` in a
+public repository is exactly that. It is in `.gitignore`; the URL and the hash
+above are what make it one download away rather than lost.
+
+Whether a *bake* may be committed is the judgement call, and it is a different
+one from the file: `resources/bodies/polyart_*.res` is 1,650 triangles of
+re-posed, re-scaled, re-coloured vertex data with no textures and no rig, built
+by `BakeBody` — a derivative work, which is the category the licence names. That
+is the reading this project is going on, and it is written down here rather than
+assumed so that it can be revisited.
+
+### How one of the ten is baked
+
+The pack is one file with ten characters and a floor tile in it, so the bake has
+to say which:
+
+```bash
+godot --headless --script scripts/tools/BakeBody.cs --   res://assets/models/polyart_zombies.glb res://resources/bodies/polyart_male_c.res   2.0 0.55 0.30 0.035 node:rig_CharRoot007 "pose:Take 001@1.0" yaw:180
+```
+
+`ModelReport.cs -- <model> tree` lists the nodes. The characters are the
+`rig_CharRootNNN` nodes, **not** the `lpMale_zombie_C` markers beside them —
+those are empty labels, and baking one gives "has no mesh to bake". The marker
+immediately above each rig is what names it.
+
+`pose:` is needed because the bind pose is a T-pose. `yaw:180` is needed because
+these face +Z and this game's bodies face -Z.
+
 ## Verifying
 
 ```bash
