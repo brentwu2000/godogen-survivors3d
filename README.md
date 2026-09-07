@@ -19,6 +19,11 @@ lines and both the shop and the run tilt it. Finite ammo, items you can use or t
 audio and music that follows the run's shape, a HUD of bars rather than labels, a minimap that records
 where you have been rather than revealing the map, and hit feedback.
 
+**The look is cel-shaded stylised**, and `ART.md` is the brief anyone sourcing a model works to. Most
+of that file is a list of things this renderer cannot do — a `MultiMesh` has no skeleton, so animations,
+blend shapes and per-instance mesh variants are all worth nothing here — because that is what decides
+which of two good-looking models is usable and none of it is guessable from a screenshot.
+
 The billboard sprite path is still there and still works, behind `Horde.SolidBodies` — it is the
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
 scene with it so it cannot quietly rot.
