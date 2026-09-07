@@ -346,11 +346,15 @@ public partial class BuildMain : SceneTree
             // immediately. The first attempt at getting blue back raised this to
             // 0.3 and made the sky greyer.
             //
-            // It matters more here than in most games: the camera tilts 26° down
-            // with a 60° field, so it never looks more than a few degrees above
-            // horizontal. The only sky this game ever shows is the band right
-            // above the horizon — if the blue does not arrive within a few
-            // degrees, it may as well not be in the material.
+            // It matters more here than in most games, and by more than the
+            // eight degrees this comment used to claim. It said "a 60° field, so
+            // it never looks more than a few degrees above horizontal"; the
+            // field is 52 and Godot measures it vertically, so a 26° tilt puts
+            // the top of the frame at exactly 0° and the answer is *no* degrees
+            // above horizontal. The only sky this game shows is the band right
+            // below the horizon, seen through fog. If the blue does not arrive
+            // in the first degree it may as well not be in the material — and
+            // nothing above that first degree is worth authoring at all.
             SkyCurve = 0.1f,
             SkyEnergyMultiplier = 1.0f,
 
@@ -365,6 +369,23 @@ public partial class BuildMain : SceneTree
             // and the shadows would point in different directions in four of five.
             SunAngleMax = 0.0f,
             SunCurve = 0.0f,
+
+            // **No `sky_cover`, and this is the note that says not to try.**
+            //
+            // Clouds were painted for that slot, mapped to an equirectangular
+            // upper hemisphere and wired in here, and not one of them was ever
+            // drawn. The arithmetic above is why and it is exact rather than
+            // nearly: the camera tilts 26 degrees down and `Fov` is Godot's
+            // *vertical* field at 52, so the top edge of the frame sits at
+            // -26 + 26 = 0 degrees of elevation. The horizon is the top of the
+            // screen. There is no sky above it to put anything in, and the pale
+            // band that looks like sky is the fogged far end of the arena.
+            //
+            // What arrived instead was additive spill through the fog, which
+            // warmed the horizon band away from `Palette.Fog` — the one colour
+            // the four notes above exist to keep the sky and the far terrain
+            // agreeing on. Anything spent on the sky is spent on that band, and
+            // the band belongs to the fog.
         },
     };
 

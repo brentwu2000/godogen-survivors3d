@@ -2,8 +2,21 @@ shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 
 uniform sampler2D surface_detail : source_color, filter_linear_mipmap, repeat_enable;
-uniform float surface_detail_scale = 3.2;
-uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.52;
+
+// **3.2 was a frequency nobody could see, and it is worth saying why rather
+// than just lowering it.** The projection is triplanar in model space, so this
+// is tiles per metre of body: at 3.2 the painted plate repeated every 31 cm,
+// which puts its 1024 pixels across a third of a metre — about 3,300 pixels of
+// texture per metre of body against the sixty pixels per metre a body actually
+// occupies on screen at playing distance. Everything in the plate averaged to
+// its own mean and the bodies rendered flat, which is exactly what a painted
+// surface is bought to stop.
+//
+// At 1.1 the plate covers most of a torso. Its features land around a tenth of
+// a metre, which is six or seven pixels on screen — the smallest thing the eye
+// still reads as a material rather than as noise.
+uniform float surface_detail_scale = 1.1;
+uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.62;
 
 // The walk, and the only place a body is animated.
 //

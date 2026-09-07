@@ -73,9 +73,14 @@ The named Windows families are not an answer either: the export target is Androi
 there. They are only evidence that the monospace path exists.
 
 This would be the **first third-party binary asset in the repository**. Everything the player currently
-sees is generated: audio is synthesised from recipes by `BuildAudio`, the ground texture by
-`BuildGroundTexture`, cover is boxes, bodies are procedural. A CJK typeface cannot be generated, and
-the README's asset rule already anticipates the case — CC0 and OFL sources are usable directly.
+sees is generated: audio is synthesised from recipes by `BuildAudio`, the ground texture is painted
+and then made tileable by `art-src/textures/make_ground.py`, cover is boxes, bodies are procedural. A
+CJK typeface cannot be generated, and the README's asset rule already anticipates the case — CC0 and
+OFL sources are usable directly.
+
+(Written before the Kenney and Quaternius props arrived, which are the actual answer to "first
+third-party binary asset" — see `assets/models/SOURCE.md`. The argument for subsetting a font at
+build time is unaffected and is the reason this section is still here.)
 
 **Subset it at build time rather than shipping the whole thing.** A full Traditional Chinese face is
 10–20 MB; the glyphs this game actually uses will be under a thousand. A build tool that reads the
