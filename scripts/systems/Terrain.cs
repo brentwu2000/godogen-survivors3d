@@ -86,6 +86,98 @@ public static class Terrain
     /// Puts a point on the ground, keeping its X and Z.
     public static Vector3 Plant(Vector3 at) => new(at.X, Height(at.X, at.Z), at.Z);
 
+    /// A rectangle laid over the ground rather than across it.
+    ///
+    /// **Every flat marker in the game was a `PlaneMesh` and the ground stopped
+    /// being flat.** A zone boundary is up to 26 by 20 metres and the terrain
+    /// moves 1.75 either way, so a marker planted at its own centre's height hung
+    /// three and a half metres in the air at one corner and was buried at the
+    /// other — and since every one of these draws with depth writing off, what
+    /// the player saw was a pale hard-edged sheet floating over the field with
+    /// enemies walking about inside it. It looked like broken geometry because it
+    /// was: a flat quad in a world that grew hills.
+    ///
+    /// Local space, centred on the origin, so a node already planted by `Plant`
+    /// keeps its position and its small lift off the ground. The height at each
+    /// vertex is the field's height there *minus the origin's*, which is what
+    /// makes the two cancel.
+    ///
+    /// UVs run 0..1 across the rectangle, which is what the marker shaders read —
+    /// `zone_marker` takes a Chebyshev distance from the centre and
+    /// `ground_marker` a radial one, and both are symmetric about 0.5, so this
+    /// does not have to reproduce which corner `PlaneMesh` calls the origin.
+    public static ArrayMesh Drape(Vector2 size, Vector3 origin, float spacing = 2.0f)
+    {
+        int nx = Mathf.Max(1, Mathf.RoundToInt(size.X / Mathf.Max(0.05f, spacing)));
+        int nz = Mathf.Max(1, Mathf.RoundToInt(size.Y / Mathf.Max(0.05f, spacing)));
+
+        var half = new Vector2(size.X * 0.5f, size.Y * 0.5f);
+        float stepX = size.X / nx;
+        float stepZ = size.Y / nz;
+
+        var vertices = new Vector3[nx * nz * 6];
+        var normals = new Vector3[nx * nz * 6];
+        var uvs = new Vector2[nx * nz * 6];
+
+        int at = 0;
+
+        Vector3 Corner(float x, float z) =>
+            new(x, Height(origin.X + x, origin.Z + z) - origin.Y, z);
+
+        Vector2 Uv(Vector3 v) =>
+            new((v.X + half.X) / size.X, (v.Z + half.Y) / size.Y);
+
+        for (int gz = 0; gz < nz; gz++)
+        {
+            for (int gx = 0; gx < nx; gx++)
+            {
+                float x0 = -half.X + gx * stepX;
+                float z0 = -half.Y + gz * stepZ;
+
+                Vector3 a = Corner(x0, z0);
+                Vector3 b = Corner(x0 + stepX, z0);
+                Vector3 c = Corner(x0 + stepX, z0 + stepZ);
+                Vector3 d = Corner(x0, z0 + stepZ);
+
+                // The same winding `GroundMesh` uses and for the same reason:
+                // Godot's engine normal is the negative of the right-hand one, so
+                // a surface is front-facing from above when its right-hand normal
+                // points down. Reversed, a marker is invisible from every angle
+                // the camera can reach — see the long note there before changing
+                // this.
+                Face(vertices, normals, uvs, ref at, a, b, c, Uv);
+                Face(vertices, normals, uvs, ref at, a, c, d, Uv);
+            }
+        }
+
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = vertices;
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.TexUV] = uvs;
+
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
+
+    private static void Face(Vector3[] vertices, Vector3[] normals, Vector2[] uvs, ref int at,
+                             Vector3 a, Vector3 b, Vector3 c, System.Func<Vector3, Vector2> uv)
+    {
+        Vector3 normal = -(b - a).Cross(c - a).Normalized();
+
+        // Three collinear points on flat ground cross to zero and normalise to
+        // NaN, which renders as a black speck that follows the camera. Flat
+        // ground is the common case inside `FlatRadius`, so this is the branch
+        // that runs rather than the one that guards.
+        if (normal.Y < 0.0f || !float.IsFinite(normal.Y))
+            normal = Vector3.Up;
+
+        vertices[at] = a; normals[at] = normal; uvs[at++] = uv(a);
+        vertices[at] = b; normals[at] = normal; uvs[at++] = uv(b);
+        vertices[at] = c; normals[at] = normal; uvs[at++] = uv(c);
+    }
+
     /// Value noise: a hash at each lattice corner, smoothly interpolated.
     ///
     /// Value rather than gradient noise because the difference is invisible at

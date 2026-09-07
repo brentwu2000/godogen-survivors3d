@@ -132,7 +132,16 @@ public partial class LevelProbe : SceneTree
                 int tile = tiles[gz * _level.GridSize + gx];
                 seen.Add(tile);
 
-                Color expected = LevelGenerator.TintFor(tile);
+                // **Times the biome's tint, which is what this stage was missing
+                // for nine phases.** It was written when `PaintGround` wrote
+                // `TintFor(tile)` and nothing else; Phase 23 made a biome tint the
+                // tile rather than replace it — deliberately, so the player still
+                // reads where the rubble is while the place as a whole shifts —
+                // and this comparison went on checking the un-tinted colour. It
+                // has been red ever since, which is worse than not existing: a
+                // stage that always fails is a stage nobody reads, in the exact
+                // subsystem it was built to watch.
+                Color expected = LevelGenerator.TintFor(tile) * _level.Biome.GroundTint;
                 Color actual = image.GetPixel(gx, gz);
 
                 // Rgb8, so a channel is only accurate to about 1/255.

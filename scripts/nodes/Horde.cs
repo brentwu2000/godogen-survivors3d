@@ -414,6 +414,7 @@ public partial class Horde : Node3D
     private void BuildHazardDecals()
     {
         _hazardDecals = new MeshInstance3D[HazardCapacity];
+        _hazardShape = new Vector3[HazardCapacity];
 
         var shader = GD.Load<Shader>("res://assets/shaders/ground_marker.gdshader");
 
@@ -449,12 +450,13 @@ public partial class Horde : Node3D
             // A flat quad rather than a cylinder: the sides were never visible
             // from this camera, and a quad has the clean 0..1 UV the shader needs
             // to know where the middle of the fire is.
+            // No mesh yet, and no rotation to lay a quad flat: `Terrain.Drape`
+            // builds already lying in XZ, and it has to be rebuilt per placement
+            // anyway because a draped surface is a function of where it is.
             var decal = new MeshInstance3D
             {
                 Name = $"Hazard{i}",
-                Mesh = new QuadMesh { Size = new Vector2(2.0f, 2.0f) },
                 MaterialOverride = material,
-                RotationDegrees = new Vector3(-90.0f, 0.0f, 0.0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
                 Visible = false,
             };
@@ -465,6 +467,10 @@ public partial class Horde : Node3D
     }
 
     private MeshInstance3D[] _hazardDecals = System.Array.Empty<MeshInstance3D>();
+
+    /// Where each decal's mesh was last built for, so it is not rebuilt every
+    /// frame. A hazard does not move once placed; the slot is what gets reused.
+    private Vector3[] _hazardShape = System.Array.Empty<Vector3>();
 
     /// Ticks the burning ground and shows where it is. Enemies only: the thrower
     /// picks the spot, and a patch they also have to avoid turns a tactical item
@@ -498,22 +504,38 @@ public partial class Horde : Node3D
             if (!active)
                 continue;
 
-            // Planted. Two centimetres of lift is enough to beat z-fighting
-            // against a flat floor and nowhere near enough against a floor with
-            // a metre and a half of relief — an unplanted decal spends most of
-            // its life buried, and a burning patch the player cannot see is a
-            // patch they walk into.
+            // Planted *and* draped. Two centimetres of lift is enough to beat
+            // z-fighting against a flat floor and nowhere near enough against a
+            // floor with a metre and a half of relief — an unplanted decal spends
+            // most of its life buried, and a burning patch the player cannot see
+            // is a patch they walk into.
+            //
+            // Planting alone only fixed the centre. A patch is up to four and a
+            // half metres across and the ground moves half a metre over that, so
+            // a flat quad planted at its middle still had one edge underground
+            // and the opposite one in the air. Same defect as the zone markers,
+            // smaller and on fire.
             //
             // The hazard itself stays flat: `Hazards.Position` is what the damage
             // test reads, and it is a two-dimensional test.
             Vector3 spot = Hazards.Position[i];
-            _hazardDecals[i].Position = new Vector3(
-                spot.X, Terrain.Height(spot.X, spot.Z) + spot.Y + 0.02f, spot.Z);
-            // X and Y, not X and Z. Scale is applied in local space before the
-            // rotation that lays the quad flat, and a quad's extent is in its own
-            // XY — the cylinder this replaced had its height on Y, which is why
-            // the axes moved.
-            _hazardDecals[i].Scale = new Vector3(Hazards.Radius[i], Hazards.Radius[i], 1.0f);
+            float radius = Hazards.Radius[i];
+            float floor = Terrain.Height(spot.X, spot.Z);
+
+            _hazardDecals[i].Position = new Vector3(spot.X, floor + spot.Y + 0.02f, spot.Z);
+
+            // Rebuilt only when the slot is used for somewhere else. A draped
+            // mesh is a function of where it is, so it cannot be scaled or moved
+            // into place — but a hazard does not move once it is placed, so this
+            // runs on the frame it is thrown and no other.
+            var shape = new Vector3(spot.X, spot.Z, radius);
+            if (_hazardDecals[i].Mesh == null || !_hazardShape[i].IsEqualApprox(shape))
+            {
+                _hazardDecals[i].Mesh = Terrain.Drape(
+                    new Vector2(radius * 2.0f, radius * 2.0f),
+                    new Vector3(spot.X, floor, spot.Z), 1.2f);
+                _hazardShape[i] = shape;
+            }
         }
     }
 

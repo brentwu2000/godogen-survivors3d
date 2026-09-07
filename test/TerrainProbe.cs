@@ -74,6 +74,7 @@ public partial class TerrainProbe : SceneTree
             case 5: return RunStage(StageBodiesAreDrawnPlanted, "every drawn body sits on the ground it stands on");
             case 6: return RunStage(StageQueriesIgnoreTheDrop, "NearestWithin measures the floor plan, not the terrain");
             case 7: return RunStage(StageGroundMeshFacesUp, "the floor mesh is wound to be seen from above");
+            case 8: return RunStage(StageMarkersLieOnTheGround, "no flat marker floats over the terrain");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -396,6 +397,90 @@ public partial class TerrainProbe : SceneTree
 
             return atThirteen == 0 && atEleven == -1;
         }
+    }
+
+    /// Every zone boundary and extraction pad follows the ground it is drawn on.
+    ///
+    /// **This is the stage that would have caught a bug that shipped in every
+    /// screenshot for a phase and a half.** The markers were `PlaneMesh` and
+    /// `QuadMesh`, authored when the floor was flat and never revisited when it
+    /// stopped being. A zone is up to 26 by 20 metres and the terrain moves 1.75
+    /// either way, so a marker planted at its centre's height hung three and a
+    /// half metres up at one corner — and every one of them draws with depth
+    /// writing off, so what that renders is an opaque pale sheet in mid-air with
+    /// a hard straight edge and enemies walking about inside it.
+    ///
+    /// It is exactly the class of defect this file's header is about: nothing
+    /// throws, nothing is out of range, both sides are individually correct, and
+    /// they disagree. `StageGroundMeshFacesUp` asks the same question of the
+    /// floor; this asks it of everything laid on top.
+    ///
+    /// Tolerance is the lift plus a millimetre. Each marker is deliberately a
+    /// couple of centimetres clear of the floor — coplanar, the two fight for the
+    /// same depth and flicker — so "on the ground" means "on the ground plus that
+    /// lift", and a marker that lost its lift is as wrong as one that floats.
+    private bool? StageMarkersLieOnTheGround(int tick)
+    {
+        Node scene = GetRoot().GetChild(GetRoot().GetChildCount() - 1);
+
+        var found = new System.Collections.Generic.List<MeshInstance3D>();
+        Collect(scene, found);
+
+        if (found.Count == 0)
+        {
+            GD.PushError("  no Marker or Pad meshes in the scene — the level built without zones");
+            return false;
+        }
+
+        int floating = 0;
+        float worst = 0.0f;
+        string worstName = string.Empty;
+
+        foreach (MeshInstance3D marker in found)
+        {
+            if (marker.Mesh is not ArrayMesh mesh || mesh.GetSurfaceCount() == 0)
+            {
+                GD.PushError($"  {marker.Name} is not an ArrayMesh — it is still a flat primitive");
+                return false;
+            }
+
+            var vertices = (Vector3[])mesh.SurfaceGetArrays(0)[(int)Mesh.ArrayType.Vertex];
+            Transform3D world = marker.GlobalTransform;
+
+            foreach (Vector3 local in vertices)
+            {
+                Vector3 point = world * local;
+                float off = Mathf.Abs(point.Y - Terrain.Height(point.X, point.Z));
+
+                if (off > worst)
+                {
+                    worst = off;
+                    worstName = marker.GetParent()?.Name ?? marker.Name;
+                }
+
+                if (off > MarkerLift + 0.001f)
+                    floating++;
+            }
+        }
+
+        GD.Print($"  {found.Count} markers, {floating} vertices off the ground, "
+               + $"worst {worst:F3} m on {worstName} against a {MarkerLift:F2} m lift");
+
+        return floating == 0;
+    }
+
+    /// The couple of centimetres every ground marker is raised by, from
+    /// `LevelGenerator`. Repeated rather than shared because a probe that reads
+    /// the number it is checking from the thing it is checking asserts nothing.
+    private const float MarkerLift = 0.03f;
+
+    private static void Collect(Node node, System.Collections.Generic.List<MeshInstance3D> into)
+    {
+        if (node is MeshInstance3D mesh && (node.Name == "Marker" || node.Name == "Pad"))
+            into.Add(mesh);
+
+        foreach (Node child in node.GetChildren())
+            Collect(child, into);
     }
 
     /// The floor is wound to be seen from above.

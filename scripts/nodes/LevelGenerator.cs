@@ -1065,9 +1065,15 @@ public partial class LevelGenerator : Node3D
             zone.AddChild(new MeshInstance3D
             {
                 Name = "Pad",
-                Mesh = new QuadMesh { Size = new Vector2(6.4f, 6.4f) },
+
+                // Draped, like the zone markers, and built already lying in XZ —
+                // which is why the -90 degree rotation about X that a `QuadMesh`
+                // needs is gone rather than kept. Six and a half metres across
+                // only buys about a metre of terrain, but this is the thing the
+                // player walks onto to end a run and a pad with one corner in the
+                // air is the last frame of a good one.
+                Mesh = Terrain.Drape(new Vector2(6.4f, 6.4f), zone.Position, 1.6f),
                 MaterialOverride = material,
-                RotationDegrees = new Vector3(-90.0f, 0.0f, 0.0f),
                 Position = new Vector3(0.0f, 0.03f, 0.0f),
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             });
@@ -1132,7 +1138,7 @@ public partial class LevelGenerator : Node3D
                 Title = plan.Title,
             };
 
-            zone.AddChild(BuildZoneMarker(plan));
+            zone.AddChild(BuildZoneMarker(plan, zone.Position));
             parent.AddChild(zone);
         }
     }
@@ -1181,7 +1187,7 @@ public partial class LevelGenerator : Node3D
     ///
     /// Dormant colours are cold and dim — an unwoken zone should read as
     /// somewhere to consider, not somewhere already on fire.
-    private static MeshInstance3D BuildZoneMarker(ZonePlan plan)
+    private static MeshInstance3D BuildZoneMarker(ZonePlan plan, Vector3 origin)
     {
         Material chosen = new StandardMaterial3D
         {
@@ -1211,7 +1217,21 @@ public partial class LevelGenerator : Node3D
         return new MeshInstance3D
         {
             Name = "Marker",
-            Mesh = new PlaneMesh { Size = plan.HalfExtent * 2.0f },
+
+            // Draped over the terrain rather than a flat `PlaneMesh` across it.
+            //
+            // This is the largest flat thing in the game — 26 by 20 metres at the
+            // top tier — and the terrain moves 1.75 either way, so a plane laid
+            // at the zone centre's height hung three and a half metres up at one
+            // corner. With depth writing off, what that draws is an opaque pale
+            // sheet in mid-air with a hard straight edge and enemies walking
+            // about inside it. It read as broken geometry in every screenshot
+            // taken since the ground grew hills.
+            //
+            // Two-metre spacing over a 1.75-metre amplitude on an eighteen-metre
+            // wave: the marker sits within a couple of centimetres of the floor
+            // everywhere, which is the same tolerance as the lift below.
+            Mesh = Terrain.Drape(plan.HalfExtent * 2.0f, origin),
 
             // Clear of the ground by a couple of centimetres. Coplanar with it
             // and the two fight for the same depth, which flickers per pixel as
