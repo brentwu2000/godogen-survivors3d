@@ -18,6 +18,31 @@ uniform sampler2D surface_detail : source_color, filter_linear_mipmap, repeat_en
 uniform float surface_detail_scale = 1.1;
 uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.62;
 
+// Two terms of baked ambient occlusion, because the light in this game comes
+// from a bright sky and a body under a bright sky with `diffuse_lambert` and no
+// occlusion is a paper cut-out. Both are computed from data the shader already
+// carries for the triplanar projection, so they cost two multiplies and nothing
+// else — no second UV channel, no baked vertex data, and they apply to imported
+// bodies as readily as to procedural ones.
+//
+// **Downward faces.** Ambient here is the sky, and a surface pointing at the
+// ground cannot see it. Under the jaw, under the belly, the underside of a
+// shoulder, the top of a boot: every one of those was exactly as bright as the
+// surface facing the sun, which is the single thing that made these read as
+// coloured shapes rather than as volumes. Only the strictly downward half is
+// touched, so the average brightness of a body barely moves and the palette work
+// this game has done five times is untouched.
+uniform float occlusion_down : hint_range(0.0, 1.0) = 0.40;
+
+// **Near the ground.** A contact shadow, in the albedo, because the real one
+// cannot exist: the horde casts no shadows (a hundred and fifty shadow casters
+// is the budget), so a body's feet meet the floor with nothing between them.
+// Model space, so this is metres above the sole whatever the body's height —
+// the shins and boots of a 5.5 m boss darken over the same 70 cm as a walker's,
+// which is right, because a contact shadow is a fact about the floor.
+uniform float occlusion_ground : hint_range(0.0, 1.0) = 0.26;
+uniform float occlusion_ground_height = 0.70;
+
 // The walk, and the only place a body is animated.
 //
 // A MultiMesh has no skeleton. There is one mesh and N transforms, and nothing
@@ -227,7 +252,19 @@ void fragment() {
     // adding actual cloth grain, chipped paint, pores and grime to every surface.
     float detail_value = mix(1.0, clamp(0.58 + painted * 0.82, 0.58, 1.28),
                              surface_detail_strength);
-    ALBEDO = body_tint * detail_value;
+
+    // `detail_normal` and `detail_position` are the animated model-space normal
+    // and position kept for the triplanar projection above, which is why these
+    // two terms are free. Model space is what they want anyway: "downward" has
+    // to mean downward on the body rather than in the camera, and "near the
+    // ground" has to mean near the body's own sole.
+    float under = max(0.0, -normalize(detail_normal).y);
+    float contact = clamp(detail_position.y / max(0.01, occlusion_ground_height), 0.0, 1.0);
+
+    float occlusion = (1.0 - occlusion_down * under)
+                    * mix(1.0 - occlusion_ground, 1.0, contact);
+
+    ALBEDO = body_tint * detail_value * occlusion;
 
     // Emission, not a light. The mobile renderer has no global illumination and
     // this is a hundred and fifty bodies deep, so the sac brightens itself and

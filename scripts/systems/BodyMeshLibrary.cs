@@ -143,7 +143,31 @@ public static class BodyMeshLibrary
         ///
         /// It stays under `HeadFraction + HeadRadiusFraction`, so it changes no
         /// standing height and `BodyProbe` does not care that it exists.
-        bool Cap = false);
+        bool Cap = false,
+
+        /// How crooked. Zero is a survivor; one is the horde.
+        ///
+        /// **This is the other half of the rule the cap started, and it is the
+        /// half that was missing.** `CHARACTERS.md`: *a survivor is manufactured;
+        /// the horde is grown. Straight edges, bilateral symmetry, hard kit with
+        /// a flat face on it. The horde is asymmetric mass — leaning, swollen,
+        /// spilling.* Every body in this file was perfectly bilaterally
+        /// symmetrical, standing to attention with its arms at its sides, which
+        /// means the horde had been built to the survivor's rule for eleven
+        /// phases. Nine variants of shop mannequin.
+        ///
+        /// One shoulder drops, the arm under it hangs longer, the head sits
+        /// forward of the spine and off the centre line, and the chest rolls a
+        /// few degrees toward the low side. None of it is large — a tenth of a
+        /// chest here, a sixth of a head there — and all of it is on the same
+        /// side, which is what makes it read as one crooked body rather than as
+        /// four separate errors.
+        ///
+        /// Nothing moves vertically. `StandingHeight` is `HeadFraction +
+        /// HeadRadiusFraction` at zero lean and `BodyProbe` asserts every variant
+        /// stands at the height the balance table names, so the head may go
+        /// forward and sideways and may not go down.
+        float Asymmetry = 0.0f);
 
     /// The variants, by the same names `Horde.TypeNames` uses.
     ///
@@ -155,23 +179,27 @@ public static class BodyMeshLibrary
         // Gaunt and slightly stooped. The baseline everything else reads against,
         // so it is deliberately the least distinctive silhouette in the set.
         "walker" => new Build(height, 0.50f, 0.095f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
-            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
+            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false,
+            Asymmetry: 1.0f),
 
         // Thin, leaning hard into the run, arms back. Recognisable from the
         // silhouette alone before the speed is apparent, which is the whole point
         // — by the time the speed is apparent it is next to you.
         "runner" => new Build(height, 0.44f, 0.078f, 0.16f, 26.0f, 0.95f, 0.48f, 0.055f,
-            Palette.RunnerTorso, Palette.RunnerLimb, Palette.RunnerHead, false),
+            Palette.RunnerTorso, Palette.RunnerLimb, Palette.RunnerHead, false,
+            Asymmetry: 0.75f),
 
         // Shoulders wider than a doorway, short stride. Bulk reads as slowness at
         // any distance, which is honest: it is the slowest thing in the game.
         "brute" => new Build(height, 0.78f, 0.180f, 0.38f, -4.0f, 0.32f, 0.24f, 0.045f,
-            Palette.BruteTorso, Palette.BruteLimb, Palette.BruteHead, false),
+            Palette.BruteTorso, Palette.BruteLimb, Palette.BruteHead, false,
+            Asymmetry: 1.25f),
 
         // A belly on legs. Nothing else in the set is round, so roundness alone
         // is enough to mean "do not stand next to this".
         "bloater" => new Build(height, 0.54f, 0.140f, 0.30f, 4.0f, 0.30f, 0.30f, 0.075f,
-            Palette.BloaterTorso, Palette.BloaterLimb, Palette.BloaterHead, true),
+            Palette.BloaterTorso, Palette.BloaterLimb, Palette.BloaterHead, true,
+            Asymmetry: 1.1f),
 
         // Wider than it is tall, and that is the entire idea.
         //
@@ -185,7 +213,8 @@ public static class BodyMeshLibrary
         // it the health and the knockback resistance; the shape has to be what
         // says so before the player has been hit once.
         "bulwark" => new Build(height, 1.62f, 0.24f, 0.44f, -8.0f, 0.20f, 0.16f, 0.030f,
-            Palette.BulwarkTorso, Palette.BulwarkLimb, Palette.BulwarkHead, true),
+            Palette.BulwarkTorso, Palette.BulwarkLimb, Palette.BulwarkHead, true,
+            Asymmetry: 0.8f),
 
         // Dark, and carrying a light.
         //
@@ -201,22 +230,24 @@ public static class BodyMeshLibrary
         // nothing, or what approaches is a lit man rather than a light.
         "lantern" => new Build(height, 0.47f, 0.090f, 0.19f, 16.0f, 0.50f, 0.34f, 0.045f,
             Palette.LanternTorso, Palette.LanternLimb, Palette.LanternHead, false,
-            Carry.None, true, new Color(0.55f, 0.92f, 0.72f, 0.0f)),
+            Carry.None, true, new Color(0.55f, 0.92f, 0.72f, 0.0f), Asymmetry: 0.9f),
 
         // Long-armed and narrow, because it fights at eight metres and the reach
         // is the tell.
         "spitter" => new Build(height, 0.44f, 0.082f, 0.18f, 12.0f, 0.45f, 0.38f, 0.030f,
             Palette.SpitterTorso, Palette.SpitterLimb, Palette.SpitterHead, false,
-            Reach: 1.34f),
+            Reach: 1.34f, Asymmetry: 1.15f),
 
         // Everything larger, and darker than anything around it. A boss that
         // shared the horde's value range would disappear into it at exactly the
         // moment the horde is thickest.
         "boss" => new Build(height, 1.26f, 0.240f, 0.50f, 0.0f, 0.40f, 0.34f, 0.060f,
-            Palette.BossTorso, Palette.BossLimb, Palette.BossHead, false),
+            Palette.BossTorso, Palette.BossLimb, Palette.BossHead, false,
+            Asymmetry: 1.0f),
 
         _ => new Build(height, 0.50f, 0.095f, 0.20f, 8.0f, 0.55f, 0.30f, 0.035f,
-            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false),
+            Palette.WalkerTorso, Palette.WalkerLimb, Palette.WalkerHead, false,
+            Asymmetry: 1.0f),
     };
 
     /// Upright, squarer, and in colours nothing in the horde uses.
@@ -341,6 +372,30 @@ public static class BodyMeshLibrary
         Color trousers = Darken(spec.Limb, 0.72f);
         Color shadow = Darken(spec.Head, 0.34f);
 
+        // Everything crooked, resolved once and applied on the body's left.
+        //
+        // On one side deliberately. Dropping a shoulder here and lengthening the
+        // *other* arm reads as two mistakes; doing both on the same side reads as
+        // one body carrying its weight wrong, which is what it is meant to be.
+        float asym = spec.Asymmetry;
+        float shoulderDrop = chestHeight * 0.11f * asym;
+
+        // Forward and to the low side. Forward is the stoop — a head over its own
+        // feet is a person standing, and a head over the ground in front of them
+        // is a person coming at you — and sideways is what stops the stoop
+        // reading as a bow.
+        //
+        // Damped by the lean, because the two are the same gesture and they were
+        // stacking. `Lean` already swings the whole upper body forward about the
+        // hip, so on the runner — 26 degrees of it — a full head lead on top put
+        // the skull in front of its own sternum at chest height. A body cannot be
+        // both hunched and sprinting; the lean is the sprint and this is the
+        // hunch, so whichever one the variant has more of takes the difference.
+        float hunch = Mathf.Clamp(1.0f - spec.LeanDegrees / 40.0f, 0.25f, 1.0f) * asym;
+
+        var headLead = new Vector3(-headRadius * 0.20f * hunch, 0.0f,
+                                   -headRadius * 0.38f * hunch);
+
         // Bob is on every part, including the legs. Applying it to the torso
         // alone would lift the hips off the thighs on every footfall, and a body
         // that comes apart four centimetres at a time is worse than one that does
@@ -387,7 +442,32 @@ public static class BodyMeshLibrary
         // function evaluated for every body on screen every frame.
         mesh.SetRig(0.0f, 0.0f, 0.0f, spec.Bob);
 
-        if (spec.Belly)
+        if (spec.Belly && spec.ShoulderWidth > height * 0.6f)
+        {
+            // Wider than it is tall, so its body is a barrel laid on its side.
+            //
+            // **The bulwark and the bloater share `Belly` and do not share a
+            // shape**, and treating them the same left the bulwark as a pile of
+            // separate boulders. Its shoulders are 1.62 m apart on a 1.5 m body
+            // and its ball was sized off the *chest height* — 0.29 m of radius
+            // trying to span 1.62 m of shoulder — so the two deltoids, the belly
+            // and the head were four objects with air between them. From the
+            // front it read as three heads.
+            //
+            // A horizontal barrel spans them by construction: the axis runs
+            // shoulder to shoulder and the radii are the height and the depth, so
+            // the thing is exactly as wide as it is meant to be and as deep as
+            // its own `TorsoDepth`. This is the only body in the game whose
+            // *width* is the silhouette, and it is now the only one built along
+            // that axis.
+            float span = spec.ShoulderWidth * 0.42f;
+            var girth = new Vector2(chestHeight * 0.62f, spec.TorsoDepth * 0.82f);
+            Vector3 middle = Lean(new Vector3(0.0f, (hipY + shoulderY) * 0.5f, 0.0f), lean, hipY);
+
+            mesh.Barrel(middle + new Vector3(-span, 0.0f, 0.0f),
+                        middle + new Vector3(span, 0.0f, 0.0f), girth, girth, spec.Torso, 8);
+        }
+        else if (spec.Belly)
         {
             mesh.Ball(Lean(new Vector3(0.0f, (hipY + shoulderY) * 0.5f, 0.0f), lean, hipY),
                       chestHeight * 0.62f, spec.Torso, 6, 4);
@@ -399,10 +479,21 @@ public static class BodyMeshLibrary
             // this replaces was four hard vertical edges catching the light in
             // four flat bands, which is most of why these read as furniture.
             float waist = spec.ShoulderWidth * 0.38f;
-            float chest = spec.ShoulderWidth * 0.56f;
 
+            // Half the shoulder span, so the chest is exactly as wide as the
+            // shoulder line and the deltoids below add the bulge on top of it.
+            // At 0.56 it was *wider* than the span — a torso overhanging its own
+            // shoulders, with the arms emerging from under it like a tablecloth,
+            // which is most of why the shoulder never read as a joint.
+            float chest = spec.ShoulderWidth * 0.50f;
+
+            // The top of the chest goes with the low shoulder. A ribcage that
+            // stays level under a dropped shoulder is a body with a broken
+            // collarbone rather than a crooked one.
             mesh.Barrel(Lean(new Vector3(0.0f, hipY + chestHeight * 0.24f, 0.0f), lean, hipY),
-                        Lean(new Vector3(0.0f, hipY + chestHeight * 0.96f, 0.0f), lean, hipY),
+                        Lean(new Vector3(-spec.ShoulderWidth * 0.05f * asym,
+                                         hipY + chestHeight * 0.96f - shoulderDrop * 0.45f, 0.0f),
+                             lean, hipY),
                         new Vector2(waist, spec.TorsoDepth * 0.52f),
                         new Vector2(chest, spec.TorsoDepth * 0.66f),
                         spec.Torso);
@@ -419,44 +510,52 @@ public static class BodyMeshLibrary
                     new Vector2(spec.ShoulderWidth * 0.42f, spec.TorsoDepth * 0.56f),
                     new Vector2(spec.ShoulderWidth * 0.36f, spec.TorsoDepth * 0.50f),
                     trousers);
-        // The shoulder line, across rather than up. A barrel lying on its side:
-        // the axis runs from one shoulder to the other, so the taper is the
-        // *deltoid* falling away at each end rather than a slab with two square
-        // corners. It is the last hard-edged box on the upper body and the one
-        // the eye lands on, because it is where the arms are supposed to join.
+        // A deltoid is a ball, and two barrels laid end to end were never going
+        // to be one.
         //
-        // The brute's warning is still its width — nothing here narrows it, the
-        // corners are simply no longer square.
+        // **The shoulder was the worst joint on the body and it was the one the
+        // eye lands on.** What was here ran a tapered barrel from the sternum out
+        // to each shoulder tip: correct in span, and in silhouette a slab with a
+        // step down to the arm hanging past its end. On the brute — a grey torso
+        // with pale limbs — it read as two epaulettes with somebody else's arms
+        // under them, and no amount of retuning the taper fixed it, because the
+        // shape a shoulder actually is is a sphere with the arm leaving its
+        // underside.
+        //
+        // So: one ball per side, centred where the arm's own root is, with the
+        // upper arm's top ring inside it. There is no join left to see, because
+        // the two overlap rather than meet. Twelve triangles cheaper, too.
         float halfSpan = spec.ShoulderWidth * 0.5f;
-        Vector3 shoulderLine = Lean(new Vector3(0.0f, shoulderY - chestHeight * 0.06f, 0.0f), lean, hipY);
+        float armX = halfSpan - armRadius * 0.25f;
+        Color deltoid = Darken(spec.Torso, 0.92f);
 
-        // Two, from the middle outward, each thinning as it goes.
-        //
-        // One barrel end to end has the same radius the whole way and reads as a
-        // girder laid across the back — which on the bulwark, whose shoulders are
-        // 1.6 m wide, looked like something it was carrying. A deltoid falls
-        // away, and the only way to say that with a tapered primitive is to run
-        // it from the centre out in both directions.
-        Color deltoid = Darken(spec.Torso, 0.86f);
-        var inner = new Vector2(chestHeight * 0.13f, spec.TorsoDepth * 0.52f);
-        var outer = new Vector2(chestHeight * 0.075f, spec.TorsoDepth * 0.30f);
+        // Reaches to `halfSpan + 1.35` arm radii, which is where the old barrel
+        // plus the arm hanging off it reached. The brute's warning is its width
+        // and nothing here narrows it.
+        float deltoidRadius = armRadius * 1.60f;
 
         foreach (int side in new[] { -1, 1 })
         {
-            mesh.Barrel(shoulderLine,
-                        shoulderLine + new Vector3(side * halfSpan, -chestHeight * 0.04f, 0.0f),
-                        inner, outer, deltoid, 6);
+            float drop = side < 0 ? shoulderDrop : 0.0f;
+            mesh.Ball(Lean(new Vector3(side * armX, shoulderY - chestHeight * 0.04f - drop, 0.0f),
+                           lean, hipY),
+                      deltoidRadius, deltoid, 6, 4);
         }
 
         // --- head ------------------------------------------------------------
         // Wider where it meets the shoulders than where it meets the skull. A
         // constant-width neck is a bolt, and it is the join the eye goes to first
         // because the head is the only part of a body anyone looks at.
+        // Leaning with the head rather than standing under it. `headLead` puts
+        // the skull forward of the spine on a crooked body, and a neck that
+        // stayed vertical under it would leave the head floating off the front of
+        // the shoulders — so the top of the neck goes three quarters of the way,
+        // which is a neck at an angle.
         mesh.Tube(Lean(new Vector3(0.0f, shoulderY, 0.0f), lean, hipY),
-                  Lean(new Vector3(0.0f, neckY, 0.0f), lean, hipY),
+                  Lean(new Vector3(0.0f, neckY, 0.0f), lean, hipY) + headLead * 0.75f,
                   spec.LimbRadius * 1.35f, spec.LimbRadius * 0.95f, spec.Limb);
 
-        Vector3 head = Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY);
+        Vector3 head = Lean(new Vector3(0.0f, headY, 0.0f), lean, hipY) + headLead;
 
         // Eight around and five up, against the six-and-four the small head had.
         // Faceting is a style here rather than an artefact, but the facet has to
@@ -489,6 +588,24 @@ public static class BodyMeshLibrary
                      new Vector3(headRadius * 0.42f, headRadius * 0.26f, headRadius * 0.24f),
                      shadow);
         }
+
+        // A brow over them, and a mouth under.
+        //
+        // Two dark slots on a smooth dome is a mask, and that is what these were
+        // reading as — the eyes were the only feature on the face and nothing
+        // above or below them said which way was up. A ridge catching the light
+        // directly over a dark socket is the oldest trick there is for making a
+        // face out of almost nothing, and it costs twelve triangles.
+        mesh.Box(head + new Vector3(0.0f, headRadius * 0.30f, -headRadius * 0.78f),
+                 new Vector3(headRadius * 1.12f, headRadius * 0.18f, headRadius * 0.30f),
+                 Darken(spec.Head, 0.88f));
+
+        // On the front of the jaw rather than under it. A mouth on the underside
+        // is invisible from a camera 26 degrees above the horizontal, which is
+        // every camera this game has.
+        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.46f, -headRadius * 0.84f),
+                 new Vector3(headRadius * 0.60f, headRadius * 0.20f, headRadius * 0.18f),
+                 Darken(spec.Head, 0.26f));
 
         // The cap, on the survivors and on nothing else.
         if (spec.Cap)
@@ -539,18 +656,35 @@ public static class BodyMeshLibrary
         // upright detaches from a leaning body at the top of every stride.
         for (int side = 0; side < 2; side++)
         {
-            // Sixty-five per cent of the root radius crosses the shoulder edge.
-            // That overlap survives the faceted tube's narrowest presentation
-            // during a swing, while the remainder still carries the arm in the
-            // silhouette at horde distance.
-            float x = (side == 0 ? -1.0f : 1.0f) * (half + armRadius * 0.35f);
-            Vector3 shoulder = Lean(new Vector3(x, shoulderY, 0.0f), lean, hipY);
-            float armLength = chestHeight * spec.Reach;
+            // Rooted *inside* the deltoid ball rather than outboard of the
+            // shoulder line. The ball is centred here and is 1.6 arm radii
+            // across, so the upper arm's top ring is wholly inside it and there
+            // is no join to open however the arm swings — the overlap the old
+            // outboard placement was trying to buy with 0.35 of a radius and
+            // never quite got.
+            float sign = side == 0 ? -1.0f : 1.0f;
+            float x = sign * armX;
+            float drop = sign < 0.0f ? shoulderDrop : 0.0f;
+            Vector3 shoulder = Lean(new Vector3(x, shoulderY - drop, 0.0f), lean, hipY);
+            // Longer on the low side. A dropped shoulder with an arm the same
+            // length as the other one reads as a shrug; the point of the drop is
+            // that the whole side hangs.
+            float armLength = chestHeight * spec.Reach * (sign < 0.0f ? 1.0f + 0.09f * asym : 1.0f);
             // Twelve per cent of a radius shows which way the elbow faces in
             // profile without moving the hand away from the hip. Animation
             // supplies the gesture; the resting mesh only supplies the anatomy.
-            Vector3 elbow = shoulder + new Vector3(0.0f, -armLength * 0.52f, -armRadius * 0.12f);
-            Vector3 wrist = shoulder + new Vector3(0.0f, -armLength, -armRadius * 0.03f);
+            //
+            // Forward and out, on a crooked body. Arms hanging plumb at the sides
+            // is a person waiting for a bus; the horde is meant to be reaching,
+            // and the rig only swings fore and aft, so the reach has to be in the
+            // rest pose. Splayed as well as forward, because a body with both
+            // arms in the same vertical plane is a diagram.
+            Vector3 elbow = shoulder + new Vector3(sign * armRadius * 0.55f * asym,
+                                                   -armLength * 0.52f,
+                                                   -armRadius * (0.12f + 1.10f * asym));
+            Vector3 wrist = shoulder + new Vector3(sign * armRadius * 0.30f * asym,
+                                                   -armLength,
+                                                   -armRadius * (0.03f + 1.90f * asym));
             float phase = side * 0.5f + 0.5f;
 
             // The carrying arm barely swings, and that is anatomy rather than
@@ -558,7 +692,7 @@ public static class BodyMeshLibrary
             // that arm travel. Left at full swing the weapon scythes back and
             // forth across the torso every stride, which reads as the weapon
             // being animated rather than held.
-            bool carrying = side == 1 && spec.Held != Carry.None;
+            bool carrying = sign > 0.0f && spec.Held != Carry.None;
             float swing = carrying ? spec.ArmSwing * 0.25f : spec.ArmSwing;
 
             mesh.SetRig(swing, shoulder.Y, phase, spec.Bob);
