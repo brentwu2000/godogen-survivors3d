@@ -56,8 +56,18 @@ public sealed class BodyRenderer
         {
             ArrayMesh mesh = MeshFor(types[i]);
             var material = new ShaderMaterial { Shader = shader };
-            material.SetShaderParameter("surface_detail",
-                GD.Load<Texture2D>(DetailTextureFor(types[i].TypeName)));
+            // Only when it stacked. `SetShaderParameter` with a null takes the
+            // null, and a sampler bound to nothing reads black — a horde drawn
+            // in silhouette, from a missing file, with no error at the point of
+            // use. Leaving the uniform unset leaves the shader's own default,
+            // which is white, which is the body's own colour.
+            if (AtlasFor(DetailTextureFor(types[i].TypeName)) is { } atlas)
+                material.SetShaderParameter("surface_detail", atlas);
+
+            // Per variant, because it is per body. See `body.gdshader`'s
+            // `body_bob`: this was a per-vertex copy of a constant, sitting in
+            // the channel the atlas needed.
+            material.SetShaderParameter("body_bob", BobFor(types[i]));
             mesh.SurfaceSetMaterial(0, material);
 
             _multiMeshes[i] = new MultiMesh
@@ -95,16 +105,39 @@ public sealed class BodyRenderer
     /// variant and avoids spending either animation UV channel on texture data.
     /// Public so a single body drawn outside the horde — `BodyShot`, and the
     /// probes — is dressed in the same surface the horde would give it. It was
-    /// private, and `SoloBody` therefore hard-coded the survivor's plate: every
-    /// picture of a walker ever taken with `BodyShot` had it wearing the
-    /// survivor's patched cloth, which is a lie about the one thing that shot
-    /// exists to show.
+    /// private, and `SoloBody` therefore hard-coded the survivor's: every picture
+    /// of a walker ever taken with `BodyShot` had it wearing the survivor's
+    /// patched cloth, which is a lie about the one thing that shot exists to
+    /// show.
     public static string DetailTextureFor(string typeName) => typeName switch
     {
-        "brute" or "bloater" or "bulwark" or "boss" or "lantern" =>
-            "res://assets/textures/skin_mutant.png",
-        _ => "res://assets/textures/skin_infected.png",
+        "brute" or "bloater" or "bulwark" or "boss" or "lantern" => "mutant",
+        _ => "infected",
     };
+
+    /// The six layers of one category, stacked, built once and shared.
+    ///
+    /// Nine variants draw from three categories, and a `Texture2DArray` is
+    /// eighteen images decompressed and copied: rebuilding one per variant is
+    /// six wasted stacks on every level load, and rebuilding one per *body* would
+    /// be a hundred and fifty.
+    private static readonly System.Collections.Generic.Dictionary<string, Texture2DArray?>
+        Atlases = new();
+
+    public static Texture2DArray? AtlasFor(string category)
+    {
+        if (Atlases.TryGetValue(category, out Texture2DArray? cached))
+            return cached;
+
+        Texture2DArray? built = HordeRenderer.LoadArray(BodyAtlas.Paths(category));
+        if (built == null)
+            GD.PushWarning($"BodyRenderer: the '{category}' body atlas did not stack — those "
+                         + "bodies will draw in flat vertex colour. Re-run "
+                         + "art-src/textures/make_body_atlas.py.");
+
+        Atlases[category] = built;
+        return built;
+    }
 
     /// The mesh for one variant: a baked body if it names one, procedural if not.
     ///
@@ -133,6 +166,22 @@ public sealed class BodyRenderer
     /// `DesignHeightMeters` exactly — that is what the field means.
     public static float DrawnHeight(EnemyTypeResource type) =>
         MeshFor(type).GetAabb().Size.Y * InstanceScale(0, 1.0f);
+
+    /// How far a variant bounces, whichever way its mesh was made.
+    ///
+    /// A bake carries its own, because it was baked against a model whose stride
+    /// is not this table's; a procedural body takes the spec's. Falling back to
+    /// the spec for a bake that predates the field is deliberate — zero would
+    /// be a horde that walks without bouncing, which is a thing nobody would
+    /// name and everybody would feel.
+    private static float BobFor(EnemyTypeResource type)
+    {
+        if (!string.IsNullOrEmpty(type.BakedBodyPath)
+            && ResourceLoader.Load<BakedBodyResource>(type.BakedBodyPath) is { Bob: > 0.0f } baked)
+            return baked.Bob;
+
+        return BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters).Bob;
+    }
 
     private static ArrayMesh MeshFor(EnemyTypeResource type)
     {

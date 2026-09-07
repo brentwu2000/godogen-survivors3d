@@ -412,6 +412,11 @@ public static class BodyMeshLibrary
             Vector3 hip = new(x, hipY, 0.0f);
 
             mesh.SetRig(spec.LegSwing, hipY, phase, spec.Bob);
+
+            // Which layer of the body atlas each part is painted from. See
+            // `BodyAtlas`: the layer index rides in the integer part of U, so
+            // setting this is setting where on the body this surface is.
+            mesh.UvRect = BodyAtlas.Cloth;
             // Tapered, at no cost — see `MeshBuilder.Tube`. A thigh the same width
             // at the knee as at the hip is the single thing that made these read
             // as plumbing rather than as legs, and the fix is one more argument.
@@ -422,6 +427,7 @@ public static class BodyMeshLibrary
             // sections nearly collinear at full extension. A larger lag shortened
             // the leg precisely when its forward silhouette needed the reach.
             mesh.SetRig(spec.LegSwing * 0.92f, kneeY, phase + 0.04f, spec.Bob);
+            mesh.UvRect = BodyAtlas.Limb;
             // Narrowest at the ankle. The calf is above the midpoint on a real
             // leg, but a second segment to say so costs twelve triangles per leg
             // for something nobody will see at this distance — the taper alone
@@ -431,6 +437,7 @@ public static class BodyMeshLibrary
             // limbs and grew too far: at 3.9 radii deep the boss was standing on
             // two ninety-centimetre skis. Retuned against the thicker leg so the
             // proportion is the one it was before, not the arithmetic.
+            mesh.UvRect = BodyAtlas.Kit;
             mesh.Box(new Vector3(x, 0.05f, -spec.LimbRadius * 0.85f),
                      new Vector3(spec.LimbRadius * 1.55f, 0.10f, spec.LimbRadius * 2.60f),
                      Darken(spec.Limb, 0.62f));
@@ -441,6 +448,7 @@ public static class BodyMeshLibrary
         // it never changes, and a constant does not belong in a per-vertex
         // function evaluated for every body on screen every frame.
         mesh.SetRig(0.0f, 0.0f, 0.0f, spec.Bob);
+        mesh.UvRect = BodyAtlas.Torso;
 
         if (spec.Belly && spec.ShoulderWidth > height * 0.6f)
         {
@@ -505,6 +513,7 @@ public static class BodyMeshLibrary
         // The pelvis, tapering the other way — wide where the legs leave it and
         // narrower where the ribs sit on it. Two barrels meeting at the waist is
         // what gives a body a middle, and a middle is what a box never had.
+        mesh.UvRect = BodyAtlas.Cloth;
         mesh.Barrel(Lean(new Vector3(0.0f, hipY - chestHeight * 0.06f, 0.0f), lean, hipY),
                     Lean(new Vector3(0.0f, hipY + chestHeight * 0.26f, 0.0f), lean, hipY),
                     new Vector2(spec.ShoulderWidth * 0.42f, spec.TorsoDepth * 0.56f),
@@ -541,6 +550,8 @@ public static class BodyMeshLibrary
         // and nothing here narrows it.
         float deltoidRadius = armRadius * 1.45f;
 
+        mesh.UvRect = BodyAtlas.Limb;
+
         foreach (int side in new[] { -1, 1 })
         {
             float drop = side < 0 ? shoulderDrop : 0.0f;
@@ -558,6 +569,7 @@ public static class BodyMeshLibrary
         // stayed vertical under it would leave the head floating off the front of
         // the shoulders — so the top of the neck goes three quarters of the way,
         // which is a neck at an angle.
+        mesh.UvRect = BodyAtlas.Limb;
         mesh.Tube(Lean(new Vector3(0.0f, shoulderY, 0.0f), lean, hipY),
                   Lean(new Vector3(0.0f, neckY, 0.0f), lean, hipY) + headLead * 0.75f,
                   spec.LimbRadius * 1.35f, spec.LimbRadius * 0.95f, spec.Limb);
@@ -570,54 +582,29 @@ public static class BodyMeshLibrary
         // size is a hexagonal prism and the brow spans a whole flat face, so the
         // jaw and the brow stop being a jaw and a brow and become two ledges.
         // Sixteen more triangles on the one part of the body anyone looks at.
+        mesh.UvRect = BodyAtlas.Head;
         mesh.Ball(head, headRadius, spec.Head, 8, 5);
 
-        // These project beyond the sphere rather than being decoration painted
-        // onto it. The jaw survives as a profile from the side; the brow stays
-        // inside the crown's narrow low-poly silhouette so darkness, rather than
-        // a mushroom cap, survives when the face is three pixels tall.
-        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.44f, -headRadius * 0.52f),
-                 new Vector3(headRadius * 1.10f, headRadius * 0.52f, headRadius * 0.66f),
-                 Darken(spec.Head, 0.88f));
-        // Two sockets with a bridge between them, rather than one bar across.
+        // **No brow box and no jaw box any more, and this is the trade the atlas
+        // was built for.**
         //
-        // The bar was right when the head was 26 cm: at that size it is a line of
-        // shadow under a brow and there is no room for anything with structure in
-        // it. On a head twice as wide the same box spans the whole face at a
-        // constant height, and what a horizontal dark band across a face reads as
-        // is a visor — the boss in particular arrived wearing sunglasses. Two
-        // patches either side of a lit bridge is the smallest thing that reads as
-        // a face instead, and it costs the same twelve triangles.
-        foreach (int eye in new[] { -1, 1 })
-        {
-            mesh.Box(head + new Vector3(eye * headRadius * 0.40f, headRadius * 0.10f,
-                                        -headRadius * 0.80f),
-                     new Vector3(headRadius * 0.42f, headRadius * 0.26f, headRadius * 0.24f),
-                     shadow);
-        }
-
-        // A brow over them, and a mouth under.
+        // A face used to be three dark boxes: two sockets and a slot, geometry
+        // doing a texture's job because there was no texture channel to do it
+        // with. `BodyAtlas.Head` paints eyes, nose, teeth and the rot around them
+        // where a face has them, and the boxes then sat *across* that painting —
+        // a bar through the eyes and a block over the mouth — destroying the one
+        // feature they had been standing in for.
         //
-        // Two dark slots on a smooth dome is a mask, and that is what these were
-        // reading as — the eyes were the only feature on the face and nothing
-        // above or below them said which way was up. A ridge catching the light
-        // directly over a dark socket is the oldest trick there is for making a
-        // face out of almost nothing, and it costs twelve triangles.
-        mesh.Box(head + new Vector3(0.0f, headRadius * 0.30f, -headRadius * 0.78f),
-                 new Vector3(headRadius * 1.12f, headRadius * 0.18f, headRadius * 0.30f),
-                 Darken(spec.Head, 0.88f));
-
-        // On the front of the jaw rather than under it. A mouth on the underside
-        // is invisible from a camera 26 degrees above the horizontal, which is
-        // every camera this game has.
-        mesh.Box(head + new Vector3(0.0f, -headRadius * 0.46f, -headRadius * 0.84f),
-                 new Vector3(headRadius * 0.60f, headRadius * 0.20f, headRadius * 0.18f),
-                 Darken(spec.Head, 0.26f));
+        // What is lost is real and is smaller than it sounds: a brow ridge reads
+        // in silhouette from the side, and a painted one does not. At the
+        // distance this game is played a head is twenty-five pixels and its
+        // silhouette is a circle either way.
 
         // The cap, on the survivors and on nothing else.
         if (spec.Cap)
         {
             Color kit = Darken(spec.Limb, 0.88f);
+            mesh.UvRect = BodyAtlas.Kit;
 
             // **Two segments, because one cone cannot cover a sphere.** The
             // first attempt was a single truncated cone from the temple to the
@@ -634,15 +621,22 @@ public static class BodyMeshLibrary
             //
             // It starts at 0.30 of a radius, just above the eye sockets at 0.10,
             // so the cap sits on a face rather than replacing one.
-            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.30f, 0.0f),
-                        head + new Vector3(0.0f, headRadius * 0.72f, 0.0f),
-                        new Vector2(headRadius * 1.011f, headRadius * 1.011f),
-                        new Vector2(headRadius * 0.735f, headRadius * 0.735f),
+            // **The brim moved up, from 0.30 of a radius to 0.46, and it moved
+            // because the head has a painted face on it now.** At 0.30 the cap
+            // came down to 72 degrees of polar and the survivor's eyes are
+            // painted at 63 to 81: the hat was over them, and what showed below
+            // it was a band of blank cheek. Nothing else about the cap changes —
+            // the radii are still the sphere's own at each height plus six per
+            // cent, `sqrt(1 - y²) * 1.06`.
+            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.46f, 0.0f),
+                        head + new Vector3(0.0f, headRadius * 0.76f, 0.0f),
+                        new Vector2(headRadius * 0.941f, headRadius * 0.941f),
+                        new Vector2(headRadius * 0.689f, headRadius * 0.689f),
                         kit, 8);
 
-            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.72f, 0.0f),
+            mesh.Barrel(head + new Vector3(0.0f, headRadius * 0.76f, 0.0f),
                         head + new Vector3(0.0f, headRadius * 0.99f, 0.0f),
-                        new Vector2(headRadius * 0.735f, headRadius * 0.735f),
+                        new Vector2(headRadius * 0.689f, headRadius * 0.689f),
                         new Vector2(headRadius * 0.200f, headRadius * 0.200f),
                         kit, 8);
 
@@ -651,8 +645,8 @@ public static class BodyMeshLibrary
             // a head made of spheres — it is what says the shape was *made*, and
             // it points the way the body is facing from behind as well as in
             // front.
-            mesh.Box(head + new Vector3(0.0f, headRadius * 0.30f, -headRadius * 1.00f),
-                     new Vector3(headRadius * 1.24f, headRadius * 0.14f, headRadius * 0.62f),
+            mesh.Box(head + new Vector3(0.0f, headRadius * 0.46f, -headRadius * 0.94f),
+                     new Vector3(headRadius * 1.18f, headRadius * 0.14f, headRadius * 0.62f),
                      Darken(kit, 0.82f));
         }
 
@@ -703,6 +697,7 @@ public static class BodyMeshLibrary
             float swing = carrying ? spec.ArmSwing * 0.25f : spec.ArmSwing;
 
             mesh.SetRig(swing, shoulder.Y, phase, spec.Bob);
+            mesh.UvRect = BodyAtlas.Limb;
             // Thicker at the top than it was, so the step from the deltoid ball
             // down to the arm is 0.15 of a radius rather than 0.45. Below about
             // that the two read as one shoulder; above it the ball reads as
@@ -715,9 +710,11 @@ public static class BodyMeshLibrary
             mesh.Tube(elbow, wrist, armRadius * 0.9f, armRadius * 0.66f, spec.Head);
             // Same correction as the foot. A hand is barely wider than the wrist
             // it is on; at 1.65 radii on the new arm it was a mitten.
+            mesh.UvRect = BodyAtlas.Kit;
             mesh.Box(wrist + new Vector3(0.0f, -armRadius * 0.62f, -armRadius * 0.10f),
                      new Vector3(armRadius * 1.32f, armRadius * 1.40f, armRadius * 1.15f),
                      spec.Head);
+            mesh.UvRect = BodyAtlas.Limb;
 
             // The weapon rides the same rig as the hand holding it. Rigged
             // rather than parented, because there is nothing to parent to: a
@@ -736,6 +733,10 @@ public static class BodyMeshLibrary
             // pivot would swing out of the body every stride.
             mesh.ClearRig();
             mesh.SetRig(0.0f, 0.0f, 0.0f, spec.Bob);
+
+            // Flat, because this one is a light rather than a surface. A painted
+            // material over an emissive organ is a lamp with rot on it.
+            mesh.UvRect = BodyAtlas.Flat;
 
             // Mid-chest, not the gut. At 0.42 of the chest it sat at the waist
             // and read as something the creature was carrying; a light at the
@@ -767,6 +768,7 @@ public static class BodyMeshLibrary
         }
 
         mesh.ClearRig();
+        mesh.UvRect = BodyAtlas.Flat;
         return mesh.Build();
     }
 
@@ -818,6 +820,8 @@ public static class BodyMeshLibrary
     private static void Weapon(MeshBuilder mesh, Build spec, Vector3 shoulder, Vector3 wrist,
                                float armRadius)
     {
+        mesh.UvRect = BodyAtlas.Kit;
+
         Color metal = Darken(spec.Limb, 0.5f);
         Color wood = new(0.30f, 0.20f, 0.13f);
         Color edge = new(0.60f, 0.62f, 0.66f);

@@ -19,7 +19,7 @@ using Godot;
 /// sets that `body.gdshader` reads:
 ///
 ///     UV  = (swing radians, pivot height)
-///     UV2 = (phase in turns, bob metres)
+///     UV2 = (swing radians, floor(pivotY * 100) + phase in turns)
 ///
 /// A `.glb` carries `JOINTS_0` and `WEIGHTS_0` instead — the same information, in
 /// a form the shader cannot read and a `MultiMesh` cannot carry. This converts
@@ -736,15 +736,20 @@ public partial class BakeBody : SceneTree
             // there is nothing left to choose here.
             colour[i] = i < colours.Length ? colours[i] : fallback;
 
+            float swing;
+            float pivot;
+
             switch (limbs[i])
             {
                 case Limb.Leg:
-                    rig[i] = new Vector2(legSwing, hipY);
+                    swing = legSwing;
+                    pivot = hipY;
                     legs++;
                     break;
 
                 case Limb.Arm:
-                    rig[i] = new Vector2(armSwing, shoulderY);
+                    swing = armSwing;
+                    pivot = shoulderY;
                     arms++;
                     break;
 
@@ -752,15 +757,20 @@ public partial class BakeBody : SceneTree
                     // No swing, and no pivot either — a pivot with a zero swing
                     // does nothing, and leaving a stale one in would make the
                     // channel unreadable to anyone checking a bake by eye.
-                    rig[i] = Vector2.Zero;
+                    swing = 0.0f;
+                    pivot = 0.0f;
                     break;
             }
 
-            // Bob is on every vertex including the torso, so the body rises as one
-            // piece. Applying it to the limbs alone lifts the legs off the hips on
-            // every footfall — four centimetres of gap that reads as a body coming
-            // apart.
-            rig2[i] = new Vector2(phases[i], bob);
+            // The rig is UV2 alone now, packed the way `MeshBuilder` packs it:
+            // `floor(pivotY * 100) + phase`. UV is the body atlas, which is the
+            // channel this used to take half of.
+            //
+            // The bob left the arrays entirely. It was written into every vertex
+            // and is one number per body — it is `baked.Bob` below, and
+            // `BodyRenderer` hands it to the material.
+            rig[i] = BodyAtlas.Flat.Position;
+            rig2[i] = new Vector2(swing, Mathf.Floor(pivot * 100.0f) + phases[i] - Mathf.Floor(phases[i]));
         }
 
         // A prop has no legs and is not supposed to. Everything above this point
@@ -811,6 +821,7 @@ public partial class BakeBody : SceneTree
             baked.Colours = colours;
             baked.Rig = new Vector2[vertices.Length];
             baked.Rig2 = new Vector2[vertices.Length];
+            baked.Bob = 0.0f;
             baked.Indices = indices;
             baked.StandingHeight = height;
 
@@ -843,6 +854,7 @@ public partial class BakeBody : SceneTree
         baked.Colours = colour;
         baked.Rig = rig;
         baked.Rig2 = rig2;
+        baked.Bob = bob;
         baked.Indices = indices;
         baked.StandingHeight = height;
 

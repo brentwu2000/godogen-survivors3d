@@ -96,14 +96,17 @@ public partial class BakeProbe : SceneTree
         var uv = arrays[(int)Mesh.ArrayType.TexUV].AsVector2Array();
         var uv2 = arrays[(int)Mesh.ArrayType.TexUV2].AsVector2Array();
 
-        // The rig has to survive the round trip. It travels in the UV channels,
-        // which is the one part of this that looks like a mistake and is not —
-        // nothing here is a texture coordinate and no texture is ever sampled.
+        // The rig has to survive the round trip. It travels in UV2 alone —
+        // `(swing, floor(pivotY * 100) + phase)` — and UV is the body atlas
+        // coordinate, which for a bake is the flat cell. Both channels are
+        // checked because losing either is silent: a bake with no UV samples
+        // texel zero of layer zero and draws in flat colour, and a bake with no
+        // UV2 stands rigid while it walks.
         bool kept = vertices.Length == 3
                  && uv.Length == 3
                  && uv2.Length == 3
-                 && Mathf.Abs(uv[1].X - 0.55f) < 0.001f
-                 && Mathf.Abs(uv2[1].X - 0.5f) < 0.001f;
+                 && Mathf.Abs(uv2[1].X - 0.55f) < 0.001f
+                 && Mathf.Abs(uv2[1].Y - 90.5f) < 0.001f;
 
         GD.Print($"  rebuilt {vertices.Length} vertices, rig survived {kept}");
         return kept;
@@ -116,8 +119,11 @@ public partial class BakeProbe : SceneTree
         Vertices = new[] { Vector3.Zero, Vector3.Up, Vector3.Right },
         Normals = new[] { Vector3.Back, Vector3.Back, Vector3.Back },
         Colours = new[] { Colors.White, Colors.White, Colors.White },
-        Rig = new[] { Vector2.Zero, new Vector2(0.55f, 0.9f), Vector2.Zero },
-        Rig2 = new[] { Vector2.Zero, new Vector2(0.5f, 0.035f), Vector2.Zero },
+        // UV is the atlas and UV2 is the packed rig. A swing of 0.55 about a
+        // pivot at 0.9 m with a half-turn of phase is `(0.55, 90.5)` — see
+        // `MeshBuilder`, which packs `floor(pivotY * 100) + phase`.
+        Rig = new[] { Vector2.Zero, Vector2.Zero, Vector2.Zero },
+        Rig2 = new[] { Vector2.Zero, new Vector2(0.55f, 90.5f), Vector2.Zero },
     };
 
     /// The same hex has to come out the same colour down both paths.
@@ -281,19 +287,24 @@ public partial class BakeProbe : SceneTree
         int moving = 0;
         bool early = false, late = false;
 
-        for (int i = 0; i < baked.Rig.Length; i++)
+        for (int i = 0; i < baked.Rig2.Length; i++)
         {
-            if (baked.Rig[i].X <= 0.0f)
+            if (baked.Rig2[i].X <= 0.0f)
                 continue;
 
             moving++;
 
             // Legs pivot low and arms high; the two pivots in use are the hip and
             // the shoulder, so the lower of them is the hip.
-            hip = Mathf.Min(hip, baked.Rig[i].Y);
-            shoulder = Mathf.Max(shoulder == float.MaxValue ? 0.0f : shoulder, baked.Rig[i].Y);
+            // Unpacked the way the shader unpacks it: the rig lives in UV2
+            // alone now, as `floor(pivotY * 100) + phase`.
+            float pivot = Mathf.Floor(baked.Rig2[i].Y) * 0.01f;
+            float phase = baked.Rig2[i].Y - Mathf.Floor(baked.Rig2[i].Y);
 
-            if (baked.Rig2[i].X < 0.25f)
+            hip = Mathf.Min(hip, pivot);
+            shoulder = Mathf.Max(shoulder == float.MaxValue ? 0.0f : shoulder, pivot);
+
+            if (phase < 0.25f)
                 early = true;
             else
                 late = true;
@@ -331,9 +342,9 @@ public partial class BakeProbe : SceneTree
         // What holds for both is that legs end at the ground. Arms mistaken for
         // legs are the failure worth catching, and arms do not touch the floor.
         float lowestMoving = float.MaxValue;
-        for (int i = 0; i < baked.Rig.Length; i++)
+        for (int i = 0; i < baked.Rig2.Length; i++)
         {
-            if (baked.Rig[i].X > 0.0f)
+            if (baked.Rig2[i].X > 0.0f)
                 lowestMoving = Mathf.Min(lowestMoving, baked.Vertices[i].Y);
         }
 

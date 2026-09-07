@@ -258,7 +258,8 @@ public partial class BodyShot : SceneTree
             // in the game, and taking that default here put every variant in
             // this lineup in patched cloth it never wears.
             var body = new SoloBody(shader, mesh, height, 40.0f,
-                                    BodyRenderer.DetailTextureFor(names[i]));
+                                    BodyRenderer.DetailTextureFor(names[i]),
+                                    BodyMeshLibrary.ForVariant(names[i], height).Bob);
             root.AddChild(body.Node);
             _bodies.Add(body);
             _placements.Add(new Vector3(x, 0.0f, 0.0f));

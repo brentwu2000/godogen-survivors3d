@@ -42,6 +42,14 @@ public partial class BakedBodyResource : Resource
     /// opposite of the other, and the rise on each footfall.
     [Export] public Vector2[] Rig2 { get; set; } = System.Array.Empty<Vector2>();
 
+    /// Metres this body rises on each footfall, at full pace.
+    ///
+    /// A field rather than a column of the rig arrays, because it is one number
+    /// per body and never varied within one. It used to be repeated into every
+    /// vertex, in the UV channel a painted surface needs — see `MeshBuilder`.
+    /// `BodyRenderer` hands it to the material as `body_bob`.
+    [Export] public float Bob { get; set; }
+
     [Export] public int[] Indices { get; set; } = System.Array.Empty<int>();
 
     public int Triangles => (Indices.Length > 0 ? Indices.Length : Vertices.Length) / 3;

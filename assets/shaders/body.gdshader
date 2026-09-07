@@ -1,22 +1,30 @@
 shader_type spatial;
 render_mode cull_back, diffuse_lambert, specular_disabled;
 
-uniform sampler2D surface_detail : source_color, filter_linear_mipmap, repeat_enable;
-
-// **3.2 was a frequency nobody could see, and it is worth saying why rather
-// than just lowering it.** The projection is triplanar in model space, so this
-// is tiles per metre of body: at 3.2 the painted plate repeated every 31 cm,
-// which puts its 1024 pixels across a third of a metre — about 3,300 pixels of
-// texture per metre of body against the sixty pixels per metre a body actually
-// occupies on screen at playing distance. Everything in the plate averaged to
-// its own mean and the bodies rendered flat, which is exactly what a painted
-// surface is bought to stop.
+// The painted surface, one layer per part of a body.
 //
-// At 1.1 the plate covers most of a torso. Its features land around a tenth of
-// a metre, which is six or seven pixels on screen — the smallest thing the eye
-// still reads as a material rather than as noise.
-uniform float surface_detail_scale = 2.0;
-uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.62;
+// **This replaced a triplanar projection, and the difference is placement.** A
+// triplanar sample can say what a body is *made of* and cannot say what is
+// *where*: it wrapped rot around a head exactly the way it wrapped rot around a
+// shin, because it had no idea which was which. Eyes have to be at eye height.
+//
+// The layer index arrives in the integer part of `UV.x` and the texture
+// coordinate in the fraction — see `BodyAtlas`, which owns that packing. An
+// array rather than one packed image because a body is about 120 pixels tall at
+// this camera, so its head samples a 16-pixel mip, and in a packed atlas the
+// filter at that level averages across cell boundaries and fringes the face
+// with whatever was painted beside it.
+uniform sampler2DArray surface_detail : source_color, filter_linear_mipmap, repeat_enable;
+
+// How many times a layer repeats across the part it is painted on.
+//
+// One, for everything with a face or a front: a head has to wear its head layer
+// exactly once or the face appears twice. Limbs could take more and do not,
+// because the same number keeps the material at one scale across a whole body —
+// a forearm at two tiles beside a thigh at one reads as two different creatures
+// joined at the elbow.
+uniform float surface_detail_scale = 1.0;
+uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.88;
 
 // How much of the plate's own *colour* the body takes, on top of its value.
 //
@@ -32,13 +40,13 @@ uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.62;
 // the palette identity `PaletteProbe` gates — that probe compares authored
 // colours and has no renderer, and this multiplier averages to one — while
 // picking up the local variation that says what it is made of.
-uniform float surface_detail_chroma : hint_range(0.0, 1.0) = 0.30;
+uniform float surface_detail_chroma : hint_range(0.0, 1.0) = 0.45;
 
 // The plate's mean, in the linear space the sampler hands it over in, and how
 // far a texel either side of it moves the body. 0.21 is a mid grey once decoded
 // — see `art-src/textures/plate.py`, which grades every plate to exactly this.
 uniform float surface_detail_mid = 0.21;
-uniform float surface_detail_gain = 1.6;
+uniform float surface_detail_gain = 2.6;
 
 // Two terms of baked ambient occlusion, because the light in this game comes
 // from a bright sky and a body under a bright sky with `diffuse_lambert` and no
@@ -71,13 +79,20 @@ uniform float occlusion_ground_height = 0.70;
 // per-instance for a bone to hang from — so the stride is a function evaluated
 // here, per vertex, from data baked into the mesh at build time.
 //
-// What the mesh carries (written by MeshBuilder.SetRig):
+// What the mesh carries (written by MeshBuilder):
 //
-//   UV.x    swing, radians at full pace. Zero for anything that does not move.
-//   UV.y    the height this limb pivots about.
-//   UV2.x   phase offset in turns. 0.5 makes the left leg the opposite of the
-//           right one.
-//   UV2.y   vertical bob in metres at full pace.
+//   UV      where this vertex is painted in the body atlas. **This channel used
+//           to hold half the rig**, and freeing it is the whole reason these
+//           bodies can carry a face.
+//   UV2.x   swing, radians at full pace. Zero for anything that does not move.
+//   UV2.y   the pivot height and the phase offset, packed as
+//           `floor(pivotY * 100) + phase`. Same trick as INSTANCE_CUSTOM.x
+//           below, and for the same reason: a centimetre of quantisation on a
+//           rotation pivot is invisible, and a body with no texture is not.
+//
+// The bob is not per-vertex and never was. It is one number per *body*, so it
+// arrives as the uniform `body_bob` on the material, which every variant already
+// has its own copy of.
 //
 // What the instance carries (written by BodyRenderer):
 //
@@ -90,6 +105,18 @@ uniform float occlusion_ground_height = 0.70;
 // INSTANCE_CUSTOM, not CUSTOM0. CUSTOM0 is a *mesh vertex* attribute and is the
 // same for every instance; reading it here would give every body in the horde
 // an identical stride and no amount of staring at the C# would explain why.
+
+// How far this body rises on each footfall, in metres at full pace.
+//
+// A uniform rather than a vertex attribute, because it is a fact about the whole
+// body: `BodyMeshLibrary` passes `spec.Bob` at every one of its six rig calls,
+// and a per-vertex copy of a per-body constant was occupying the channel a
+// painted surface needs. `BodyRenderer` and `SoloBody` set it per variant.
+//
+// Zero by default, which is the correct reading for a prop drawn with this
+// shader and for a material somebody forgot to configure: it stands still rather
+// than bouncing by whatever was left in the vertex format.
+uniform float body_bob = 0.0;
 
 // Metres per second per integer unit of the packed pace.
 const float PACE_QUANTUM = 0.25;
@@ -110,6 +137,7 @@ const float ELITE_SATURATE = 0.55;
 const float ELITE_DARKEN = 0.28;
 
 varying vec3 body_tint;
+varying vec3 atlas_coord;
 varying vec3 detail_position;
 varying vec3 detail_normal;
 
@@ -166,10 +194,16 @@ vec3 shift_hue(vec3 colour, float turns) {
 }
 
 void vertex() {
-    float swing = UV.x;
-    float pivot_y = UV.y;
-    float phase_offset = UV2.x;
-    float bob = UV2.y;
+    float swing = UV2.x;
+
+    // floor and fract, on a value packed at build time. Pivot heights run from
+    // the ankle to a five-and-a-half-metre boss's shoulder, so the integer part
+    // is at most 550 and the fraction keeps every bit it was given.
+    float packed_rig = UV2.y;
+    float pivot_y = floor(packed_rig) * 0.01;
+    float phase_offset = fract(packed_rig);
+
+    float bob = body_bob;
 
     float packed = INSTANCE_CUSTOM.x;
 
@@ -207,10 +241,17 @@ void vertex() {
     // Twice a stride: the body rises on each footfall, and there are two feet.
     VERTEX.y += bob * amount * sin(phase * 2.0 * TAU);
 
-    // Texture coordinates are occupied by the animation rig. Keep the animated
-    // model-space position and normal for triplanar projection instead, so a
-    // painted texture can wrap every procedural and baked body without changing
-    // the gait data or requiring a second draw pass.
+    // UV is the atlas now, and it is carried across rather than read in the
+    // fragment stage because the rig above has already moved this vertex: the
+    // *position* is animated and the coordinate is not, and reading UV directly
+    // in `fragment()` would be correct but leaves the two channels' jobs less
+    // obvious than one varying named for what it is.
+    atlas_coord = vec3(UV, 0.0);
+
+    // The model-space position and normal are still kept, and no longer for a
+    // projection. The two ambient-occlusion terms below read them: "downward"
+    // has to mean downward on the body rather than in the camera, and "near the
+    // ground" has to mean near the body's own sole.
     detail_position = VERTEX;
     detail_normal = NORMAL;
 
@@ -260,14 +301,14 @@ void vertex() {
 }
 
 void fragment() {
-    vec3 weights = pow(abs(normalize(detail_normal)), vec3(4.0));
-    weights /= max(weights.x + weights.y + weights.z, 0.0001);
+    // Which layer, and where on it. The integer part of U is the part of the
+    // body this fragment belongs to; the fraction is the coordinate across it.
+    // `atlas_uv` is taken before the scale so a scale of one lands exactly on
+    // the layer it was painted for.
+    float layer = floor(atlas_coord.x);
+    vec2 atlas_uv = vec2(fract(atlas_coord.x), atlas_coord.y) * surface_detail_scale;
 
-    vec3 sample_x = texture(surface_detail, detail_position.zy * surface_detail_scale).rgb;
-    vec3 sample_y = texture(surface_detail, detail_position.xz * surface_detail_scale).rgb;
-    vec3 sample_z = texture(surface_detail, detail_position.xy * surface_detail_scale).rgb;
-
-    vec3 blended = sample_x * weights.x + sample_y * weights.y + sample_z * weights.z;
+    vec3 blended = texture(surface_detail, vec3(atlas_uv, layer)).rgb;
     float painted = dot(blended, vec3(0.2126, 0.7152, 0.0722));
 
     // Normalised, so this is the plate's hue and saturation with its brightness
@@ -292,8 +333,14 @@ void fragment() {
     // exactly this space, so the multiplier now averages to one by construction
     // and the gain is a free parameter instead of a compensation.
     float detail_value = mix(1.0,
+                             // Wider than it was at both ends, and the dark end is
+                             // why. A painted eye socket has to go a long way
+                             // below the skin around it or it is a smudge; at a
+                             // floor of 0.55 the deepest thing a face could have
+                             // was half a stop, and every face on every body read
+                             // as a ghost of one.
                              clamp(1.0 + (painted - surface_detail_mid) * surface_detail_gain,
-                                   0.55, 1.35),
+                                   0.30, 1.45),
                              surface_detail_strength);
 
     // `detail_normal` and `detail_position` are the animated model-space normal

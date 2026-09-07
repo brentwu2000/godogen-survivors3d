@@ -25,7 +25,7 @@ public sealed class MeshBuilder
     private readonly System.Collections.Generic.List<Vector3> _normals = new();
     private readonly System.Collections.Generic.List<Color> _colours = new();
 
-    /// Rig data, written into the two UV channels as vertices are emitted.
+    /// Rig data, in **UV2 alone**, as vertices are emitted.
     ///
     /// A MultiMesh has no skeleton — there is one mesh and N transforms, and
     /// nothing per-instance a bone could hang off. So the walk is a function
@@ -35,24 +35,50 @@ public sealed class MeshBuilder
     /// the instance, which is the right home for "how fast is this one walking"
     /// and the wrong home for "which limb is this".
     ///
-    /// Four numbers, in the two channels the vertex format already has:
+    /// **It used to occupy both channels, and that is why these bodies had no
+    /// textures.** Only three of the four numbers are per-vertex, and the fourth
+    /// was sitting in the channel a painted surface needs.
     ///
-    ///   UV.x   swing, in radians at full pace. Zero for anything that does not
+    ///   UV2.x  swing, in radians at full pace. Zero for anything that does not
     ///          move, which is most of a body.
-    ///   UV.y   the height the limb pivots about. Rotation is about the X axis
-    ///          through this height, so a leg swings from the hip rather than
-    ///          about the floor — and no other component of the pivot is needed,
-    ///          because a limb that swings fore-and-aft pivots on a line parallel
-    ///          to X and each vertex already carries its own X.
-    ///   UV2.x  phase offset in turns. 0.5 is what makes the left leg the
-    ///          opposite of the right one.
-    ///   UV2.y  vertical bob, in metres at full pace. The body rises on each
-    ///          footfall — twice a stride, so it reads at double frequency.
-    private Vector2 _rigUv;
+    ///   UV2.y  the pivot height and the phase, packed. Rotation is about the X
+    ///          axis through that height, so a leg swings from the hip rather
+    ///          than about the floor — and no other component of the pivot is
+    ///          needed, because a limb that swings fore-and-aft pivots on a line
+    ///          parallel to X and each vertex already carries its own X. Phase is
+    ///          the offset in turns; 0.5 is what makes the left leg the opposite
+    ///          of the right one.
+    ///
+    /// The pack is `floor(pivotY * 100) + phase`, decoded with `floor` and
+    /// `fract` — the same trick `body.gdshader` already plays on pace and phase
+    /// in `INSTANCE_CUSTOM.x`, and for the same reason. A centimetre of
+    /// quantisation on a rotation pivot is invisible; a body with no texture is
+    /// not.
+    ///
+    /// The bob left entirely. It is `spec.Bob` at every one of the six call
+    /// sites — one number per *body*, not per vertex — so it belongs on the
+    /// material, and `body.gdshader` reads it as the uniform `body_bob`.
     private Vector2 _rigUv2;
 
     private readonly System.Collections.Generic.List<Vector2> _uvs = new();
     private readonly System.Collections.Generic.List<Vector2> _uv2s = new();
+
+    /// Where in the body atlas everything emitted from here on is painted.
+    ///
+    /// A rectangle in 0..1 texture space. Each primitive maps its own natural
+    /// parameterisation into it — a tube's angle around and distance along, a
+    /// ball's azimuth and polar — so a caller places a *part* rather than a
+    /// vertex, which is the only granularity a procedural body has.
+    ///
+    /// Zero-sized by default, which sends every vertex to (0, 0). `BodyAtlas`
+    /// reserves that corner as a flat patch for exactly this reason: a prop, or a
+    /// part nobody has dressed, comes out its own colour rather than wearing
+    /// whatever happens to be at the origin.
+    public Rect2 UvRect { get; set; }
+
+    private Vector2 Map(float u, float v) =>
+        new(UvRect.Position.X + u * UvRect.Size.X,
+            UvRect.Position.Y + v * UvRect.Size.Y);
 
     /// Sets the rig data for everything emitted from here on.
     ///
@@ -63,10 +89,19 @@ public sealed class MeshBuilder
     /// Not reset automatically. A builder that quietly returned to rest after
     /// each shape would make the common case, a whole limb, the one needing
     /// ceremony.
+    /// `bobMetres` is accepted and ignored, and stays in the signature because it
+    /// is the number every call site has in hand: dropping it would make six of
+    /// them read as though the bob had been forgotten. `BodyRenderer` and
+    /// `SoloBody` push it to the material instead.
     public void SetRig(float swingRadians, float pivotY, float phaseTurns, float bobMetres)
     {
-        _rigUv = new Vector2(swingRadians, pivotY);
-        _rigUv2 = new Vector2(phaseTurns, bobMetres);
+        // Wrapped into [0, 1) before packing. One call site passes a phase of
+        // exactly 1.0 — the carried weapon, a whole turn round from zero and
+        // identical to it — and an unwrapped 1.0 would land in the integer part
+        // and move that limb's pivot a centimetre up the body.
+        float phase = phaseTurns - Mathf.Floor(phaseTurns);
+
+        _rigUv2 = new Vector2(swingRadians, Mathf.Floor(pivotY * 100.0f) + phase);
     }
 
     /// Back to a part that does not move.
@@ -119,15 +154,24 @@ public sealed class MeshBuilder
     /// as their own interiors, lit from behind — which looks like a material
     /// problem rather than a winding one, and the usual fix for it
     /// (`CullMode.Disabled`) also removes the shadow.
-    private void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Color colour)
+    private void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Color colour) =>
+        Quad(a, b, c, d, normal, colour,
+             Map(0.0f, 0.0f), Map(0.0f, 1.0f), Map(1.0f, 1.0f), Map(1.0f, 0.0f));
+
+    private void Quad(Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, Color colour,
+                      Vector2 uvA, Vector2 uvB, Vector2 uvC, Vector2 uvD)
     {
-        Triangle(c, b, a, normal, colour);
-        Triangle(d, c, a, normal, colour);
+        Triangle(c, b, a, normal, colour, uvC, uvB, uvA);
+        Triangle(d, c, a, normal, colour, uvD, uvC, uvA);
     }
 
     /// A triangle given counter-clockwise as seen from outside.
     private void TriangleOutward(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color colour) =>
         Triangle(c, b, a, normal, colour);
+
+    private void TriangleOutward(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color colour,
+                                 Vector2 uvA, Vector2 uvB, Vector2 uvC) =>
+        Triangle(c, b, a, normal, colour, uvC, uvB, uvA);
 
     /// A limb: a prism from `from` to `to`, `sides` around, capped at both ends.
     ///
@@ -195,7 +239,15 @@ public sealed class MeshBuilder
             // end. The face normal is the average of the two ring directions
             // rather than either, so a flat facet is lit as the flat facet it is
             // instead of as one of its edges.
-            Quad(lower[i], lower[j], upper[j], upper[i], (outward[i] + outward[j]).Normalized(), colour);
+            //
+            // U runs round the limb and V along it, `from` at the bottom of the
+            // rect. `i + 1` rather than `j`, so the last facet's far edge is at
+            // u = 1 instead of wrapping to u = 0 and mirroring the whole strip
+            // back across itself in one triangle.
+            Quad(lower[i], lower[j], upper[j], upper[i], (outward[i] + outward[j]).Normalized(),
+                 colour,
+                 Map((float)i / sides, 1.0f), Map((float)(i + 1) / sides, 1.0f),
+                 Map((float)(i + 1) / sides, 0.0f), Map((float)i / sides, 0.0f));
         }
 
         // Caps, wound opposite to each other. Both are fans from a ring centre;
@@ -261,7 +313,10 @@ public sealed class MeshBuilder
         for (int i = 0; i < sides; i++)
         {
             int j = (i + 1) % sides;
-            Quad(lower[i], lower[j], upper[j], upper[i], (outward[i] + outward[j]).Normalized(), colour);
+            Quad(lower[i], lower[j], upper[j], upper[i], (outward[i] + outward[j]).Normalized(),
+                 colour,
+                 Map((float)i / sides, 1.0f), Map((float)(i + 1) / sides, 1.0f),
+                 Map((float)(i + 1) / sides, 0.0f), Map((float)i / sides, 0.0f));
         }
 
         for (int i = 0; i < sides; i++)
@@ -305,12 +360,24 @@ public sealed class MeshBuilder
                 // The poles collapse a quad to a triangle. Emitting it as a quad
                 // anyway would add a degenerate triangle with an undefined normal,
                 // which shades as a black speck exactly at the crown of every head.
+                // Equirectangular: u round the azimuth, v from the crown down.
+                // The azimuth starts at +X and turns toward +Z, so the front of a
+                // body — which faces -Z — is three quarters of the way round,
+                // at u = 0.75. `BodyAtlas` paints the face there.
+                float ua = (float)segment / segments;
+                float ub = (float)(segment + 1) / segments;
+                float va = (float)ring / rings;
+                float vb = (float)(ring + 1) / rings;
+
                 if (ring == 0)
-                    TriangleOutward(a, c, d, FaceNormal(a, c, d, centre), colour);
+                    TriangleOutward(a, c, d, FaceNormal(a, c, d, centre), colour,
+                                    Map(ua, va), Map(ub, vb), Map(ua, vb));
                 else if (ring == rings - 1)
-                    TriangleOutward(a, b, c, FaceNormal(a, b, c, centre), colour);
+                    TriangleOutward(a, b, c, FaceNormal(a, b, c, centre), colour,
+                                    Map(ua, va), Map(ub, va), Map(ub, vb));
                 else
-                    Quad(a, b, c, d, FaceNormal(a, b, c, centre), colour);
+                    Quad(a, b, c, d, FaceNormal(a, b, c, centre), colour,
+                         Map(ua, va), Map(ub, va), Map(ub, vb), Map(ua, vb));
             }
         }
     }
@@ -333,16 +400,22 @@ public sealed class MeshBuilder
     private static Vector3 Spin(Vector3 v, float cos, float sin) =>
         new(v.X * cos - v.Z * sin, v.Y, v.X * sin + v.Z * cos);
 
-    private void Triangle(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color colour)
+    private void Triangle(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color colour) =>
+        Triangle(a, b, c, normal, colour, Map(0.5f, 0.5f), Map(0.5f, 0.5f), Map(0.5f, 0.5f));
+
+    private void Triangle(Vector3 a, Vector3 b, Vector3 c, Vector3 normal, Color colour,
+                          Vector2 uvA, Vector2 uvB, Vector2 uvC)
     {
         _vertices.Add(a); _vertices.Add(b); _vertices.Add(c);
         _normals.Add(normal); _normals.Add(normal); _normals.Add(normal);
         _colours.Add(colour); _colours.Add(colour); _colours.Add(colour);
 
+        _uvs.Add(uvA); _uvs.Add(uvB); _uvs.Add(uvC);
+
         // Whole triangles share one rig, because a triangle straddling two limbs
         // would tear open as they swung apart. The body library keeps limbs as
-        // separate primitives for exactly this reason.
-        _uvs.Add(_rigUv); _uvs.Add(_rigUv); _uvs.Add(_rigUv);
+        // separate primitives for exactly this reason. The *texture* coordinate
+        // is per-vertex, which is the whole difference between the two channels.
         _uv2s.Add(_rigUv2); _uv2s.Add(_rigUv2); _uv2s.Add(_rigUv2);
     }
 

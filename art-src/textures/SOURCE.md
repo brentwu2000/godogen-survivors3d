@@ -12,6 +12,9 @@ which is a third case and is why this file exists rather than a row being added 
 | `skin_infected_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_skin.py` → `assets/textures/skin_infected.png` |
 | `skin_mutant_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_skin.py` → `assets/textures/skin_mutant.png` |
 | `skin_survivor_raw.png` | the project's own earlier painting, carried over unchanged | 1240×1240 | `make_body_skin.py` → `assets/textures/skin_survivor.png` |
+| `face_infected_raw.png` | OpenAI `gpt-image` via the Codex CLI's built-in image tool, 2026-09-07 | 1024×1024 | `make_body_atlas.py` → the head layer |
+| `face_mutant_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_atlas.py` → the head layer |
+| `face_survivor_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_atlas.py` → the head layer |
 
 `plate.py` is what the three `make_*.py` share: the wrap blend that makes a
 painting tile, the tileable resize, the shoulder-and-toe curve, and the grade
@@ -59,6 +62,31 @@ tuned against.
 > vignette, no depth of field. Evenly distributed detail with no focal point and no composition.
 > Desaturated, mid-value, low contrast so it can be colour graded later. No objects, no people, no
 > faces, no text, no watermark, no frame, no border.
+
+#### The three faces
+
+All three share one frame, and the frame is most of the prompt: *the face fills
+the frame edge to edge, is bilaterally symmetric, is seen straight on with no
+perspective and no turn of the head, and is lit flatly and evenly with no cast
+shadows and no vignette. The eyes are open and looking straight ahead. No hair
+above the brow, no neck, no shoulders, no background scene.* Then one line each:
+
+> **infected** — a rotting undead face. Sunken grey-green skin stretched over
+> the skull, dark hollow eye sockets with small pale clouded eyes, a torn split
+> lip showing teeth, dark veins at the temples, a bruised patch on one cheek.
+
+> **mutant** — a heavy brutish mutant face. Thick leathery grey skin with
+> hardened calcified ridges across the brow and cheekbones, deep-set small dark
+> eyes, a broad heavy jaw with a wide clenched mouth, coarse pores and old scars.
+
+> **survivor** — a weathered living human face, mid-thirties, tired and hard.
+> Tanned dirt-streaked skin, dark eyes, stubble on the jaw, a small healed scar
+> over one eyebrow.
+
+"Fills the frame, no neck, no hair" is the load-bearing part. `make_body_atlas.py`
+sets each face into an oval on the front of an equirectangular head, and anything
+the model draws outside the face — a neck, a collar, a background — lands on the
+head as a stripe of it.
 
 ## Two things a prompt for this game has to do
 

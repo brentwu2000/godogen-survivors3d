@@ -66,6 +66,7 @@ public partial class BodyProbe : SceneTree
             case 6: return RunStage(StagePlayerHasABody, "the player is a body too, and not one of theirs");
             case 7: return RunStage(StageCarryMeshIsBuiltOnce, "a silhouette the player has held before is not built again");
             case 8: return RunStage(StageBillboardsStayOff, "the billboards stay off while the bodies are on");
+            case 9: return RunStage(StageAtlasStacks, "every body atlas stacks, at the size the layout says");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -100,6 +101,63 @@ public partial class BodyProbe : SceneTree
     /// are framed at the two silhouettes overlap into one slightly odd shape. It
     /// was found in a single frame of the proof video, with a runner close enough
     /// to the camera to see both.
+    /// Every layer of every body atlas is on disk, square, and `LayerSize`.
+    ///
+    /// **This is the seam between two languages and it fails silently.**
+    /// `BodyAtlas` is the layout in C#; `art-src/textures/make_body_atlas.py`
+    /// writes the files. Nothing connects them but the names, and a
+    /// `Texture2DArray` handed layers that disagree on size refuses them with a
+    /// warning and returns null — after which `BodyRenderer` leaves the sampler
+    /// at its default and the whole horde draws in flat vertex colour. That is
+    /// the game *before* this phase, arriving as a regression nobody would name,
+    /// from a file nobody edited.
+    ///
+    /// Checked per category rather than once, because the three are written by
+    /// three passes of the same loop and a missing plate skips only its own.
+    private bool? StageAtlasStacks(int tick)
+    {
+        bool ok = true;
+
+        foreach (string category in new[] { "infected", "mutant", "survivor" })
+        {
+            string[] paths = BodyAtlas.Paths(category);
+
+            foreach (string path in paths)
+            {
+                var texture = GD.Load<Texture2D>(path);
+                if (texture == null)
+                {
+                    GD.PushError($"  {path} is missing — re-run "
+                               + "art-src/textures/make_body_atlas.py");
+                    ok = false;
+                    continue;
+                }
+
+                if (texture.GetWidth() != BodyAtlas.LayerSize
+                    || texture.GetHeight() != BodyAtlas.LayerSize)
+                {
+                    GD.PushError($"  {path} is {texture.GetWidth()}x{texture.GetHeight()}, and "
+                               + $"BodyAtlas.LayerSize says {BodyAtlas.LayerSize}");
+                    ok = false;
+                }
+            }
+
+            Texture2DArray? stacked = BodyRenderer.AtlasFor(category);
+            if (stacked == null || stacked.GetLayers() != paths.Length)
+            {
+                GD.PushError($"  the '{category}' atlas stacked "
+                           + $"{stacked?.GetLayers() ?? 0} of {paths.Length} layers");
+                ok = false;
+                continue;
+            }
+
+            GD.Print($"  {category}: {stacked.GetLayers()} layers at "
+                   + $"{stacked.GetWidth()}x{stacked.GetHeight()}");
+        }
+
+        return ok;
+    }
+
     private bool? StageBillboardsStayOff(int tick)
     {
         Horde horde = _horde!;
@@ -172,7 +230,12 @@ public partial class BodyProbe : SceneTree
 
             Godot.Collections.Array arrays = mesh.SurfaceGetArrays(0);
             var vertices = (Vector3[])arrays[(int)Mesh.ArrayType.Vertex];
-            var uvs = (Vector2[])arrays[(int)Mesh.ArrayType.TexUV];
+            // **UV2, not UV.** The rig moved into UV2 alone so that UV could
+            // carry the body atlas — see `MeshBuilder`. Read from UV this stage
+            // counts every vertex as swinging, because an atlas coordinate is
+            // almost never zero, and "something has to actually swing" then
+            // passes on a body that does not.
+            var uvs = (Vector2[])arrays[(int)Mesh.ArrayType.TexUV2];
             var indices = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
 
             // Through the index buffer when there is one.

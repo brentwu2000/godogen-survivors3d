@@ -180,6 +180,16 @@ public partial class MeshProbe : SceneTree
         return net.Length() < 0.001f && outward && degenerate == 0;
     }
 
+    /// The rig reaches every vertex of the primitive it was set for, and no
+    /// vertex of the next one.
+    ///
+    /// **UV is no longer part of the answer.** The rig used to occupy both
+    /// channels; it is UV2 alone now, packed as `floor(pivotY * 100) + phase`,
+    /// and UV carries the body atlas coordinate — which is per-vertex by
+    /// definition and therefore cannot be checked for being constant across a
+    /// primitive. What this stage guards is unchanged: a rig that leaked into
+    /// the next primitive would animate a torso, and one applied a vertex late
+    /// would tear the limb it belongs to.
     private bool RigRidesAlong()
     {
         var builder = new MeshBuilder();
@@ -193,29 +203,31 @@ public partial class MeshProbe : SceneTree
 
         var (vertices, _, uv, uv2) = Read(builder.Build());
 
+        // Swing 0.7 about a pivot at 0.9 m with a half-turn of phase packs to
+        // `(0.7, 90.5)`. Written out rather than recomputed, so a change to the
+        // packing has to be made here as well as there.
+        var packed = new Vector2(0.7f, 90.5f);
+
         bool legTagged = true;
         for (int i = 0; i < legVertices; i++)
         {
-            if (!uv[i].IsEqualApprox(new Vector2(0.7f, 0.9f)) || !uv2[i].IsEqualApprox(new Vector2(0.5f, 0.04f)))
+            if (!uv2[i].IsEqualApprox(packed))
                 legTagged = false;
         }
 
         bool torsoRested = true;
         for (int i = legVertices; i < vertices.Length; i++)
         {
-            if (uv[i] != Vector2.Zero || uv2[i] != Vector2.Zero)
+            if (uv2[i] != Vector2.Zero)
                 torsoRested = false;
         }
 
-        GD.Print($"  {legVertices} limb vertices tagged {uv[0]}/{uv2[0]}, " +
+        GD.Print($"  {legVertices} limb vertices tagged {uv2[0]}, " +
                  $"{vertices.Length - legVertices} still vertices at rest = {torsoRested}");
 
         if (!legTagged)
             GD.PushError("  the rig did not reach every vertex of the primitive it was set for");
 
-        // The boundary matters as much as the values. A rig that leaked into the
-        // next primitive would animate a torso, and a rig applied one vertex late
-        // would tear the limb it belongs to.
         return legTagged && torsoRested && uv.Length == vertices.Length && uv2.Length == vertices.Length;
     }
 

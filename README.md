@@ -1549,6 +1549,7 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/skin_infected.png` | `art-src/textures/skin_infected_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | walker, runner, spitter, stalker |
 | `assets/textures/skin_mutant.png` | `art-src/textures/skin_mutant_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | brute, bloater, bulwark, boss, lantern |
 | `assets/textures/skin_survivor.png` | `art-src/textures/skin_survivor_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | every survivor |
+| `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
