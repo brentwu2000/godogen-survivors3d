@@ -9,6 +9,13 @@ which is a third case and is why this file exists rather than a row being added 
 | File | Made with | Output | Consumed by |
 | :--- | :--- | :--- | :--- |
 | `ground_raw.png` | OpenAI `gpt-image` via the Codex CLI's built-in image tool, 2026-09-07 | 1024×1024 | `make_ground.py` → `assets/textures/ground.png` |
+| `skin_infected_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_skin.py` → `assets/textures/skin_infected.png` |
+| `skin_mutant_raw.png` | same, 2026-09-07 | 1024×1024 | `make_body_skin.py` → `assets/textures/skin_mutant.png` |
+| `skin_survivor_raw.png` | the project's own earlier painting, carried over unchanged | 1240×1240 | `make_body_skin.py` → `assets/textures/skin_survivor.png` |
+
+`plate.py` is what the three `make_*.py` share: the wrap blend that makes a
+painting tile, the tileable resize, the shoulder-and-toe curve, and the grade
+that puts a plate's mean where its shader expects it.
 
 ## Licence
 
@@ -23,7 +30,9 @@ generated image. Re-running it gives a different plate; nothing downstream cares
 `make_ground.py` normalises whatever it is handed to the mean and contrast the biome tints were
 tuned against.
 
-### `ground_raw.png`
+### The prompts
+
+#### `ground_raw.png`
 
 > Top-down orthographic view of weathered post-industrial ground, filling the entire square frame
 > edge to edge. Cracked pale-grey asphalt broken up by patches of dry compacted brown dirt,
@@ -32,6 +41,24 @@ tuned against.
 > no vignette, no depth of field. Evenly distributed detail with no focal point and no composition.
 > Desaturated near-neutral grey-brown, low contrast, so it can be colour graded later. Photographic
 > material study. No objects, no plants, no people, no text, no watermark, no frame, no border.
+
+#### `skin_infected_raw.png`
+
+> Flat top-down material study of rotting undead skin, filling the entire square frame edge to edge.
+> Grey-green mottled flesh with darker bruised patches, raised veins, small splits showing dark red
+> beneath, and scraps of filthy torn grey cloth adhering in places. Even overcast lighting, no cast
+> shadows from any object, no vignette, no depth of field. Evenly distributed detail with no focal
+> point and no composition. Desaturated, mid-value, low contrast so it can be colour graded later.
+> No objects, no people, no faces, no text, no watermark, no frame, no border.
+
+#### `skin_mutant_raw.png`
+
+> Flat top-down material study of thick monstrous hide, filling the entire square frame edge to edge.
+> Leathery grey skin with hardened calcified plates and knotted scar ridges, deep cracks between the
+> plates packed with grime, coarse pores. Even overcast lighting, no cast shadows from any object, no
+> vignette, no depth of field. Evenly distributed detail with no focal point and no composition.
+> Desaturated, mid-value, low contrast so it can be colour graded later. No objects, no people, no
+> faces, no text, no watermark, no frame, no border.
 
 ## Two things a prompt for this game has to do
 

@@ -31,3 +31,7 @@ art-src/models/node_modules/
 # is four megabytes of the last version, regenerated on every save and never
 # wanted by anyone.
 *.blend1
+
+# Python bytecode from the art-src plate scripts.
+__pycache__/
+*.pyc

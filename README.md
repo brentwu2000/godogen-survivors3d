@@ -1546,6 +1546,9 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/shaders/effect.gdshader` | hand-written | — | additive billboard puffs |
 | `assets/shaders/ground_marker.gdshader` | hand-written | — | burning ground and the extraction ring |
 | `assets/textures/ground.png` | `art-src/textures/ground_raw.png`, via `make_ground.py` | 1024×1024, tileable | 4.5 m tile |
+| `assets/textures/skin_infected.png` | `art-src/textures/skin_infected_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | walker, runner, spitter, stalker |
+| `assets/textures/skin_mutant.png` | `art-src/textures/skin_mutant_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | brute, bloater, bulwark, boss, lantern |
+| `assets/textures/skin_survivor.png` | `art-src/textures/skin_survivor_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | every survivor |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,

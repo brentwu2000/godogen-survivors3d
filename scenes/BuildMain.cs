@@ -653,7 +653,20 @@ public partial class BuildMain : SceneTree
         var body = new StaticBody3D { Name = "Ground" };
 
         var material = new ShaderMaterial { Shader = GD.Load<Shader>("res://assets/shaders/ground.gdshader") };
-        material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground_handpainted.png"));
+        // **`ground.png`, and it was not before.** `ground_handpainted.png` is a
+        // painting of mossy dirt — green, brown, and already carrying its own
+        // colour — and `ground.gdshader` multiplies whatever it is given by a
+        // per-biome tint. So the floor was a green plate under a green tint, and
+        // the five biomes could only ever differ from each other by how green
+        // they were. The shader was designed the other way round and its comments
+        // say so: this texture sets the *value* and the biome sets the *colour*.
+        //
+        // `ground.png` is the near-neutral one, graded to the mean the tints were
+        // tuned against by `art-src/textures/make_ground.py`. It was also, until
+        // this line, loaded by nothing at all — the retired `BuildGroundTexture`
+        // wrote it, the README documented it, and the scene quietly used the
+        // other file.
+        material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground.png"));
 
         // MaterialOverride rather than a material on the mesh: this node is
         // owned by the scene, so the override serialises — the case godot.md:46

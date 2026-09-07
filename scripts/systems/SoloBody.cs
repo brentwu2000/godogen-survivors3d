@@ -34,18 +34,26 @@ public sealed class SoloBody
     /// downstream can tell the difference — which is the whole point of the bake.
     /// `height` is what the caller must supply because the bounds a `MultiMesh`
     /// needs cannot be read off a mesh whose instance transform is world space.
-    public SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent)
-        : this(shader, mesh, height, arenaExtent, fromSpec: false)
+    public SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent,
+                    string skin = SurvivorSkin)
+        : this(shader, mesh, height, arenaExtent, fromSpec: false, skin: skin)
     {
     }
 
-    public SoloBody(Shader shader, BodyMeshLibrary.Build spec, float arenaExtent)
+    public SoloBody(Shader shader, BodyMeshLibrary.Build spec, float arenaExtent,
+                    string skin = SurvivorSkin)
         : this(shader, BodyMeshLibrary.Build3D(spec),
-               BodyMeshLibrary.StandingHeight(spec), arenaExtent, fromSpec: true)
+               BodyMeshLibrary.StandingHeight(spec), arenaExtent, fromSpec: true, skin: skin)
     {
     }
 
-    private SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent, bool fromSpec)
+    /// The default, because the only body this class draws in the game is the
+    /// player. Anything standing a *horde* body on its own — `BodyShot`, a probe
+    /// — has to say so, or it photographs a walker wearing the survivor's kit.
+    public const string SurvivorSkin = "res://assets/textures/skin_survivor.png";
+
+    private SoloBody(Shader shader, ArrayMesh mesh, float height, float arenaExtent,
+                     bool fromSpec, string skin)
     {
         // Left alone when the mesh already carries the right one. A body mesh is
         // cached per silhouette and handed back here on every rebuild, so
@@ -55,7 +63,7 @@ public sealed class SoloBody
         {
             var material = new ShaderMaterial { Shader = shader };
             material.SetShaderParameter("surface_detail",
-                GD.Load<Texture2D>("res://assets/textures/survivor_handpainted.png"));
+                GD.Load<Texture2D>(skin));
             mesh.SurfaceSetMaterial(0, material);
         }
 

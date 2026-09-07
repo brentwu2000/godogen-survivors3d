@@ -15,8 +15,30 @@ uniform sampler2D surface_detail : source_color, filter_linear_mipmap, repeat_en
 // At 1.1 the plate covers most of a torso. Its features land around a tenth of
 // a metre, which is six or seven pixels on screen — the smallest thing the eye
 // still reads as a material rather than as noise.
-uniform float surface_detail_scale = 1.1;
+uniform float surface_detail_scale = 2.0;
 uniform float surface_detail_strength : hint_range(0.0, 1.0) = 0.62;
+
+// How much of the plate's own *colour* the body takes, on top of its value.
+//
+// **The plate was being thrown away three channels at a time.** Only its
+// luminance was read, so a painting of rotting skin — grey-green flesh, bruised
+// purple, dark red where it has split, a scrap of filthy cloth — arrived as one
+// grey number and modulated brightness. Everything that made it a material
+// rather than a noise field was discarded at the `dot`.
+//
+// The chroma is taken normalised, so it carries hue and saturation and no
+// brightness at all: brightness is `surface_detail_strength`'s job, and doing it
+// twice squares the contrast and makes the crevices black. At 0.4 a body keeps
+// the palette identity `PaletteProbe` gates — that probe compares authored
+// colours and has no renderer, and this multiplier averages to one — while
+// picking up the local variation that says what it is made of.
+uniform float surface_detail_chroma : hint_range(0.0, 1.0) = 0.30;
+
+// The plate's mean, in the linear space the sampler hands it over in, and how
+// far a texel either side of it moves the body. 0.21 is a mid grey once decoded
+// — see `art-src/textures/plate.py`, which grades every plate to exactly this.
+uniform float surface_detail_mid = 0.21;
+uniform float surface_detail_gain = 1.6;
 
 // Two terms of baked ambient occlusion, because the light in this game comes
 // from a bright sky and a body under a bright sky with `diffuse_lambert` and no
@@ -244,13 +266,34 @@ void fragment() {
     vec3 sample_x = texture(surface_detail, detail_position.zy * surface_detail_scale).rgb;
     vec3 sample_y = texture(surface_detail, detail_position.xz * surface_detail_scale).rgb;
     vec3 sample_z = texture(surface_detail, detail_position.xy * surface_detail_scale).rgb;
-    float painted = dot(sample_x * weights.x + sample_y * weights.y + sample_z * weights.z,
-                        vec3(0.2126, 0.7152, 0.0722));
 
-    // Re-centre the neutral grayscale map around one before multiplying it over
-    // the authored vertex palette. This preserves enemy colour readability while
-    // adding actual cloth grain, chipped paint, pores and grime to every surface.
-    float detail_value = mix(1.0, clamp(0.58 + painted * 0.82, 0.58, 1.28),
+    vec3 blended = sample_x * weights.x + sample_y * weights.y + sample_z * weights.z;
+    float painted = dot(blended, vec3(0.2126, 0.7152, 0.0722));
+
+    // Normalised, so this is the plate's hue and saturation with its brightness
+    // divided out. Clamped because a near-black texel divides by nearly nothing,
+    // and one texel of 8x chroma on a body is a coloured firefly that moves with
+    // the camera.
+    vec3 chroma = clamp(blended / max(painted, 0.02), vec3(0.0), vec3(2.0));
+    chroma = mix(vec3(1.0), chroma, surface_detail_chroma);
+
+    // Centred on the plate's own mean rather than on a constant that happened to
+    // suit the first plate.
+    //
+    // The old form was `0.58 + painted * 0.82`, which is neutral at a painted
+    // value of 0.512 — and `painted` is measured *after* the sRGB decode that
+    // `source_color` performs, so 0.512 linear is 0.74 in storage. That is a
+    // very bright plate, and every plate this game has ever had was a mid grey:
+    // all of them therefore arrived at about 0.85 and darkened every body by
+    // fifteen per cent, uniformly, which is indistinguishable from the palette
+    // being too dark and is where two rounds of palette-lifting went.
+    //
+    // `art-src/textures/plate.py` grades every plate to `surface_detail_mid` in
+    // exactly this space, so the multiplier now averages to one by construction
+    // and the gain is a free parameter instead of a compensation.
+    float detail_value = mix(1.0,
+                             clamp(1.0 + (painted - surface_detail_mid) * surface_detail_gain,
+                                   0.55, 1.35),
                              surface_detail_strength);
 
     // `detail_normal` and `detail_position` are the animated model-space normal
@@ -264,7 +307,7 @@ void fragment() {
     float occlusion = (1.0 - occlusion_down * under)
                     * mix(1.0 - occlusion_ground, 1.0, contact);
 
-    ALBEDO = body_tint * detail_value * occlusion;
+    ALBEDO = body_tint * detail_value * chroma * occlusion;
 
     // Emission, not a light. The mobile renderer has no global illumination and
     // this is a hundred and fifty bodies deep, so the sac brightens itself and

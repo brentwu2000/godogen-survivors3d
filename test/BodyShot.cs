@@ -253,7 +253,12 @@ public partial class BodyShot : SceneTree
             if (mesh == null)
                 continue;
 
-            var body = new SoloBody(shader, mesh, height, 40.0f);
+            // Dressed the way the horde would dress it. `SoloBody` defaults to
+            // the survivor's plate because the player is the only body it draws
+            // in the game, and taking that default here put every variant in
+            // this lineup in patched cloth it never wears.
+            var body = new SoloBody(shader, mesh, height, 40.0f,
+                                    BodyRenderer.DetailTextureFor(names[i]));
             root.AddChild(body.Node);
             _bodies.Add(body);
             _placements.Add(new Vector3(x, 0.0f, 0.0f));

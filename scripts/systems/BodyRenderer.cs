@@ -93,11 +93,17 @@ public sealed class BodyRenderer
     /// read as torn skin and cloth; the heavy roster reads as layered hide and
     /// calcified armour. Keeping this on the material preserves one draw call per
     /// variant and avoids spending either animation UV channel on texture data.
-    private static string DetailTextureFor(string typeName) => typeName switch
+    /// Public so a single body drawn outside the horde — `BodyShot`, and the
+    /// probes — is dressed in the same surface the horde would give it. It was
+    /// private, and `SoloBody` therefore hard-coded the survivor's plate: every
+    /// picture of a walker ever taken with `BodyShot` had it wearing the
+    /// survivor's patched cloth, which is a lie about the one thing that shot
+    /// exists to show.
+    public static string DetailTextureFor(string typeName) => typeName switch
     {
         "brute" or "bloater" or "bulwark" or "boss" or "lantern" =>
-            "res://assets/textures/mutant_handpainted.png",
-        _ => "res://assets/textures/infected_handpainted.png",
+            "res://assets/textures/skin_mutant.png",
+        _ => "res://assets/textures/skin_infected.png",
     };
 
     /// The mesh for one variant: a baked body if it names one, procedural if not.
