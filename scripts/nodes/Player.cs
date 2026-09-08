@@ -900,22 +900,59 @@ public partial class Player : CharacterBody3D
     /// aiming, and a facing that only updated while moving would leave a swing at
     /// empty air going wherever the last step went. The mouse gave up aiming for
     /// this and got turning instead; `CameraRig._UnhandledInput` says why.
+    /// Which way the body points, which is also which way the weapon fires.
+    ///
+    /// **This branched on `TurnToSteer` and turning that off left the body facing
+    /// the raw keys.** `_input.Move` is screen space — `move_right` is `(1, 0)`
+    /// whatever the camera is doing — which was correct when the camera could not
+    /// turn and has been wrong since it could. With strafing switched on it meant
+    /// the survivor faced north-east because a key said so while the view pointed
+    /// somewhere else, and **the weapon fired along the key rather than along the
+    /// aim**, because `Facing` is what `Aim` reads. `GaitShot` measured the travel
+    /// at 144–170° off the facing where strafing should read exactly 90°, which is
+    /// how it was found; forty-seven probes had passed it, because nothing
+    /// asserted the relationship between the facing and the camera.
+    ///
+    /// **And `IInputSource.Aim` is not consulted, which is the second half of the
+    /// same bug.** `KeyboardMouseInput.Aim` projects the *cursor* onto the ground
+    /// plane, and `CameraRig` had already written down why that stopped working:
+    /// "the world sweeps beneath a stationary cursor as the view comes round, so
+    /// the player spins while the hand holding the mouse is still". The camera
+    /// stopped reading it; the input source went on computing it; and the only
+    /// thing keeping it out of the game was this method returning early. Turning
+    /// that early return off did not introduce the defect, it exposed it — with a
+    /// captured cursor the projection is of a pointer parked wherever it was
+    /// grabbed.
+    ///
+    /// So the order is the view, then the keys:
+    ///
+    /// - The **view**, whenever there is a camera rig. This is the third-person
+    ///   contract: the character points where the player is looking, walking
+    ///   forwards, backwards or sideways without turning. It is also the only
+    ///   reading under which the weapon fires where the player is aiming.
+    /// - The **keys**, with no rig at all. That is the sprite path and the
+    ///   fixed-camera layout, where screen space and world space agree.
+    ///
+    /// A real aim device — a right stick, a touch aim pad — would belong ahead of
+    /// both, and `Aim` is the field it would arrive on. What it must not be is a
+    /// mouse position under a mouse-driven camera.
     private void UpdateFacing()
     {
-        if (TurnToSteer && _rig != null)
+        if (_rig != null)
         {
-            Facing = _rig.Forward();
-            if (Mathf.Abs(Facing.X) > 0.05f)
-                _sprite.FlipH = Facing.X < 0.0f;
+            Face(_rig.Forward());
             return;
         }
 
-        Vector2 facing = _input.Aim != Vector2.Zero ? _input.Aim : _input.Move;
-        if (facing == Vector2.Zero)
-            return;
+        if (_input.Move != Vector2.Zero)
+            Face(_input.Move);
+    }
 
-        Facing = facing.Normalized();
-        if (Mathf.Abs(facing.X) > 0.05f)
-            _sprite.FlipH = facing.X < 0.0f;
+    private void Face(Vector2 direction)
+    {
+        Facing = direction.Normalized();
+
+        if (Mathf.Abs(Facing.X) > 0.05f)
+            _sprite.FlipH = Facing.X < 0.0f;
     }
 }

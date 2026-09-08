@@ -1,12 +1,33 @@
 using Godot;
 
-/// Desktop input: WASD/arrows to move, mouse position to aim.
+/// Desktop input: WASD/arrows to move. The mouse turns the camera and does not
+/// aim.
+///
+/// **`Aim` is `Zero` and the projection that used to fill it is gone.** It cast
+/// the cursor onto the player's ground plane, which is the right idea under a
+/// camera that cannot turn and wrong under one the mouse drives — `CameraRig`
+/// says so in as many words: the world sweeps beneath a stationary cursor as the
+/// view comes round, so the player spins while the hand holding the mouse is
+/// still. With the cursor captured it is worse than wrong, because the projection
+/// is of a pointer parked wherever it was grabbed.
+///
+/// It survived because its only consumer, `Player.UpdateFacing`, returned early
+/// before reaching it while `TurnToSteer` was on. Switching to strafing made that
+/// branch live and the survivor started facing a stale cursor — 168° off her
+/// direction of travel, measured by `GaitShot`, with the weapon firing there
+/// because `Facing` is what the weapon reads.
+///
+/// The field stays on the interface. A right stick or a touch aim pad is a real
+/// aim device and this is where one would arrive; a mouse position under
+/// mouse-look is not one.
 public sealed class KeyboardMouseInput : IInputSource
 {
     private readonly Camera3D _camera;
 
     public Vector2 Move { get; private set; }
-    public Vector2 Aim { get; private set; }
+
+    /// No aim device on this platform. See the note above.
+    public Vector2 Aim => Vector2.Zero;
     public bool SecurePressed => Input.IsActionJustPressed("secure");
     public bool UsePressed => Input.IsActionJustPressed("use");
     public bool SwapPressed => Input.IsActionJustPressed("swap");
@@ -21,31 +42,5 @@ public sealed class KeyboardMouseInput : IInputSource
     public void Update(Vector3 playerPosition)
     {
         Move = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-        Aim = AimFromMouse(playerPosition);
-    }
-
-    /// Projects the cursor onto the player's ground plane. Returns Zero when the
-    /// ray runs parallel to the plane or the cursor sits on top of the player,
-    /// so callers fall back to auto-targeting instead of snapping to a garbage
-    /// direction.
-    private Vector2 AimFromMouse(Vector3 playerPosition)
-    {
-        if (_camera == null || !_camera.IsInsideTree())
-            return Vector2.Zero;
-
-        Vector2 mouse = _camera.GetViewport().GetMousePosition();
-        Vector3 origin = _camera.ProjectRayOrigin(mouse);
-        Vector3 direction = _camera.ProjectRayNormal(mouse);
-
-        if (Mathf.Abs(direction.Y) < 0.0001f)
-            return Vector2.Zero;
-
-        float distance = (playerPosition.Y - origin.Y) / direction.Y;
-        if (distance < 0.0f)
-            return Vector2.Zero;
-
-        Vector3 hit = origin + direction * distance;
-        var flat = new Vector2(hit.X - playerPosition.X, hit.Z - playerPosition.Z);
-        return flat.LengthSquared() < 0.01f ? Vector2.Zero : flat.Normalized();
     }
 }

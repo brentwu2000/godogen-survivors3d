@@ -91,7 +91,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 
 | Script | Headless | Asserts |
 | :--- | :---: | :--- |
-| `test/MovementProbe.cs` | yes | Synthetic input moves the player; the camera follows within its lag budget; a driver closes on something 2 m away and 90° off, which a driver that advances while turning cannot; and the field's heading survives clipping the margin while a bot leaning on a wall still escapes |
+| `test/MovementProbe.cs` | yes | `[W]` advances along the view; `[D]` translates along the view's right and does *not* turn it; the view keys turn without translating; `[W]` after a turn follows the new view; a driver closes on something 2 m away and 90° off; and the field's heading survives clipping the margin while a bot leaning on a wall still escapes |
 | `test/FlowFieldProbe.cs` | yes | An enemy behind the long wall routes around it instead of into it |
 | `test/WeaponProbe.cs` | yes | Per-category mechanic: penetration, arc, travel time, every proficiency curve, and that both shelves are stocked — the Sidearm one with four weapons, three distinct signatures and something that reaches 8 m |
 | `test/RunLoopProbe.cs` | yes | Six stages: extraction closed at t=0 → loot → leave-resets → contact damage → enrage → bank |
@@ -123,6 +123,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/EliteProbe.cs` | yes | A mark is a different fight — armour soaks, swift outruns, volatile bursts — it survives the swap-remove, and the boss arrives once, announced, and pays |
 | `test/HordePerf.cs` | no | Frame time, physics time, draw calls under load (`-- 500`) |
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
+| `test/GaitShot.cs` | no | A strip of frames while a movement key is held, under the game's own camera, printing travel against the facing and against the view's right (`-- hold:move_right`). It is the print that matters: strafing must read 90° off the facing and 0° off the right |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
 | `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills and a detonation just before the shutter) |
 | `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
@@ -1494,6 +1495,40 @@ horde**. RIN 12.6%, MIKA 12.0%, AKIRA 26.0%, SORA 25.2%, YUNA 9.8% — and the s
 used as a control, 0.0%. That control is why the number is trustworthy, and it is the standing
 request now. There is no threshold on it: five samples between 9.8% and 26.0% is not enough to set
 one.
+
+**Strafing left the survivor facing the wrong way and firing there, and forty-seven probes passed
+it.** `UpdateFacing` branched on `TurnToSteer`: with it on the body faced the view, and with it off —
+the new default — it faced `_input.Move`, which is *screen space*. `move_right` is `(1, 0)` whatever
+the camera is doing, so the survivor pointed north-east because a key said so while the view pointed
+somewhere else, and the weapon fired along the key rather than along the aim, because `Facing` is what
+`Aim` reads.
+
+**The second half of the same bug was an aim source that had been dead for eleven phases.**
+`KeyboardMouseInput.Aim` projects the cursor onto the player's ground plane, and `CameraRig` had
+already written down why that stopped working — "the world sweeps beneath a stationary cursor as the
+view comes round, so the player spins while the hand holding the mouse is still". The camera stopped
+reading it. The input source went on computing it. The only thing keeping it out of the game was
+`UpdateFacing` returning early, so turning that early return off did not introduce the defect, it
+exposed it — and with the cursor now captured, the projection is of a pointer parked wherever it was
+grabbed. Both ends are gone: the facing is the view, and `Aim` is `Zero` until a real aim device
+arrives on it.
+
+**Neither would have been found by a probe, and `test/GaitShot.cs` is what found them.** It holds a
+movement key and photographs the player's gait as a strip of frames under the game's own camera,
+printing the angle between the direction of travel, the body's facing and the view's right. That
+print is the whole tool: strafing has to read *90° off the facing and 0° off the view's right*, and it
+read 168°/0° — which says in one line that the movement is right and the facing is wrong. `MovementProbe`
+measures travel against the view and never had an opinion about the facing.
+
+**And the moonwalk, which is what the tool was actually built to judge, is much milder than predicted.**
+`body.gdshader` swings a limb about a hip pivot and fore-and-aft is the only axis it has, so a body
+strafing at 90° swings its legs along an axis it is not travelling on. Photographed against the
+forward walk frame for frame, the two gaits look nearly the same: from behind at a 26° downward tilt
+the swing foreshortens into a few pixels of vertical scissor, the legs are black over black boots
+against a dark ground, and the motion cue the eye is actually taking is the sliding ground — which is
+correct either way. So no shader change: a side-swing channel needs a vertex channel and the channels
+are full, and facing the movement instead of the view would break aim to fix something almost
+invisible. Recorded as measured and accepted.
 
 ## Performance
 
