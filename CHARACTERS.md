@@ -8,11 +8,14 @@ this file extends that roster and **overturns exactly one of its decisions**, wh
 below rather than quietly reversed.
 
 **The modelling half of this brief has been overtaken from an unexpected direction: the Drifter's
-body is now a downloaded model rather than an authored one.** `tactical_character.glb` bakes to
-`resources/bodies/drifter.res`, which is where `BodyBakes` looks for a survivor called Drifter, and it
-satisfies the part of this brief that mattered most — §"The kit is where the silhouette lives" — off
-the shelf, wearing a plate carrier, gloves, a holster and boots. See README's Decisions and
-`ART.md §2` for why a 23,822-triangle body costs nothing here.
+body is a model now, not a `MeshBuilder` composition.** RIN — `rin_v1_reference.glb`, 27,488
+triangles, refined against a supplied reference sheet — bakes to `resources/bodies/drifter.res`,
+which is where `BodyBakes` looks for a survivor called Drifter. She satisfies the part of this brief
+that mattered most, §"The kit is where the silhouette lives", without any of it being modelled here:
+cropped tactical jacket over an ivory panel, thigh bands and straps, gloves, headset, a stowed rifle,
+and a ponytail long enough to be a silhouette on its own. See README's Decisions and `ART.md §2` for
+why a 27,488-triangle body costs nothing here, and README's What's left for the one thing wrong with
+her, which is that she has no irises.
 
 **A survivor's body is a file on a shelf now, so this brief is one intake command away from being
 answered rather than a modelling project.** `resources/bodies/courier.res` and `warden.res` are the
@@ -90,6 +93,40 @@ torso is hue 190°–260° with saturation at or above 0.25.** Nothing in the ho
 the saturation floor is what stops a "steel" survivor collapsing into the grey the crowd is full of.
 
 The empirical gate is in §How it is judged. It is the one that decides.
+
+### That rule does not transfer to a textured body, and RIN is the proof
+
+`PaletteProbe` stage 3 requires the player's chroma to sit at least 0.35 from every horde torso on
+the colour wheel, deliberately ignoring value — because a survivor has to be legible in shadow and in
+sun, and brightness is the channel a dark biome takes away. Measured against RIN's bake:
+
+| | Mean colour | Saturation | Chroma distance to nearest horde | Luminance |
+| :--- | :--- | ---: | ---: | ---: |
+| RIN, as drawn | `7d6c6e` | 0.275 | **0.217** (bulwark `8f8a80`) | 0.162 |
+| Procedural survivor | `3b75db` | 0.72 | 0.72 | 0.30 |
+| Darkest horde variant | `424752` | 0.19 | — | 0.279 |
+
+**She fails it, and the metric is what is wrong.** A survivor's colour used to be three authored
+constants for torso, limbs and head; RIN's is twenty-three thousand sampled texels of skin, black
+cloth, an ivory panel and red trim, and the mean of *any* such body is near-grey. A rule that takes
+the mean therefore rejects every textured character there will ever be, which is not a statement
+about legibility.
+
+What actually separates her is the two things this rule set aside. **Value:** at 0.162 she is
+1.7 times darker than the darkest thing in the horde, on a field whose ground reads 0.5 and up.
+**Silhouette:** a human figure with a hip-length ponytail among nine boxes, which is the same
+argument §"The decision this overturns" already makes for the horde.
+
+Neither is asserted by anything, and the honest reading is that a textured survivor's legibility is
+currently a play-test rather than a probe.
+
+**The place it should have broken was checked and it holds.** Cold Storage's ground is dark grey and
+its fog closes at 7–28 m, which is exactly where a dark survivor was expected to disappear; in
+`screenshots/_rin_coldstorage.png` she is one of the easiest figures to find. Two things do it, and
+neither was designed for it: the fog is additive haze, so it *lightens* a dark body against a dark
+floor rather than hiding it, and the ivory chest panel and hip-length ponytail are the only shapes of
+their kind on screen. That is a good outcome from an unasserted property rather than a safe one — the
+next survivor could be dark, matte and short-haired and nothing would catch it.
 
 ---
 

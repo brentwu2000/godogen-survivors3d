@@ -24,8 +24,8 @@ of that file is a list of things this renderer cannot do — a `MultiMesh` has n
 blend shapes and per-instance mesh variants are all worth nothing here — because that is what decides
 which of two good-looking models is usable and none of it is guessable from a screenshot.
 
-**The survivor the player controls is an authored model**, and the rest of the bodies are still built
-by `MeshBuilder`. Which of the twelve are which is decided by what is in `resources/bodies/`: a bake
+**The survivor the player controls is RIN**, an authored model, and the rest of the bodies are still
+built by `MeshBuilder`. Which of the twelve are which is decided by what is in `resources/bodies/`: a bake
 named after its slot *is* that slot's body, so applying a model is a file landing there and undoing it
 is deleting the file. `art-src/models/intake.ps1` takes a `.glb` to that file in one command, and
 `ART.md` is the brief for choosing one.
@@ -1790,6 +1790,36 @@ person**, not things that need code.
   anything this machine objected to — it drew 200 bodies at 23,822 each. If a real device falls
   short, cut the distance-tiering thresholds before cutting enemy count, and re-take the table in
   Performance with the same three bodies.
+- **A textured survivor's legibility in a crowd is unasserted, and RIN fails the rule that used to
+  cover it.** `PaletteProbe` stage 3 wants 0.35 of chroma between the player and every horde torso,
+  value deliberately excluded because a dark biome takes value away. RIN's drawn mean is `7d6c6e` at
+  0.217 from the bulwark's grey. The metric is what broke: a survivor's colour used to be three
+  authored constants and is now twenty-three thousand sampled texels of skin, black cloth and an
+  ivory panel, whose mean is near-grey for *any* authored character. What separates her instead is
+  value — 0.162 against the horde's 0.279 and up — and silhouette, and nothing checks either. The
+  place it should have broken *was* checked: Cold Storage's dark floor and 7–28 m fog is where a
+  dark survivor was expected to vanish, and she is one of the easiest figures to find there, because
+  additive fog lightens a dark body and because an ivory panel and a hip-length ponytail are the only
+  shapes of their kind on screen. A good outcome from an unasserted property, not a safe one — the
+  next survivor could be dark, matte and short-haired and nothing would catch it. `CHARACTERS.md`
+  carries the table.
+- **The player's face has no eyes, and the fix is the one thing only the player can afford.** RIN
+  bakes exactly right — black jacket, ivory chest panel, red ribbons and headset plates, gloves,
+  thigh bands, lips, blush — and the whites of her eyes are blown white with no iris. A vertex takes
+  one texel, which is exact for a flat patch of colour and wrong for *drawn detail*: the iris is
+  painted inside a UV island a few millimetres across and there are no vertices in it. It is
+  `RIN_Body`'s own sclera geometry that shows; the eyeballs behind it were tinted bright green to
+  check and nothing changed.
+
+  **The player is one mesh and one draw call, so it can carry the model's own UVs and its albedo
+  texture.** Nothing else in this game can — the horde is one `MultiMesh` per variant sampling a
+  shared `Texture2DArray`, which is what puts a hundred and fifty bodies in one call. `BakeBody`
+  currently spends both UV channels on the rig and the body atlas (`Rig` is one point on the flat
+  layer for a baked body, so no painted plate is applied at all), and `BakedBodyResource` has no
+  texture field. A survivor-only path — real UVs in a third channel or in place of the atlas, the
+  model's albedo on the material — would give every survivor a face for one draw call, and is the
+  next thing worth doing to how bodies look. At 20 pixels a head none of it is visible in play; it
+  is visible in `BodyShot` and in every close render, which is what a character-select screen is.
 - **`test/TouchProbe.cs` needs a real display** and so has never run in the regression sweep. The
   headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
   whose tests are green only when someone runs them by hand.

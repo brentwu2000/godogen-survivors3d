@@ -242,6 +242,23 @@ public partial class PaletteProbe : SceneTree
         // — so the rule has always been "blue against greens and greys", and it
         // has never once been checked. A saturated palette is exactly where it
         // breaks, because a saturated colour gets chosen for how it looks alone.
+        //
+        // **This measures `Palette.PlayerTorso`, and the Drifter does not draw
+        // with it any more.** A survivor with a bake on the shelf takes its
+        // colours from the model, per vertex, and this constant is then the
+        // palette the *procedural* survivor would have used — still the right
+        // thing to check, because the Courier and the Warden are procedural and
+        // because a bake can be removed at any time, and no longer a statement
+        // about what is on screen.
+        //
+        // What the drawn body measures is in `CHARACTERS.md`: RIN's mean is a
+        // desaturated `7d6c6e` and lands 0.217 from the bulwark's grey, against
+        // this rule's 0.35. That is not a failure of RIN so much as of the
+        // metric — the mean of twenty-three thousand sampled texels of skin and
+        // black cloth is near-grey for *any* authored character, so a rule
+        // written for one flat torso colour rejects every textured body there
+        // will ever be. What separates her instead is silhouette and value, and
+        // nothing asserts either. See README's What's left.
         Vector2 player = Palette.Chroma(Palette.PlayerTorso);
         float nearest = float.MaxValue;
 
@@ -249,7 +266,7 @@ public partial class PaletteProbe : SceneTree
             nearest = Mathf.Min(nearest, player.DistanceTo(Palette.Chroma(torso)));
 
         bool separated = nearest >= Palette.PlayerChromaSeparation;
-        GD.Print($"stage 3  player chroma nearest body {nearest:F2} away "
+        GD.Print($"stage 3  procedural player chroma nearest body {nearest:F2} away "
                  + $"(needs {Palette.PlayerChromaSeparation:F2})  {(separated ? "ok" : "FAILED")}");
 
         if (!separated)

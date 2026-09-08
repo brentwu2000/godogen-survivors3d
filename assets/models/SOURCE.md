@@ -145,64 +145,74 @@ The perf question it was meant to answer came back conclusively and is in
 and 200 bodies at 23,822 triangles measure 3.41. Triangles are not what the
 horde costs.
 
-## Unknown source — `tactical_character.glb`, the survivor the player controls
+## RIN — the survivor the player controls
 
 | | |
 | :--- | :--- |
-| File as downloaded | `game_ready_low_poly_tactical_character.glb` |
-| Author | **not recorded** |
-| Page | **not recorded** |
-| Downloaded | 2026-09-08, from the user's own `Downloads` |
-| sha256 | `7aa7a73b3000fc410c831a0e8f35c5dc2d99c61da528a4de864b282dbe9dafe3` |
-| Licence | **not recorded** |
-| Contents | one character, 23,822 triangles across 16 surfaces, one skeleton of 89 `mixamorig_*` bones, one 8.3 s `IdleAnimation`, two 1024 textures |
+| In repo | `rin_v1_reference.glb`, baked to `resources/bodies/drifter.res` |
+| Authored in | `godogen-master/artifacts/rin_v1_reference/` — work blend, refine script, four-view previews, changelog |
+| sha256 (glb) | `f87e3e6dd43e57d71084740b545e171ca62260907dafe1bca3a936d1fa159082` |
+| Contents | 27,488 triangles, 57 mesh objects, 60 surfaces, one skeleton of 88 `mixamorig_*` bones, one 8.3 s `Animation`, a 2048 albedo atlas |
+| Underlying character | `game-ready-low-poly-tactical-character.zip`, nested `source/ForSketchfab.zip/CharacterIdle.fbx` |
+| Licence | **not established.** See below |
 
-**Two of the three fields that matter are blank, and that is the whole entry.**
-The geometry is excellent and bakes cleanly — it is the first authored humanoid
-in three rounds to beat the procedural body it replaced — and none of that is a
-provenance record. A file name is not a licence, which is the lesson
-`rigged_anime_girl_cc0.blend` taught this project at ten megabytes.
+**The provenance is traceable now and the licence still is not, and those are two
+different facts.** `artifacts/rin_v1/docs/SOURCE_LICENSE.md` records what the
+supplied archives contained: no licence document, no author attribution, no
+receipt, no listing URL. The inner archive is named `ForSketchfab.zip`, which
+places the original on Sketchfab and makes **Free Standard** the likely terms —
+the row in `ART.md §6` that permits use in a product and forbids redistributing
+the file. That is a strong inference and not a record, so it is written as one.
 
-So the same call is made here, on purpose: **the `.glb` is in `.gitignore` and
-the bake is committed.** Whatever the licence turns out to be, every row of the
-table in `ART.md §6` permits a derivative — a `.res` of vertex data with no
-texture, no rig and no animation — and the two rows that forbid *anything*
-(CC BY-NC, NC-ND) would sink the file either way. The one thing no licence
-permits is redistributing the source as a standalone asset, and that is exactly
-what a `.glb` in a public repo is.
+The body, skinning, face, base clothing, textures and idle come from that
+archive. Authored locally for RIN: nine ponytail locks, two ribbons and a clasp,
+the cropped jacket and its harness, the thigh bands and straps, the headset red
+plates, the shoulder patch, and the stowed rifle in nineteen pieces. Red irises
+were baked into the atlas from the supplied textures; the head was narrowed 7%
+and shortened 3.5%.
 
-`ART.md §8` is the checklist this entry fails. Fill in the page URL and the
-licence verbatim from it, then either commit the `.glb` (CC0 / CC BY) or leave
-this note as the reason it stays out (Sketchfab Standard, or a QAL-shaped
-restriction).
-
-The bake, and it wants `yaw:180` like every +Z-facing import:
+**So the `.glb` is in `.gitignore` and the bake is committed**, which is the same
+call the Polyart pack and `rigged_anime_girl_cc0.blend` got, for the same reason
+and with the same escape: fill in a licence and the line comes out.
 
 ```bash
-powershell art-src/models/intake.ps1 -Model assets/models/tactical_character.glb \
-    -Slot drifter -Pose "IdleAnimation@2.5" -Yaw 180
-
-# or the bake on its own:
-godot --headless --script scripts/tools/BakeBody.cs -- \
-  res://assets/models/tactical_character.glb slot:drifter \
-  "pose:IdleAnimation@2.5" yaw:180
+powershell art-src/models/intake.ps1 -Model assets/models/rin_v1_reference.glb     -Slot drifter -Pose "Animation@2.5" -Yaw 180
 ```
 
-`slot:drifter` writes `resources/bodies/drifter.res`, which is where `BodyBakes`
-looks, and takes the height from the survivor roster. 2.2 m is the Drifter's
-`BodyHeight` and not a property of the model. The
-`mixamorig_` prefix is what makes this one work at all: `BakeBody.Classify`
-matches on `thigh` / `arm` / `hand`, and Mixamo's names carry them, so 3,862 leg
-vertices and 5,729 arm vertices land in the right buckets and the shader swings
-them about a hip at 1.12 m and a shoulder at 1.74 m.
+`slot:drifter` resolves both the destination and the 2.2 m the survivor roster
+asks for. The animation is called `Animation`; frame 2.5 s is an idle with the
+arms down, which is what the shader's swing is added to.
 
-## Verifying
+### What is wrong with it, and it is the eyes
 
-```bash
-curl -sLO https://kenney.nl/media/pages/assets/mini-characters/bfc7e272b4-1774770718/kenney_mini-characters.zip
-sha256sum kenney_mini-characters.zip     # must match the table above
-unzip -p kenney_mini-characters.zip "Models/GLB format/character-male-a.glb" | sha256sum
-```
+**The whites of RIN's eyes bake blown white with no iris.** Everything else on
+the model is exact — black jacket, ivory chest panel, red ribbons and headset
+plates, gloves, thigh bands, the rifle's red accents, even the lips and the
+blush.
+
+The cause is the one thing `PaletteImage` says per-vertex sampling cannot do. A
+vertex takes one texel, which is exact for a flat patch of colour and wrong for
+*drawn detail*: the iris is painted inside a UV island a few millimetres across
+and there are no vertices in it. It is the face's own sclera geometry inside
+`RIN_Body` that is visible — the 96-triangle eyeballs sit behind it, and tinting
+them bright green to check changed nothing on screen.
+
+`tint:<node>=rrggbb` was added while chasing this and does not fix it; it stays
+because naming a surface beats counting to it at sixty surfaces. The fix that
+would work is in README's What's left: **the player is one mesh and one draw
+call, so it can afford to carry the model's own UVs and albedo texture** rather
+than one vertex colour per vertex. Nothing else in the game can.
+
+At the range the game is played the head is about twenty pixels and none of this
+is visible. It is visible in `BodyShot` and in any close render.
+
+### The previous survivor is still on disk and is not loaded
+
+`tactical_character.glb` is RIN's own ancestor — the same
+`game-ready-low-poly-tactical-character.zip` — and was the Drifter's body for one
+phase. It is not committed either, and nothing points at it now: the shelf holds
+`drifter.res` and `BakeBody -- ... slot:drifter` overwrote it. Kept as the
+fallback if RIN has to come out in a hurry.
 
 ## Quaternius — Zombie Apocalypse Kit
 

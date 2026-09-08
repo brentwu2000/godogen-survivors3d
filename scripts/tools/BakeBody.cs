@@ -142,6 +142,7 @@ public partial class BakeBody : SceneTree
         string pose = string.Empty;
         string only = string.Empty;
         float yaw = 0.0f;
+        var nodeTints = new System.Collections.Generic.List<(string Match, Color Colour)>();
         bool asProp = false;
         foreach (string argument in args)
         {
@@ -161,6 +162,46 @@ public partial class BakeBody : SceneTree
             // character in the tree and narrowing first would hide it.
             if (argument.StartsWith("node:", System.StringComparison.Ordinal))
                 only = argument[5..];
+
+            // `tint:Eye=8f1220` forces a colour on every mesh node whose name
+            // contains `Eye`, whatever the model says.
+            //
+            // **The palette argument is positional across the whole model and
+            // that is unusable past about six surfaces.** RIN is fifty-seven
+            // mesh objects and sixty surfaces; naming the two that came out
+            // wrong means counting to them. This names them.
+            //
+            // **It was added for RIN's white eyes and it does not fix them**,
+            // which is worth writing down because the flag looks like the answer
+            // to that problem and is not. `RIN_LeftEye` tinted bright green
+            // changed nothing on screen: the white almonds are the *face's own*
+            // sclera geometry inside `RIN_Body`, and the 96-triangle eyeballs sit
+            // behind it. Painting a 9,774-triangle body to fix two eyes is not a
+            // trade, and the iris is drawn detail inside a UV island at
+            // sub-vertex scale — the one thing `PaletteImage` says per-vertex
+            // sampling cannot reproduce. See README for the fix that would.
+            //
+            // It stays because the positional palette is genuinely unusable at
+            // this scale and this is the general form of "that surface sampled
+            // wrong": a hair clasp, a red plate, a lens, a claw.
+            //
+            // Repeatable; first match wins, so a specific name can precede a
+            // general one.
+            if (argument.StartsWith("tint:", System.StringComparison.Ordinal)
+                && argument.IndexOf('=', 5) > 5)
+            {
+                int at = argument.IndexOf('=', 5);
+                string html = argument[(at + 1)..].Trim();
+
+                if (!Color.HtmlIsValid(html))
+                {
+                    GD.PushError($"\"{html}\" is not a colour. Write it as tint:<node>=rrggbb.");
+                    Quit(1);
+                    return;
+                }
+
+                nodeTints.Add((argument[5..at], Tint(html)));
+            }
 
             // `yaw:180` turns the finished body about Y.
             //
@@ -258,7 +299,8 @@ public partial class BakeBody : SceneTree
             tints = chosen;
         }
 
-        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose, asProp, only, yaw) ? 0 : 1);
+        Quit(Bake(args[0], args[1], height, legSwing, armSwing, bob, tints, pose, asProp, only, yaw,
+                  nodeTints) ? 0 : 1);
     }
 
     /// Puts the model into one frame of one of its own animations before the
@@ -367,7 +409,8 @@ public partial class BakeBody : SceneTree
 
     public static bool Bake(string source, string destination, float height,
                             float legSwing, float armSwing, float bob, Color[]? tints,
-                            string pose = "", bool asProp = false, string only = "", float yaw = 0.0f)
+                            string pose = "", bool asProp = false, string only = "", float yaw = 0.0f,
+                            System.Collections.Generic.List<(string Match, Color Colour)>? nodeTints = null)
     {
         var packed = GD.Load<PackedScene>(source);
         if (packed == null)
@@ -517,7 +560,8 @@ public partial class BakeBody : SceneTree
         GD.Print($"  {parts.Count} mesh node(s): "
                + string.Join(", ", System.Array.ConvertAll(parts.ToArray(), p => p.Instance.Name.ToString())));
 
-        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed, asProp, yaw))
+        if (!Convert(parts, skeleton, baked, height, legSwing, armSwing, bob, tints, posed, asProp, yaw,
+                     nodeTints))
         {
             root.Free();
             return false;
@@ -551,7 +595,8 @@ public partial class BakeBody : SceneTree
         System.Collections.Generic.List<(MeshInstance3D Instance, Transform3D ToRoot)> parts,
         Skeleton3D? skeleton, BakedBodyResource baked,
         float height, float legSwing, float armSwing, float bob, Color[]? tints, bool posed, bool asProp,
-        float yaw = 0.0f)
+        float yaw = 0.0f,
+        System.Collections.Generic.List<(string Match, Color Colour)>? nodeTints = null)
     {
         var allVertices = new System.Collections.Generic.List<Vector3>();
         var allNormals = new System.Collections.Generic.List<Vector3>();
@@ -697,7 +742,15 @@ public partial class BakeBody : SceneTree
                     return false;
                 }
 
-                if (!skinned && nodeLimb == Limb.Torso
+                // Not for a bone-attached mesh, whose limb came from the bone and
+                // not from its name. RIN arrives as fifty-seven mesh objects, of
+                // which twenty are rigid parts pinned to bones — nine ponytail
+                // locks, two ribbons, a clasp, thigh bands, harness strips,
+                // buckles, a stowed rifle in six pieces — and every one of them
+                // drew this warning telling the author to rename a file that is
+                // already correct. Twenty lines of wrong advice per bake is how a
+                // tool's output stops being read.
+                if (!skinned && attachment == null && nodeLimb == Limb.Torso
                     && !instance.Name.ToString().Contains("torso", System.StringComparison.OrdinalIgnoreCase)
                     && !instance.Name.ToString().Contains("head", System.StringComparison.OrdinalIgnoreCase)
                     && !instance.Name.ToString().Contains("body", System.StringComparison.OrdinalIgnoreCase))
@@ -732,6 +785,21 @@ public partial class BakeBody : SceneTree
                 Color? forced = tints is { Length: > 0 }
                     ? tints[Mathf.Min(slot, tints.Length - 1)]
                     : null;
+
+                // A node tint beats the positional palette, because it is the
+                // more specific statement: the palette says "the sixth surface",
+                // this says "the eyes".
+                if (nodeTints != null)
+                {
+                    foreach ((string match, Color named) in nodeTints)
+                    {
+                        if (instance.Name.ToString().Contains(match, System.StringComparison.OrdinalIgnoreCase))
+                        {
+                            forced = named;
+                            break;
+                        }
+                    }
+                }
 
                 Color surfaceAlbedo = forced ?? found ?? Colors.White;
                 int offset = allVertices.Count;
@@ -768,18 +836,53 @@ public partial class BakeBody : SceneTree
                             : Vector3.Up);
                     }
 
-                    // Order of preference: a forced tint, then the mesh's own
-                    // vertex colours, then a sampled palette texel, then the
-                    // material's flat albedo.
+                    // A forced tint replaces everything. Otherwise the three
+                    // sources are **multiplied**, which is what glTF says they
+                    // are: `COLOR_0` scales `baseColorFactor` scales
+                    // `baseColorTexture`.
+                    //
+                    // **This used to pick one of them, in preference order, and
+                    // it baked RIN white from head to foot.** Vertex colours came
+                    // first, so any mesh carrying a `COLOR_0` attribute made the
+                    // baker ignore the texture entirely — and Blender's glTF
+                    // exporter writes `COLOR_0` on every mesh in an object that
+                    // has a colour attribute anywhere, filling the ones that do
+                    // not use it with **white**. RIN has one shared vertex-colour
+                    // detail material and fifty-six other meshes, so fifty-six
+                    // meshes exported an all-white `COLOR_0` that beat a 2048
+                    // albedo atlas. The report said `sampling 2048x2048 texture`
+                    // on every line while sampling nothing, because the sample
+                    // was taken and then discarded.
+                    //
+                    // White is the multiplicative identity, which is exactly why
+                    // the spec's rule is the safe one: a model with only vertex
+                    // colours multiplies by a white texture-and-factor and comes
+                    // out unchanged, a model with only a palette multiplies by a
+                    // white `COLOR_0` and comes out unchanged, and every `.res`
+                    // already on disk rebakes identically. There is no case where
+                    // choosing is right and multiplying is wrong.
                     Color vertexColour;
                     if (forced.HasValue)
+                    {
                         vertexColour = forced.Value;
-                    else if (i < c.Length)
-                        vertexColour = c[i];
-                    else if (palette != null)
-                        vertexColour = Sample(palette, uv[i]);
+                    }
                     else
+                    {
                         vertexColour = surfaceAlbedo;
+
+                        if (palette != null)
+                        {
+                            Color texel = Sample(palette, uv[i]);
+                            vertexColour = new Color(vertexColour.R * texel.R,
+                                                     vertexColour.G * texel.G,
+                                                     vertexColour.B * texel.B);
+                        }
+
+                        if (i < c.Length)
+                            vertexColour = new Color(vertexColour.R * c[i].R,
+                                                     vertexColour.G * c[i].G,
+                                                     vertexColour.B * c[i].B);
+                    }
 
                     allColours.Add(vertexColour);
 

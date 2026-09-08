@@ -67,3 +67,12 @@ assets/models/tactical_character_0.jpg
 assets/models/tactical_character_0.jpg.import
 assets/models/tactical_character_1.jpg
 assets/models/tactical_character_1.jpg.import
+
+# RIN, and her ancestor. Same archive, same missing licence — see
+# `assets/models/SOURCE.md`. The bake in `resources/bodies/drifter.res` is
+# committed; the sources are one file each away from a licence line that would
+# let them in.
+assets/models/rin_v1_reference.glb
+assets/models/rin_v1_reference.glb.import
+assets/models/rin_v1_reference_*.png
+assets/models/rin_v1_reference_*.png.import
