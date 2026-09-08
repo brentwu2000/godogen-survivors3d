@@ -41,18 +41,24 @@ public partial class BuildCharacters : SceneTree
                 CarryCapacity = 20,
                 BodyHeight = 2.2f,
 
-                // **No bake, for the same reason the horde lost its seven.** The
-                // Drifter was the one survivor drawn from a model, and stood next
-                // to the other two in `BodyShot -- roster` it was the worst body
-                // of the three: a small head, arms welded to the torso, no hands,
-                // and none of the kit that `CHARACTERS.md` says a survivor is
-                // supposed to be wearing. It also carried the provenance gap
-                // README names — `assets/models/survivors/drifter.glb` was cut
-                // from a 10 MB blend whose only claim to a licence is its own
-                // filename, and the `.glb` is not in the tree.
+                // **A downloaded model, and the first authored body in this game
+                // that beat the procedural one.** Two rounds lost: seven three.js
+                // humanoids in the horde, and the Drifter's own predecessor cut
+                // from a blend — a small head, arms welded to the torso, no hands
+                // and none of the kit `CHARACTERS.md` says a survivor wears.
                 //
-                // Three survivors, one shape, procedurally built. The bake stays
-                // on disk and `BakeProbe` keeps checking it; nothing loads it.
+                // This one arrives wearing it. 23,630 triangles is forty times a
+                // horde variant and costs nothing here, because the player is one
+                // body on screen and not a hundred and fifty — the tier `ART.md`
+                // calls free and this game had never used. `mixamorig_*` bone
+                // names classify cleanly, so the shader's hip-and-shoulder swing
+                // lands on the right vertices and it walks rather than scatters.
+                //
+                // The other two survivors stay procedural on purpose: the roster
+                // is meant to read as three people and one bake plus two
+                // `MeshBuilder` bodies is the comparison that says whether the
+                // bake is worth extending. See README.
+                BakedBodyPath = "res://resources/bodies/tactical_survivor.res",
                 OpensAfter = 0,
             },
 

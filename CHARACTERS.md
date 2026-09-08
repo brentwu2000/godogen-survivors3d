@@ -7,6 +7,19 @@ Read `RECOVERY.md` §D3 first. It records why three survivors exist and what the
 this file extends that roster and **overturns exactly one of its decisions**, which is called out
 below rather than quietly reversed.
 
+**The modelling half of this brief has been overtaken from an unexpected direction: the Drifter's
+body is now a downloaded model rather than an authored one.** `tactical_character.glb` bakes to
+`resources/bodies/tactical_survivor.res` and the Drifter loads it, and it satisfies the part of this
+brief that mattered most — §"The kit is where the silhouette lives" — off the shelf, wearing a plate
+carrier, gloves, a holster and boots. See README's Decisions and `ART.md §2` for why a 23,822-triangle
+body costs nothing here.
+
+What that changes about the pages below: the *rules* a bakeable body has to obey are unchanged and are
+still enforced by `BakeBody`, so read them before putting any model through it. The *seven-survivor
+modelling plan* is now the fallback rather than the route — the Courier and the Warden are still
+`MeshBuilder` bodies, and the cheaper way to give them kit is two more models from the same source
+than seven authored in a modelling tool.
+
 ---
 
 ## The rules a survivor already obeys

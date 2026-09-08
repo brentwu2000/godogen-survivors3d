@@ -49,3 +49,21 @@ __pycache__/
 # size one.
 assets/models/polyart_zombies.glb
 assets/models/polyart_zombies.glb.import
+
+# A downloaded character whose licence is not recorded, which is a stronger
+# reason to keep it out than the size is.
+#
+# `assets/models/SOURCE.md` has the sha256 and the two blank fields — no page,
+# no licence. Every licence that permits shipping the model at all permits the
+# bake (vertex data, no texture, no rig), and none of them permit redistributing
+# the source file as a standalone asset, which is what this would be. So the
+# 3.4 MB source stays out and `resources/bodies/tactical_survivor.res` goes in.
+#
+# Same call as the Polyart pack above, and as `rigged_anime_girl_cc0.blend`
+# before it. Delete this line once SOURCE.md names a licence that allows it.
+assets/models/tactical_character.glb
+assets/models/tactical_character.glb.import
+assets/models/tactical_character_0.jpg
+assets/models/tactical_character_0.jpg.import
+assets/models/tactical_character_1.jpg
+assets/models/tactical_character_1.jpg.import

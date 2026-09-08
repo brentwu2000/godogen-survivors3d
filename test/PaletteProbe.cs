@@ -111,7 +111,12 @@ public partial class PaletteProbe : SceneTree
         failed |= !CheckFogContrast();
         failed |= !CheckSeparation();
 
-        GD.Print(failed ? "PROBE FAILED" : "palette ok");
+        // "PROBE OK" verbatim, because that is the only string `test/sweep.ps1`
+        // looks for. This printed "palette ok" and so appeared in the sweep as a
+        // permanent FAIL beside a clean run of its own stages — which is worse
+        // than an absent probe, because a sweep with a standing failure in it is
+        // a sweep whose output stops being read.
+        GD.Print(failed ? "PROBE FAILED" : "PROBE OK");
         Quit(failed ? 1 : 0);
     }
 

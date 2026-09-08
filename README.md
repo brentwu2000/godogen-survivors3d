@@ -24,12 +24,19 @@ of that file is a list of things this renderer cannot do — a `MultiMesh` has n
 blend shapes and per-instance mesh variants are all worth nothing here — because that is what decides
 which of two good-looking models is usable and none of it is guessable from a screenshot.
 
+**The survivor the player controls is an authored model**, and the rest of the bodies are still built
+by `MeshBuilder`. That split is the budget rather than a compromise: the player is one body on screen
+in the tier a boss occupies, so it costs 23,822 triangles against the horde's 70,000 for a hundred and
+fifty, and it is the only body the camera is pointed at.
+
 The billboard sprite path is still there and still works, behind `Horde.SolidBodies` — it is the
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
 scene with it so it cannot quietly rot.
 
-Sweep clean at 45 probes; the table below lists 34 of them and is the older set. Build gate
-re-verified 2026-08-29.
+Sweep clean at 47 probes; the table below lists 34 of them and is the older set. Two of those 47
+had been failing on their own bookkeeping rather than on anything they measure — `PaletteProbe`
+printed "palette ok" where `sweep.ps1` looks for "PROBE OK", and `RouteMemory` is a helper class
+the sweep was trying to run as a probe. Build gate re-verified 2026-09-08.
 
 ## Running it
 
@@ -1266,6 +1273,46 @@ written answer: late enough for a build, early enough not to collide with the ti
 runs end between 83 and 142 seconds, so a boss at 186 happened once in twenty runs. A climax the run
 does not reach is not late, it is absent. 40%.
 
+**The player is an authored body now, and it is the third attempt that worked.** Seven three.js
+humanoids and the Drifter's own predecessor were both deleted for being worse than the `MeshBuilder`
+body they replaced. `tactical_character.glb` is better than it by every reading of the lineup:
+23,822 triangles wearing a plate carrier, gloves, a holster and boots — which is what `CHARACTERS.md`
+says a survivor wears and what `MeshBuilder` will never model — on a `mixamorig_` rig whose names
+classify cleanly, so 3,862 leg vertices and 5,729 arm vertices swing about a hip at 1.12 m and a
+shoulder at 1.74 m and it walks rather than scatters.
+
+**What made it available was noticing which tier the player is in.** `ART.md` had three: 150 on
+screen at 800–2,000 triangles, 10–20 at 2,000–6,000, and 1–2 bosses at 20,000–40,000. The player is
+one body, so it belongs in the last one, and that tier is nearly free — 23,822 triangles is a third
+of what the walker horde spends and the horde is not what anyone is looking at. Every intake decision
+before this had been made against the horde's budget, which is why a model like this had never been
+considered. **The same file also said not to search for `anime`**, on the true grounds that
+VRoid-lineage models are 10,000–50,000 triangles built around their own outline pass and toon shader.
+The triangle count was a horde objection applied to a body that is not in the horde, and the outline
+pass and toon shader are discarded on intake like the animations and the normal maps are. This
+survivor is one of those models. §5 says so now.
+
+**`BakedBody.Append` joined five arrays and never the index buffer**, which is correct for two
+non-indexed meshes and produces nothing at all for anything else. The player holds a procedural
+weapon appended to the same surface; an authored mesh is indexed — that is most of why this one is
+17,087 vertices rather than 70,890 — so the joined mesh had its vertices and no triangle referencing
+them. Godot refused the surface with "vertex amount (17255) must be a multiple of 3" once per frame,
+forever, and the player was invisible in a game that otherwise ran perfectly. It survived because the
+only two meshes that had ever met there were non-indexed: `BodyMeshLibrary` builds triangle soup, and
+every survivor bake before this one was thrown away for looking wrong rather than for failing to
+draw. Sequential indices are what "non-indexed" means, so the mixed case is now not a case.
+
+**A mesh hanging off a `BoneAttachment3D` is not a loose accessory, and the difference is the
+author's own statement.** `BakeBody` skips unskinned meshes on a rigged model because on Quaternius
+packs those are the ten weapons lying in the file — merging them produced a character wielding an axe,
+a guitar, a pistol and a rifle simultaneously. But an attachment names the bone the thing belongs to,
+and the class of model that uses one is large: eyes, glasses, hats and hair are routinely rigid meshes
+pinned to the head rather than skinned into it. Skipping them cost this survivor its irises, so it
+baked with two blank white sclerae and looked possessed at any range close enough to see a face — two
+96-triangle meshes out of 23,822, which is not a number anyone notices in a report. The attachment's
+bone is also the better classifier: a prop pinned to a hand bone now gets the arm swing rather than
+none.
+
 ## Performance
 
 RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds:
@@ -1607,23 +1654,35 @@ person**, not things that need code.
   forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
   thing to re-take whenever a weapon changes, and it is written here because that is the only place
   that will say so. See `WEAPONS.md`.
-- **Nothing in the roster or the horde is drawn from an authored humanoid any more, and that is a
-  reversal.** Eight bodies were: seven horde variants cut in three.js, and the Drifter cut from the
-  blend below. Stood in a row by `BodyShot` every one of them was worse than the `MeshBuilder` body
-  it replaced — the runner came apart into scattered sticks, the boss wore its head and both arms
-  detached from the shoulders, the bloater lost its legs and was a bare ball, and the Drifter had no
-  hands and its arms welded to its torso. The baker is not at fault: `screenshots/bake_vs_raw.png`
-  shows a bake reproducing its input exactly, and the same baker turns Kenney and Quaternius models
-  into good-looking bodies. The models were bad.
+- **The player is an authored body; nothing in the horde is, and the two Courier and Warden
+  survivors are not either.** Eight authored bodies were deleted before this one: seven horde
+  variants cut in three.js, and the Drifter's predecessor cut from the blend below. Stood in a row by
+  `BodyShot` every one was worse than the `MeshBuilder` body it replaced — the runner came apart into
+  scattered sticks, the boss wore its head and both arms detached from the shoulders, the bloater lost
+  its legs and was a bare ball, and the Drifter had no hands and its arms welded to its torso. The
+  baker was never at fault: `screenshots/bake_vs_raw.png` shows a bake reproducing its input exactly.
+  The models were bad, and the ninth is not — see Decisions.
+
+  **So the roster is now two species, and the character-select screen shows all three.** The Drifter
+  wears kit; the Courier and the Warden are blocks in different colours. Either the other two get
+  bodies from the same source or the Drifter loses its own, and the first authored body to win its
+  lineup is not the one to give up. `ART.md §9` carries this as the largest remaining art
+  inconsistency after the props.
 
   `CharacterResource.BakedBodyPath` and `EnemyTypeResource.BakedBodyPath` still work and are still
   read — `Player.CreateBody` loads the bake, appends the held weapon's procedural silhouette to the
   same surface, and falls back to `SoloBody` when the path is empty or the bake will not build; an
-  empty path *is* the procedural path. **The stalker is the one bake still pointed at**, because a
-  quadruped is a silhouette `MeshBuilder` cannot express. The eight `.res` files stay on disk and
-  `BakeProbe` keeps checking them; nothing loads them.
+  empty path *is* the procedural path. **Two bakes are pointed at**: the stalker, because a quadruped
+  is a silhouette `MeshBuilder` cannot express, and `tactical_survivor.res` for the Drifter. The eight
+  dead `.res` files stay on disk and `BakeProbe` keeps checking them; nothing loads them.
 
-  What blocks re-authoring is provenance, not modelling. `art-src/models/build_roster.py` cuts all seven
+  **The new one has the same provenance gap as the old one and it is not fixed, only bounded.**
+  `assets/models/SOURCE.md` records the sha256 and two blank fields — no page, no licence — so the
+  3.4 MB `.glb` is in `.gitignore` and the 1.2 MB bake is committed, which is the call every licence
+  in `ART.md §6` permits and none forbid. This is the one entry in that register that fails its own
+  checklist. Ask whoever downloaded it for the URL.
+
+  What blocks re-authoring the horde is provenance too. `art-src/models/build_roster.py` cuts all seven
   from `art-src/models/base/rigged_anime_girl_cc0.blend`, and that file is 10 MB of third-party
   geometry whose only claim to a licence is its own filename — no URL, no hash, nothing anyone can
   check. CC0 is a dedication to the public domain, so nothing here is a licence breach; what is

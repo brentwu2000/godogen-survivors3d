@@ -113,6 +113,51 @@ immediately above each rig is what names it.
 `pose:` is needed because the bind pose is a T-pose. `yaw:180` is needed because
 these face +Z and this game's bodies face -Z.
 
+## Unknown source — `tactical_character.glb`, the survivor the player controls
+
+| | |
+| :--- | :--- |
+| File as downloaded | `game_ready_low_poly_tactical_character.glb` |
+| Author | **not recorded** |
+| Page | **not recorded** |
+| Downloaded | 2026-09-08, from the user's own `Downloads` |
+| sha256 | `7aa7a73b3000fc410c831a0e8f35c5dc2d99c61da528a4de864b282dbe9dafe3` |
+| Licence | **not recorded** |
+| Contents | one character, 23,822 triangles across 16 surfaces, one skeleton of 89 `mixamorig_*` bones, one 8.3 s `IdleAnimation`, two 1024 textures |
+
+**Two of the three fields that matter are blank, and that is the whole entry.**
+The geometry is excellent and bakes cleanly — it is the first authored humanoid
+in three rounds to beat the procedural body it replaced — and none of that is a
+provenance record. A file name is not a licence, which is the lesson
+`rigged_anime_girl_cc0.blend` taught this project at ten megabytes.
+
+So the same call is made here, on purpose: **the `.glb` is in `.gitignore` and
+the bake is committed.** Whatever the licence turns out to be, every row of the
+table in `ART.md §6` permits a derivative — a `.res` of vertex data with no
+texture, no rig and no animation — and the two rows that forbid *anything*
+(CC BY-NC, NC-ND) would sink the file either way. The one thing no licence
+permits is redistributing the source as a standalone asset, and that is exactly
+what a `.glb` in a public repo is.
+
+`ART.md §8` is the checklist this entry fails. Fill in the page URL and the
+licence verbatim from it, then either commit the `.glb` (CC0 / CC BY) or leave
+this note as the reason it stays out (Sketchfab Standard, or a QAL-shaped
+restriction).
+
+The bake, and it wants `yaw:180` like every +Z-facing import:
+
+```bash
+godot --headless --script scripts/tools/BakeBody.cs -- \
+  res://assets/models/tactical_character.glb res://resources/bodies/tactical_survivor.res \
+  2.2 0.55 0.30 0.035 "pose:IdleAnimation@2.5" yaw:180
+```
+
+2.2 m is the Drifter's `BodyHeight` and not a property of the model. The
+`mixamorig_` prefix is what makes this one work at all: `BakeBody.Classify`
+matches on `thigh` / `arm` / `hand`, and Mixamo's names carry them, so 3,862 leg
+vertices and 5,729 arm vertices land in the right buckets and the shader swings
+them about a hip at 1.12 m and a shoulder at 1.74 m.
+
 ## Verifying
 
 ```bash

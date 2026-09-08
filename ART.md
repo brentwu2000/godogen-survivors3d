@@ -59,6 +59,7 @@ animation cost and no per-enemy node, so this is the *only* thing that scales.
 | Polyart pack (downloaded) | 1,588–1,990 | 150 | 240K–300K | At the top of the band |
 | Aiden Studios zombie | 19,508 | 150 | 2,900,000 | **No.** Forty times the budget |
 | Oscar Creativo zombie | 141,500 | 150 | 21,000,000 | **No** |
+| **Tactical character (the player)** | **23,822** | **1** | **23,822** | **In the game.** A third of the horde's total, for the one body anybody looks at |
 
 **But a boss is one to two on screen, and that changes the answer completely.**
 Every variant already has its own `MultiMesh` and its `VisibleInstanceCount` is
@@ -71,6 +72,14 @@ architecture most asset advice is written for.
 | Horde — walker, runner, spitter | 150 | 800–2,000 | Usually needed |
 | Standard — brute | 10–20 | 2,000–6,000 | Sometimes |
 | Boss / elite | 1–2 | 20,000–40,000 | Rarely |
+| **Player** | **1** | **20,000–40,000** | **Never** |
+
+**The player is the cheapest body in the game and the only one the camera is
+pointed at**, which makes it the first place to spend and the last place this
+project looked. It is one draw call at whatever the model arrives as, it is
+centre-frame for the whole run, and it is the one body a screenshot is *of*. A
+survivor is worth thirty horde variants of attention and a fiftieth of the
+triangle discipline.
 
 Anything can be brought into range: `art-src/models/decimate.py` runs Blender's
 collapse decimation and is verified on the two largest models in the tree —
@@ -137,7 +146,7 @@ boss** — five of nine, and the great majority of what is on screen.
 
 ## 5. The shopping list
 
-### Search these
+### Search these, for the horde
 
 > `stylized low poly zombie rigged`
 > `toon zombie character game ready`
@@ -147,12 +156,28 @@ boss** — five of nine, and the great majority of what is on screen.
 **"stylized low poly" is the phrase that works.** It is what the people making
 the right thing call it.
 
-### Do not search these
+### Search these, for the player
 
-**`anime`** on its own returns VRoid-lineage models: 10,000–50,000 triangles,
-built around an outline pass and a two-tone toon shader of their own, often with
-per-material outline widths and eye-highlight quads. Those are a different
-pipeline and they do not enter this one.
+> `game ready low poly tactical character`
+> `anime low poly character rigged`
+
+**A different budget is a different search, and this file said the opposite for
+one phase.** `anime` was under "do not search" on the grounds that
+VRoid-lineage models are 10,000–50,000 triangles built around their own outline
+pass and two-tone toon shader — every word of which is true, and none of which
+disqualifies anything. The triangle count is a horde objection and the player is
+not in the horde. The outline pass and the toon shader are simply discarded on
+intake, along with the animations and the normal maps, and `body.gdshader`'s own
+two bands and fresnel rim are the same look arrived at from the other direction.
+
+The survivor the player controls is one of these: 23,822 triangles, a
+`mixamorig_` rig, and the first authored humanoid in three rounds to be better
+than what it replaced. The one property it needed and a stylised zombie pack
+does not have is **kit** — a plate carrier, gloves, a holster, boots — because
+that is what `CHARACTERS.md` says a survivor wears and what `MeshBuilder` will
+never model.
+
+### Do not search these
 
 **`realistic`**, **`PBR`**, **`photoscan`**, **`8K textures`** — all describe
 qualities this renderer discards.
@@ -165,7 +190,10 @@ qualities this renderer discards.
   into legs and arms
 - Bone names that are not recognisable words. `BakeBody.Classify` matches
   `Thigh` / `Shin` / `Calf` / `Foot` and `UpperArm` / `Forearm` / `Hand`, so 3ds
-  Max biped names (`bip L Thigh007`) work and `Bone.023` does not
+  Max biped names (`bip L Thigh007`) and Mixamo's (`mixamorig_LeftUpLeg_074`)
+  both work and `Bone.023` does not. **"Mixamo" on an asset page is a
+  compatibility guarantee for this bake**, because that skeleton's names are
+  fixed and every one of them is a word
 - Sold as an animation set — the animations do not survive
 
 ### Prefer
@@ -224,6 +252,22 @@ godot --script test/BodyShot.cs -- one:walker still front baked:res://resources/
 godot --headless --script test/HordePerf.cs
 ```
 
+**Steps 2 and 5 are the horde's, and a survivor skips both.** Nothing is
+decimated for a body that draws once, and `HordePerf` measures a `MultiMesh` the
+player is not in. The survivor's steps 4 and 5 are a lineup against the two it
+stands beside on the select screen, and the game itself:
+
+```bash
+godot --script test/BodyShot.cs -- roster front baked:res://resources/bodies/thing.res
+godot --script test/Screenshot.cs
+```
+
+`PaletteProbe`'s third stage is the one assertion that covers this: it measures
+the player's chroma against the nearest body colour in the horde and needs 0.35
+of separation. The tactical survivor reads 0.53 — a dark figure on light ground —
+which is the answer to "will the player still be findable in a crowd" and the
+one question about a survivor that is not a matter of taste.
+
 **Step 4 is not optional and is not ceremony.** Two rounds of authored humanoids
 have entered this game and both were worse than the procedural bodies they
 replaced — seven three.js models and the Drifter, all deleted. The lineup shot
@@ -272,6 +316,12 @@ Fill one in per model before downloading anything else.
 - **The painted skin plates are semi-realistic.** `skin_infected` and
   `skin_mutant` are rendered rot and hide; flat colour with drawn detail would
   suit the bands better. Regenerable from `art-src/textures/`.
+- **The roster is now two species.** The Drifter is an authored body wearing kit;
+  the Courier and the Warden are `MeshBuilder` blocks in different colours. Side
+  by side in `BodyShot -- roster` that is not three survivors, it is one survivor
+  and two placeholders, and the character-select screen shows all three. Either
+  the other two get bodies from the same source or the Drifter loses its own —
+  and the first authored body to win its lineup is not the one to give up.
 - **No attribution surface**, per §6.
 - **The fog and sky are realistic in hue.** A stylised palette usually wants
   fewer, more saturated steps.

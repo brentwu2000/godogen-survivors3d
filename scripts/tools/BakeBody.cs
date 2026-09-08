@@ -526,6 +526,31 @@ public partial class BakeBody : SceneTree
             // already separated the mesh exactly where the rig bends.
             (Limb nodeLimb, float nodePhase) = Classify(instance.Name);
 
+            // **A mesh hanging off a `BoneAttachment3D` is not a loose accessory,
+            // and the difference is the author's own statement.**
+            //
+            // The rule below skips unskinned meshes on a rigged model, because on
+            // Quaternius packs those are the ten weapons lying in the file. But a
+            // `BoneAttachment3D` is the one case where the file says which bone
+            // the thing belongs to — and the class of model that uses it is
+            // large: eyes, glasses, hats and hair are routinely rigid meshes
+            // pinned to the head rather than skinned into it.
+            //
+            // Skipping them cost the tactical survivor its irises, so it baked
+            // with two blank white sclerae and looked possessed at any range
+            // close enough to see a face. Nothing errored: two 96-triangle meshes
+            // out of 23,822 is not a number anyone notices in a report.
+            //
+            // The bone is a better classifier than the node name too. `Classify`
+            // on `LeftEyeDan1_BodyDan1_0` reads "body" and gets torso by luck; on
+            // `Eye_L` it would get torso by accident. On the attachment's bone it
+            // gets the head because that is what the file says, and a prop pinned
+            // to a hand bone would get the arm swing rather than none.
+            BoneAttachment3D? attachment = BoneAttached(instance);
+            string attachedTo = attachment?.BoneName ?? string.Empty;
+            if (attachedTo.Length > 0)
+                (nodeLimb, nodePhase) = Classify(attachedTo);
+
             // Only built when a pose was asked for, so the default path stays the
             // arithmetic it always was and every `.res` already on disk rebakes
             // bit-identical.
@@ -591,7 +616,7 @@ public partial class BakeBody : SceneTree
                 // defect in the model and this game draws weapons itself — see
                 // `BodyMeshLibrary.Carry`, which appends the silhouette of
                 // whatever is actually equipped.
-                if (!skinned && skeleton != null)
+                if (!skinned && skeleton != null && attachment == null)
                 {
                     GD.Print($"    {instance.Name}: unskinned on a rigged model — an accessory, skipped");
                     continue;
@@ -709,7 +734,7 @@ public partial class BakeBody : SceneTree
                     }
                     else
                     {
-                        bone = instance.Name;
+                        bone = attachedTo.Length > 0 ? attachedTo : instance.Name;
                         limb = nodeLimb;
                         phase = nodePhase;
                     }
@@ -1355,6 +1380,25 @@ public partial class BakeBody : SceneTree
             names.Add(skeleton.GetBoneName(i));
 
         return string.Join(", ", names);
+    }
+
+    /// The `BoneAttachment3D` this mesh hangs from, if it hangs from one.
+    ///
+    /// The walk stops at the `Skeleton3D` rather than at the root, because above
+    /// the skeleton there is nothing a bone could be named and continuing would
+    /// only be a longer way to return null.
+    private static BoneAttachment3D? BoneAttached(Node node)
+    {
+        for (Node? parent = node.GetParent(); parent != null; parent = parent.GetParent())
+        {
+            if (parent is BoneAttachment3D attachment)
+                return attachment;
+
+            if (parent is Skeleton3D)
+                break;
+        }
+
+        return null;
     }
 
     /// A node's transform relative to the instantiated root.

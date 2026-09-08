@@ -21,7 +21,11 @@ Set-Location $root
 # ModelReport describes a `.glb` and answers no question on its own. Display is
 # the guard itself.
 $skip = @(
-    'Display', 'Fresh', 'BotDrive', 'ModelReport',
+    # RouteMemory joined Fresh and BotDrive as a plain helper class with no
+    # SceneTree, and was not added here when it arrived — so the sweep tried to
+    # run it, Godot answered "the associated class could not be found", and the
+    # result read as a failing probe rather than as a file that is not one.
+    'Display', 'Fresh', 'BotDrive', 'RouteMemory', 'ModelReport',
     'AutoPlay', 'BalanceSweep', 'HordePerf',
 
     # DeckMatrix fires every weapon under every growth option — 276 trials of
