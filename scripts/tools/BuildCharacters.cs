@@ -47,7 +47,7 @@ public partial class BuildCharacters : SceneTree
                 // from a blend — a small head, arms welded to the torso, no hands
                 // and none of the kit `CHARACTERS.md` says a survivor wears.
                 //
-                // This one arrives wearing it. 23,630 triangles is forty times a
+                // This one arrives wearing it. 23,822 triangles is forty times a
                 // horde variant and costs nothing here, because the player is one
                 // body on screen and not a hundred and fifty — the tier `ART.md`
                 // calls free and this game had never used. `mixamorig_*` bone
@@ -58,7 +58,12 @@ public partial class BuildCharacters : SceneTree
                 // is meant to read as three people and one bake plus two
                 // `MeshBuilder` bodies is the comparison that says whether the
                 // bake is worth extending. See README.
-                BakedBodyPath = "res://resources/bodies/tactical_survivor.res",
+                //
+                // **No `BakedBodyPath`, and the bake is still loaded.**
+                // `resources/bodies/drifter.res` is where a survivor's body goes
+                // and `BodyBakes` looks there — so a survivor's model arrives as
+                // a file rather than as an edit to this line, and the same is
+                // true of the Courier and the Warden the moment either has one.
                 OpensAfter = 0,
             },
 

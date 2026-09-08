@@ -6,8 +6,23 @@ using Godot;
 ///   godot --script test/HordePerf.cs -- 200
 ///   godot --script test/HordePerf.cs -- 500 mixed
 ///
-/// Not headless — draw calls and frame time are the point. VSync is disabled, or
-/// every result would read exactly 60 FPS regardless of headroom.
+/// Not headless, and this is checked rather than said. **The comment below is
+/// the comment this file always carried, and for one phase it was the only thing
+/// enforcing it — so the documented intake command in `ART.md` was
+/// `godot --headless --script test/HordePerf.cs`, which measures no rendering
+/// whatsoever.** Under the dummy driver every triangle count on this machine
+/// reported 6.90 ms and 145 fps to the decimal: 200 bodies at 460 triangles,
+/// at 1,650, and at 23,822 — a factor of fifty-two — all identical, because
+/// none of them were drawn. `avg draw calls 0` was printed underneath each one
+/// and read as a MultiMesh triumph.
+///
+/// The same number is in `README`'s Performance section, and the whole tier
+/// table in `ART.md` was reasoned from it. A perf probe that silently measures
+/// nothing is worse than no perf probe, because its output is a number and
+/// numbers get quoted.
+///
+/// Draw calls and frame time are the point. VSync is disabled, or every result
+/// would read exactly 60 FPS regardless of headroom.
 ///
 /// "mixed" fills the field from the late-run roster instead of walkers only. The
 /// draw call count is the number that matters there: variants are layers of one
@@ -34,6 +49,9 @@ public partial class HordePerf : SceneTree
 
     public override void _Initialize()
     {
+        if (!Display.Required(this, "HordePerf"))
+            return;
+
         string[] args = OS.GetCmdlineUserArgs();
         if (args.Length > 0 && int.TryParse(args[0], out int requested))
             _targetCount = requested;

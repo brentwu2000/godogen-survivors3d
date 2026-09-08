@@ -668,6 +668,20 @@ public partial class BuildMain : SceneTree
         // other file.
         material.SetShaderParameter("detail", GD.Load<Texture2D>("res://assets/textures/ground.png"));
 
+        // Four bands, against the two `cel.gdshaderinc` defaults to for a body.
+        // The include's argument for two is that a body is flat facets which
+        // quantise the light already; the floor is a heightmapped surface of
+        // 6,561 smooth-shaded vertices, which is the one place in this game
+        // where a mid tone describes real form. Two bands across an arena is two
+        // continents.
+        material.SetShaderParameter("cel_bands", 4);
+
+        // And no rim. Fresnel along a silhouette is what separates one body from
+        // the body behind it; on a floor the whole horizon is silhouette, so it
+        // draws a bright band across the far edge of the arena — exactly where
+        // the fog is trying to make things quietly disappear.
+        material.SetShaderParameter("rim_strength", 0.0f);
+
         // MaterialOverride rather than a material on the mesh: this node is
         // owned by the scene, so the override serialises — the case godot.md:46
         // warns about is an override on a node *inside* an imported GLB, whose

@@ -227,11 +227,17 @@ public partial class BuildEnemyTypes : SceneTree
             // the first variant that is, and the reason `BakeBody` exists: a
             // quadruped assembled from boxes and tubes is a week of fiddling with
             // pivot fractions for a shape somebody can draw in an afternoon.
+            //
+            // **No `BakedBodyPath` here either, and it still loads one.**
+            // `resources/bodies/stalker.res` is on the shelf under this
+            // variant's own name, which is where `BodyBakes` looks — so this
+            // table describes what a stalker *is* and the shelf decides what it
+            // is drawn from. Every variant below works the same way the moment a
+            // file with its name appears.
             new()
             {
                 TypeName = "stalker",
                 SpriteLayer = 6,
-                BakedBodyPath = "res://resources/bodies/stalker.res",
                 DesignHeightMeters = 1.3f,
                 MaxHealth = 13.0f,
                 MoveSpeed = 4.2f,

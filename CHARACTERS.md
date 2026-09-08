@@ -9,10 +9,15 @@ below rather than quietly reversed.
 
 **The modelling half of this brief has been overtaken from an unexpected direction: the Drifter's
 body is now a downloaded model rather than an authored one.** `tactical_character.glb` bakes to
-`resources/bodies/tactical_survivor.res` and the Drifter loads it, and it satisfies the part of this
-brief that mattered most — §"The kit is where the silhouette lives" — off the shelf, wearing a plate
-carrier, gloves, a holster and boots. See README's Decisions and `ART.md §2` for why a 23,822-triangle
-body costs nothing here.
+`resources/bodies/drifter.res`, which is where `BodyBakes` looks for a survivor called Drifter, and it
+satisfies the part of this brief that mattered most — §"The kit is where the silhouette lives" — off
+the shelf, wearing a plate carrier, gloves, a holster and boots. See README's Decisions and
+`ART.md §2` for why a 23,822-triangle body costs nothing here.
+
+**A survivor's body is a file on a shelf now, so this brief is one intake command away from being
+answered rather than a modelling project.** `resources/bodies/courier.res` and `warden.res` are the
+two names that would finish the roster, and `art-src/models/intake.ps1 -Slot courier` is the command
+that writes one. Nothing below has to change for that to work.
 
 What that changes about the pages below: the *rules* a bakeable body has to obey are unchanged and are
 still enforced by `BakeBody`, so read them before putting any model through it. The *seven-survivor

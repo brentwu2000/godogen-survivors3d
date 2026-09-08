@@ -145,7 +145,11 @@ public partial class EnemyTypeProbe : SceneTree
             // Comparing to the design height with a loose tolerance would have
             // worked too, and would have been a band wide enough to hide a real
             // error. This is exact.
-            float expected = string.IsNullOrEmpty(type.BakedBodyPath)
+            // The shelf rather than the field, for the reason `BodyBakes` gives:
+            // `BakedBodyPath` is empty on every variant and a bake under the
+            // variant's own name is still what gets drawn.
+            float expected = string.IsNullOrEmpty(
+                    BodyBakes.Resolve(type.BakedBodyPath, type.TypeName))
                 ? BodyMeshLibrary.StandingHeight(
                       BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters))
                 : type.DesignHeightMeters;
@@ -192,9 +196,10 @@ public partial class EnemyTypeProbe : SceneTree
             Image? sprite = GD.Load<Texture2D>($"res://assets/sprites/enemies/{type.TypeName}.png")?.GetImage();
             if (sprite == null)
             {
-                if (!string.IsNullOrEmpty(type.BakedBodyPath))
+                string shelved = BodyBakes.Resolve(type.BakedBodyPath, type.TypeName);
+                if (!string.IsNullOrEmpty(shelved))
                 {
-                    GD.Print($"  {type.TypeName,-8} drawn from {type.BakedBodyPath} — "
+                    GD.Print($"  {type.TypeName,-8} drawn from {shelved} — "
                            + "no sprite to measure, height checked by BakeProbe");
                     continue;
                 }

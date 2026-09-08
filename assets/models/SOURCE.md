@@ -102,7 +102,13 @@ The pack is one file with ten characters and a floor tile in it, so the bake has
 to say which:
 
 ```bash
-godot --headless --script scripts/tools/BakeBody.cs --   res://assets/models/polyart_zombies.glb res://resources/bodies/polyart_male_c.res   2.0 0.55 0.30 0.035 node:rig_CharRoot007 "pose:Take 001@1.0" yaw:180
+# Into the walker slot, which is what a real intake does: slot: resolves the
+# destination and the design height, and the whole run is one command --
+#   powershell art-src/models/intake.ps1 -Model assets/models/polyart_zombies.glb \
+#       -Slot walker -Node rig_CharRoot007 -Pose "Take 001@3.5" -Yaw 180
+godot --headless --script scripts/tools/BakeBody.cs -- \
+  res://assets/models/polyart_zombies.glb slot:walker \
+  node:rig_CharRoot007 "pose:Take 001@3.5" yaw:180
 ```
 
 `ModelReport.cs -- <model> tree` lists the nodes. The characters are the
@@ -112,6 +118,32 @@ immediately above each rig is what names it.
 
 `pose:` is needed because the bind pose is a T-pose. `yaw:180` is needed because
 these face +Z and this game's bodies face -Z.
+
+**`Take 001@1.0` was the first frame tried and it is the wrong one**: at one
+second the character stands with its hands on its hips, and a bake freezes one
+frame forever. At 3.5 s it is mid-stagger with its arms hanging, which is what
+the shader's swing is added to. A pose time is worth trying three of.
+
+### The bake is committed as a candidate, and is not in the game
+
+`resources/bodies/polyart_male_c.res` is `lpMale_zombie_C` at 1,650 triangles,
+posed from `Take 001@3.5`. It is not a slot name, so `BodyBakes` does not pick
+it up — **renaming it to `walker.res` puts it in the game and deleting it takes
+it out again, and that is the whole of the decision.**
+
+It was baked into the walker slot, measured and looked at, and it is held back
+for a reason that is not about the model. As a *body* it is plainly better than
+the procedural walker: a lurching posture, a bloodstained vest, a face. As a
+*horde variant* it is a pale-skinned man, and the walker's green is a gameplay
+signal — the variants are told apart at 25 pixels by colour before anything
+else, and 150 of these read as a crowd of survivors. It also leaves the horde
+half authored and half boxes, which is the same inconsistency the survivor
+roster now has and is more visible at 150 instances than at three.
+
+The perf question it was meant to answer came back conclusively and is in
+`ART.md §2`: 200 of these measure 1.44 ms against the procedural body's 1.64,
+and 200 bodies at 23,822 triangles measure 3.41. Triangles are not what the
+horde costs.
 
 ## Unknown source — `tactical_character.glb`, the survivor the player controls
 
@@ -147,12 +179,18 @@ restriction).
 The bake, and it wants `yaw:180` like every +Z-facing import:
 
 ```bash
+powershell art-src/models/intake.ps1 -Model assets/models/tactical_character.glb \
+    -Slot drifter -Pose "IdleAnimation@2.5" -Yaw 180
+
+# or the bake on its own:
 godot --headless --script scripts/tools/BakeBody.cs -- \
-  res://assets/models/tactical_character.glb res://resources/bodies/tactical_survivor.res \
-  2.2 0.55 0.30 0.035 "pose:IdleAnimation@2.5" yaw:180
+  res://assets/models/tactical_character.glb slot:drifter \
+  "pose:IdleAnimation@2.5" yaw:180
 ```
 
-2.2 m is the Drifter's `BodyHeight` and not a property of the model. The
+`slot:drifter` writes `resources/bodies/drifter.res`, which is where `BodyBakes`
+looks, and takes the height from the survivor roster. 2.2 m is the Drifter's
+`BodyHeight` and not a property of the model. The
 `mixamorig_` prefix is what makes this one work at all: `BakeBody.Classify`
 matches on `thigh` / `arm` / `hand`, and Mixamo's names carry them, so 3,862 leg
 vertices and 5,729 arm vertices land in the right buckets and the shader swings

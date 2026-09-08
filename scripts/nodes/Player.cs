@@ -568,11 +568,30 @@ public partial class Player : CharacterBody3D
     private BodyMesh BuildBodyMesh(BodyMeshLibrary.Build spec)
     {
         CharacterResource who = CharacterBook.Load(GameSession.Character);
-        if (!string.IsNullOrEmpty(who.BakedBodyPath)
-            && ResourceLoader.Exists(who.BakedBodyPath))
+
+        // The survivor's own path if it names one, else `resources/bodies/
+        // <survivor>.res` if that file exists. See `BodyBakes`: the shelf is how
+        // a model gets into the game without a code edit, and the survivors are
+        // slots on it exactly as the horde variants are.
+        string path = BodyBakes.Resolve(who.BakedBodyPath, who.CharacterName);
+        if (!string.IsNullOrEmpty(path) && ResourceLoader.Exists(path))
         {
-            var baked = GD.Load<BakedBodyResource>(who.BakedBodyPath);
-            ArrayMesh? mesh = BakedBody.Build(baked);
+            var baked = GD.Load<BakedBodyResource>(path);
+
+            // The same check `BodyRenderer` makes on a horde variant, and it is
+            // worth more here: a bake half a metre out is a survivor whose feet
+            // are through the floor or whose head is in the camera, and the
+            // number it should have been baked at is a design decision recorded
+            // in `BuildCharacters` rather than anything the model knows.
+            if (baked != null && Mathf.Abs(baked.StandingHeight - who.BodyHeight) > 0.05f)
+            {
+                GD.PushWarning($"Player: {who.CharacterName} is {who.BodyHeight:F2} m and "
+                             + $"{path} stands at {baked.StandingHeight:F2} m — drawing the "
+                             + "procedural body. Re-bake at the survivor's height.");
+                baked = null;
+            }
+
+            ArrayMesh? mesh = baked != null ? BakedBody.Build(baked) : null;
             if (mesh != null)
             {
                 if (spec.Held != BodyMeshLibrary.Carry.None)

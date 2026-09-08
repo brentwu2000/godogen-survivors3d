@@ -61,13 +61,77 @@ public partial class BakeBody : SceneTree
     /// colour". Those are two independent code paths and they drifted once.
     public static Color Tint(string html) => Color.FromHtml(html).SrgbToLinear();
 
+    /// `slot:walker` in place of a destination path and a height.
+    ///
+    /// **These are the two arguments that are wrong most often, and both have a
+    /// correct value the game already knows.** The destination is
+    /// `resources/bodies/<slot>.res` because that is where `BodyBakes` looks, and
+    /// the height is the slot's own `DesignHeightMeters` or `BodyHeight` —
+    /// which is not a property of the model and never was. A bake at the model's
+    /// own scale is a body with its feet through the floor, and `BodyRenderer`
+    /// refuses one more than 5 cm out, so getting it from the table is the
+    /// difference between an intake that is one command and one that is a
+    /// command plus a lookup somebody does from memory.
+    ///
+    /// Rewritten into the positional form the rest of this file already parses,
+    /// rather than threaded through it. Everything else — swing, arm swing, bob,
+    /// a palette — keeps its position, so `slot:` composes with all of it.
+    private static string[] Slotted(string[] args)
+    {
+        int at = System.Array.FindIndex(args,
+            a => a.StartsWith("slot:", System.StringComparison.Ordinal));
+
+        if (at < 0)
+            return args;
+
+        string slot = args[at][5..].ToLowerInvariant();
+
+        if (!BodyBakes.Slots.Contains(slot))
+        {
+            GD.PushError($"\"{slot}\" is not a body slot. One of: "
+                       + string.Join(", ", System.Linq.Enumerable.OrderBy(BodyBakes.Slots, x => x)));
+            return args;
+        }
+
+        float height = BodyBakes.DesignHeight(slot);
+        if (height <= 0.0f)
+        {
+            GD.PushError($"{slot} is a slot with no resource to read a height from — "
+                       + "run BuildEnemyTypes.cs or BuildCharacters.cs first");
+            return args;
+        }
+
+        GD.Print($"  slot {slot}: {BodyBakes.PathFor(slot)} at {height:F2} m, "
+               + "from the table rather than from the model");
+
+        var rewritten = new System.Collections.Generic.List<string>
+        {
+            args[0], BodyBakes.PathFor(slot), height.ToString("R"),
+        };
+
+        // Everything after the source that was not the slot flag, in order. The
+        // source is args[0] in both forms, so a caller who passed a destination
+        // and a height as well loses them to the slot — which is the point.
+        for (int i = 1; i < args.Length; i++)
+        {
+            if (i == at || float.TryParse(args[i], out _) || args[i].EndsWith(".res", System.StringComparison.Ordinal))
+                continue;
+
+            rewritten.Add(args[i]);
+        }
+
+        return rewritten.ToArray();
+    }
+
     public override void _Initialize()
     {
-        string[] args = OS.GetCmdlineUserArgs();
+        string[] args = Slotted(OS.GetCmdlineUserArgs());
         if (args.Length < 3 || !float.TryParse(args[2], out float height))
         {
             GD.PushError("usage: BakeBody.cs -- <source.glb> <out.res> <height metres> "
-                       + "[swing] [armSwing] [bob] [rrggbb,rrggbb,...] [pose:<animation>[@seconds]]");
+                       + "[swing] [armSwing] [bob] [rrggbb,rrggbb,...] [pose:<animation>[@seconds]]"
+                       + "\n   or: BakeBody.cs -- <source.glb> slot:<walker|drifter|...> "
+                       + "[flags]  — destination and height from the slot itself");
             Quit(1);
             return;
         }

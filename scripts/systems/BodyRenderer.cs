@@ -176,8 +176,9 @@ public sealed class BodyRenderer
     /// name and everybody would feel.
     private static float BobFor(EnemyTypeResource type)
     {
-        if (!string.IsNullOrEmpty(type.BakedBodyPath)
-            && ResourceLoader.Load<BakedBodyResource>(type.BakedBodyPath) is { Bob: > 0.0f } baked)
+        string path = BodyBakes.Resolve(type.BakedBodyPath, type.TypeName);
+        if (!string.IsNullOrEmpty(path)
+            && ResourceLoader.Load<BakedBodyResource>(path) is { Bob: > 0.0f } baked)
             return baked.Bob;
 
         return BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters).Bob;
@@ -188,13 +189,17 @@ public sealed class BodyRenderer
         ArrayMesh Procedural() => BodyMeshLibrary.Build3D(
             BodyMeshLibrary.ForVariant(type.TypeName, type.DesignHeightMeters));
 
-        if (string.IsNullOrEmpty(type.BakedBodyPath))
+        // The resource's own path if it names one, else whatever is on the
+        // shelf under this variant's name. See `BodyBakes`.
+        string path = BodyBakes.Resolve(type.BakedBodyPath, type.TypeName);
+
+        if (string.IsNullOrEmpty(path))
             return Procedural();
 
-        var baked = ResourceLoader.Load<BakedBodyResource>(type.BakedBodyPath);
+        var baked = ResourceLoader.Load<BakedBodyResource>(path);
         if (baked == null)
         {
-            GD.PushWarning($"BodyRenderer: {type.TypeName} names {type.BakedBodyPath} and it did "
+            GD.PushWarning($"BodyRenderer: {type.TypeName} names {path} and it did "
                          + "not load — drawing it procedurally");
             return Procedural();
         }

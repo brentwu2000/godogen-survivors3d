@@ -44,7 +44,7 @@ public sealed class PropRenderer
         _kinds = kinds;
 
         Node = new Node3D { Name = "Props" };
-        StandardMaterial3D material = PropLibrary.Material();
+        Material material = PropLibrary.Material();
 
         foreach (PropKind kind in kinds)
         {

@@ -160,54 +160,13 @@ varying float body_glow;
 
 // --- cel shading ---------------------------------------------------------
 //
-// **Lambert is a lie this game cannot afford to tell.** A smooth cosine falloff
-// describes light on a curved surface, and there are no curved surfaces here:
-// every body is flat-shaded facets, so the falloff lands as a *gradient across a
-// flat plane*, which is the one thing that makes low-poly geometry look like
-// untextured low-poly geometry rather than like a drawing. It is also the single
-// clearest difference between this game's look and the stylised look it is
-// going for.
-//
-// Banding the diffuse turns each facet into one of a few flat values. That is
-// what cel shading *is*, and it happens to be exactly true here: a flat facet
-// really does receive one amount of light, and quantising only removes the
-// interpolation that was never describing anything.
-//
-// **Two, and three was tried first.** The argument for three was that a mid tone
-// is where the form of a limb lives — true of a *smooth* limb, and these are
-// six-sided prisms whose facets already quantise the light for free. A third
-// band on top of that quantisation lands between two facet values and reads as
-// noise rather than as roundness, and combined with a shadow floor it flattened
-// every body into one tone. Two tones and a hard terminator is what the look is.
-uniform int cel_bands : hint_range(2, 6) = 2;
-
-// How wide each riser of the staircase is, in units of a band.
-//
-// Not zero, and not for taste. A hard step aliases: the terminator is a
-// one-pixel line crawling across a facet as the body turns, and at a hundred and
-// fifty bodies that is a field of crawling lines. Softening it over three per
-// cent of a band costs nothing and is invisible except where it matters.
-uniform float cel_softness : hint_range(0.0, 0.5) = 0.06;
-
-// How dark the darkest band is, as a fraction of the brightest.
-//
-// A cel shadow is a *colour*, not an absence of light. At zero the unlit side of
-// every body is whatever the ambient happens to be, which on this map is a blue
-// sky and turns the horde's shadow side blue. 0.45 keeps the body's own hue in
-// its shadow, which is what a painted shadow does.
-uniform float cel_shadow : hint_range(0.0, 1.0) = 0.32;
-
-// A light along the silhouette, which is the other half of the look.
-//
-// Fresnel against the view, so it appears exactly where a body turns away —
-// which is the edge. It does two jobs at once: it draws the outline this game
-// cannot afford as geometry (an inverted-hull outline is a second draw of every
-// body, and there are a hundred and fifty of them), and it separates one body
-// from the body behind it in a crowd, which is the thing a flat-shaded horde is
-// worst at.
-uniform float rim_strength : hint_range(0.0, 2.0) = 0.10;
-uniform float rim_width : hint_range(1.0, 8.0) = 6.0;
-uniform vec4 rim_colour : source_color = vec4(0.72, 0.80, 0.95, 1.0);
+// `cel_bands`, `cel_softness`, `cel_shadow`, the three rim uniforms, `cel_ramp`,
+// `cel_lit` and `cel_rim` all live in the include. They were written here, for
+// the horde, and moved out unchanged the moment the props and the floor needed
+// the same lighting model — see `cel.gdshaderinc` for why each number is what it
+// is, and `ART.md §3` for why banding is the *correct* model here rather than a
+// style applied on top of a realistic one.
+#include "res://assets/shaders/cel.gdshaderinc"
 
 // How brightly a fully glowing vertex burns. High enough to survive the fog it
 // is meant to be seen through, and not so high that it lights the crowd around
@@ -354,31 +313,12 @@ void vertex() {
     body_tint = colour + vec3(INSTANCE_CUSTOM.z * 0.8);
 }
 
-/// One band of the staircase, with a soft riser.
-///
-/// `floor` gives the tread and `smoothstep` at the top of each fraction gives
-/// the riser, so the result is flat across most of a band and moves quickly at
-/// the edge. Dividing by the count at the end keeps the whole thing in 0..1
-/// however many bands there are.
-float cel_ramp(float x) {
-    float steps = float(cel_bands);
-    float scaled = clamp(x, 0.0, 1.0) * steps;
-    float tread = floor(scaled);
-    float riser = smoothstep(1.0 - cel_softness, 1.0, scaled - tread);
-
-    return min((tread + riser) / steps, 1.0);
-}
-
 void light() {
     // `NORMAL` and `LIGHT` are both view space here and both already normalised,
     // which is worth stating because the same names mean model space in the
     // vertex stage above.
     float towards = clamp(dot(NORMAL, LIGHT), 0.0, 1.0);
-
-    // The shadow floor is applied to the *ramp*, not to the result, so the
-    // darkest band still carries the light's colour and the body's albedo. A
-    // floor applied afterwards would be a grey wash over the shadow side.
-    float lit = mix(cel_shadow, 1.0, cel_ramp(towards));
+    float lit = cel_lit(towards);
 
     // **`ALBEDO` *and* a division by pi**, and both halves were got wrong once
     // on the way here, which is worth writing down because each failure looks
@@ -457,7 +397,7 @@ void fragment() {
     // a source even though it lights nothing.
     // The rim, added to emission rather than to albedo, so it survives being on
     // the unlit side of a body — which is the side it exists for.
-    float rim = pow(1.0 - clamp(dot(normalize(NORMAL), normalize(VIEW)), 0.0, 1.0), rim_width);
+    float rim = cel_rim(NORMAL, VIEW);
 
     EMISSION = body_tint * body_glow * GLOW_STRENGTH
              + rim_colour.rgb * rim * rim_strength;

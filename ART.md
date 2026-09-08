@@ -18,8 +18,10 @@ here or actively cost.
 ## 1. What the renderer is, and what that forbids
 
 **The horde is one `MultiMesh` per variant.** One mesh, N instance transforms.
-That is how a hundred and fifty bodies cost 6.90 ms, and it has been defended
-since Phase 2.
+That is how two hundred bodies cost 1.64 ms — see §2, and note that the 6.90 ms
+this line used to quote was a headless measurement of nothing. It has been
+defended since Phase 2 and it is defended by the draw call count rather than by
+the triangle count.
 
 A `MultiMesh` has **no skeleton**. So the walk is a function evaluated per vertex
 in `body.gdshader`, from a rig baked into the mesh: a swing amplitude and a pivot
@@ -52,43 +54,61 @@ mesh variants.
 Cost is **triangles × instances on screen**. There is no skinning cost, no
 animation cost and no per-enemy node, so this is the *only* thing that scales.
 
-| | Triangles each | On screen | Total | Verdict |
-| :--- | ---: | ---: | ---: | :--- |
-| Procedural body (now) | ~460–570 | 150 | ~70,000 | 6.90 ms, 145 fps median |
-| **Horde target** | **800–2,000** | 150 | 120K–300K | Plausible; measure with `HordePerf` |
-| Polyart pack (downloaded) | 1,588–1,990 | 150 | 240K–300K | At the top of the band |
-| Aiden Studios zombie | 19,508 | 150 | 2,900,000 | **No.** Forty times the budget |
-| Oscar Creativo zombie | 141,500 | 150 | 21,000,000 | **No** |
-| **Tactical character (the player)** | **23,822** | **1** | **23,822** | **In the game.** A third of the horde's total, for the one body anybody looks at |
+**Measured on this machine, 200 walkers, same session, one variable.** Each row
+is the same scene with a different body on the shelf — RTX 3070 Ti, 1080p, vsync
+off, player moving so the flow field rebuilds:
 
-**But a boss is one to two on screen, and that changes the answer completely.**
-Every variant already has its own `MultiMesh` and its `VisibleInstanceCount` is
-the number alive, so a 20–30K boss costs 20–60K triangles total — *less than the
-walker horde*. The expensive tier is free here in a way it is not in the
-architecture most asset advice is written for.
+| Body | Triangles each | On screen | Total | Frame mean | Median | p95 | Draw calls |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Procedural | ~460 | 200 | 92,000 | 1.64 ms | 0.90 ms | 2.03 ms | 70 |
+| Polyart zombie | 1,650 | 200 | 330,000 | **1.44 ms** | 1.28 ms | 2.45 ms | 68 |
+| Tactical character | 23,822 | 200 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
+
+**A 3.6x increase in triangles cost nothing measurable, and a 52x increase cost
+2.1x the frame time and still held 293 fps.** The horde is not triangle-bound
+anywhere near the band this file used to give. 500 mixed enemies on procedural
+bodies measure 1.23 ms and 91 draw calls, so the roster is not the cost either.
+
+**The old number in this table was 6.90 ms and it measured no rendering at all.**
+`ART.md` said to measure with `godot --headless --script test/HordePerf.cs`, and
+under the dummy driver every one of the three rows above reports 6.90 ms and
+145 fps to the decimal — 460 triangles and 23,822 alike — with `avg draw calls 0`
+printed underneath, which read as a `MultiMesh` triumph. `HordePerf` calls
+`Display.Required` now and refuses to run headless. Every tier below was reasoned
+from that number.
 
 | Tier | On screen | Budget each | Decimation |
 | :--- | ---: | ---: | :--- |
-| Horde — walker, runner, spitter | 150 | 800–2,000 | Usually needed |
-| Standard — brute | 10–20 | 2,000–6,000 | Sometimes |
-| Boss / elite | 1–2 | 20,000–40,000 | Rarely |
+| Horde — walker, runner, spitter | 150 | up to ~4,000 | Rarely, on this GPU |
+| Standard — brute | 10–20 | up to ~20,000 | No |
+| Boss / elite | 1–2 | 20,000–40,000 | No |
 | **Player** | **1** | **20,000–40,000** | **Never** |
+
+The horde row is the only one that moved and it is deliberately not the measured
+ceiling. 23,822 at 200 instances runs, so ~4,000 is not a limit — it is a margin
+against the two things this measurement does not cover: **a mobile GPU, which is
+unmeasured everywhere in this project**, and a horde of *several* authored
+variants at once rather than one repeated 200 times. Bring a 2,000-triangle body
+and there is no question to ask; bring a 6,000-triangle one and the answer is
+probably still yes and wants one `HordePerf` run.
+
+**A boss is one to two on screen, and that was always the free tier.** Every
+variant has its own `MultiMesh` and its `VisibleInstanceCount` is the number
+alive, so a 30K boss costs 60K triangles total — less than the walker horde, in
+an architecture most asset advice is not written for.
 
 **The player is the cheapest body in the game and the only one the camera is
 pointed at**, which makes it the first place to spend and the last place this
 project looked. It is one draw call at whatever the model arrives as, it is
-centre-frame for the whole run, and it is the one body a screenshot is *of*. A
-survivor is worth thirty horde variants of attention and a fiftieth of the
-triangle discipline.
+centre-frame for the whole run, and it is the one body a screenshot is *of*.
 
-Anything can be brought into range: `art-src/models/decimate.py` runs Blender's
-collapse decimation and is verified on the two largest models in the tree —
-28,004 → 1,760, and 132,169 → 1,978 **with the skeleton and all seventeen
-skinned meshes intact**, which is the half that matters because the pose is
-applied through the skin.
+Anything can still be brought into range: `art-src/models/decimate.py` runs
+Blender's collapse decimation and is verified on the two largest models in the
+tree — 28,004 -> 1,760, and 132,169 -> 1,978 **with the skeleton and all
+seventeen skinned meshes intact**. What has changed is how rarely it is needed.
 
-So a high triangle count is not disqualifying. It is a step, and the step costs
-silhouette detail, which is the thing this game reads bodies by.
+So a high triangle count is not disqualifying. It is a step, the step costs
+silhouette detail, and the step is usually unnecessary.
 
 ---
 
@@ -96,11 +116,14 @@ silhouette detail, which is the thing this game reads bodies by.
 
 **Cel-shaded stylised, and the reason is technical before it is aesthetic.**
 
-`body.gdshader` now bands the diffuse into two flat tones with a hard
-terminator, plus a fresnel rim along the silhouette. That was not a style choice
+`cel.gdshaderinc` bands the diffuse into flat tones with a hard terminator, plus
+a fresnel rim along the silhouette, and every solid surface in the arena includes
+it: the horde and the player through `body.gdshader`, cover and scenery through
+`prop.gdshader`, the floor through `ground.gdshader`. That was not a style choice
 applied to a realistic game; it was the correct lighting model for geometry that
 is entirely flat facets. A smooth cosine falloff describes light on a curved
-surface, and there are no curved surfaces here.
+surface, and a box face is not one — it receives exactly one amount of light, and
+the gradient across it was describing nothing.
 
 Which means:
 
@@ -112,7 +135,8 @@ and moves like a mannequin — a poor man's uncanny valley.
 **Stylised assets assume what this engine already is.** Flat colour, simplified
 geometry, large readable silhouettes, posed rather than simulated motion, colour
 doing the work that lighting does elsewhere. That is the same language as
-"500–2,000 triangles, rigid limb swing, vertex colours".
+"rigid limb swing, vertex colours, no normal map" — which is a description of
+authoring style and, since §2 was measured, not of a triangle count.
 
 Concretely, a candidate should have:
 
@@ -232,33 +256,63 @@ unscheduled dependency, and it should be scheduled.
 
 Each step exists because something failed without it.
 
+**One command, and it is the list below in order:**
+
+```powershell
+powershell art-src/models/intake.ps1 -Model ~/Downloads/thing.glb -Slot walker `
+    -Node rig_CharRoot007 -Pose "Take 001@1.0" -Yaw 180
+```
+
+It copies the file into `assets/models/`, hashes it, says whether the register
+already knows that hash, imports, reports the tree, counts **the named node's**
+triangles rather than the file's, checks them against the slot's tier, bakes,
+writes the lineup and a screenshot of the running game, and prints the section 8
+checklist with everything a script can know already filled in. It stops at the
+first step that fails and names the flag that is missing.
+
+Nothing else is needed to get the body into the game. `resources/bodies/<slot>.res`
+*is* the body for that slot — see `BodyBakes` — so the bake landing there is the
+whole of "applying" it: no `BakedBodyPath`, no rebuild of the resource tables, no
+code change. Deleting the file puts the procedural body back.
+
+The steps, for when one of them has to be run alone:
+
 ```bash
 # 1. What is actually in the file. A pack's totals describe the file, not a body.
 godot --headless --script test/ModelReport.cs -- res://assets/models/thing.glb tree
 
-# 2. Bring it into budget, if it is over. Skeleton and skins survive.
-blender --background --python art-src/models/decimate.py -- \
-  in.glb out.glb 1600
+# 2. Bring it into budget, if it is over. Rarely needed since section 2 was measured.
+blender --background --python art-src/models/decimate.py -- in.glb out.glb 4000
 
-# 3. Bake to a MultiMesh-able body.
+# 3. Bake. `slot:` resolves both the destination and the height.
 godot --headless --script scripts/tools/BakeBody.cs -- \
-  res://assets/models/thing.glb res://resources/bodies/thing.res \
-  2.0 0.55 0.30 0.035 node:rig_CharRoot007 "pose:Take 001@1.0" yaw:180
+  res://assets/models/thing.glb slot:walker node:rig_CharRoot007 \
+  "pose:Take 001@1.0" yaw:180
 
-# 4. Look at it next to what it is replacing. This is the decision.
-godot --script test/BodyShot.cs -- one:walker still front baked:res://resources/bodies/thing.res
+# 4. Look at it next to what it is replacing. This is the decision. `raw` draws
+#    the procedural body and `baked:` appends the candidate, so both stand in one
+#    frame; without `raw` the candidate stands next to itself, because BodyShot
+#    reads the shelf too.
+godot --script test/BodyShot.cs -- one:walker raw front baked:res://resources/bodies/walker.res
 
-# 5. Measure. 150 instances at the new count.
-godot --headless --script test/HordePerf.cs
+# 5. Measure. Never with --headless: the dummy driver renders nothing and
+#    reports 6.90 ms for every triangle count there is.
+godot --script test/HordePerf.cs
 ```
 
-**Steps 2 and 5 are the horde's, and a survivor skips both.** Nothing is
-decimated for a body that draws once, and `HordePerf` measures a `MultiMesh` the
-player is not in. The survivor's steps 4 and 5 are a lineup against the two it
-stands beside on the select screen, and the game itself:
+**`slot:` is why steps 3 and 5 stopped being where intakes go wrong.** The
+destination and the height were two arguments the caller had to know, and the
+height is not a property of the model — it is `DesignHeightMeters` from the enemy
+table or `BodyHeight` from the survivor roster. `BakeBody` reads both from the
+slot now.
+
+**A survivor skips steps 2 and 5.** Nothing is decimated for a body that draws
+once, and `HordePerf` measures a `MultiMesh` the player is not in. Its step 4 is
+the roster lineup against the two survivors it stands beside on the select
+screen, which `intake.ps1` picks by itself from the slot name:
 
 ```bash
-godot --script test/BodyShot.cs -- roster front baked:res://resources/bodies/thing.res
+godot --script test/BodyShot.cs -- roster front baked:res://resources/bodies/drifter.res
 godot --script test/Screenshot.cs
 ```
 
@@ -309,10 +363,16 @@ Fill one in per model before downloading anything else.
 
 ## 9. What is not done yet, and is not an asset problem
 
-- **The props and the ground are not cel-shaded.** `PropLibrary` uses
-  `StandardMaterial3D` and `ground.gdshader` is its own thing, so cover and floor
-  are still smoothly shaded under a banded horde. This is the largest remaining
-  inconsistency and needs no new art.
+- ~~**The props and the ground are not cel-shaded.**~~ Done. `cel.gdshaderinc`
+  holds the ramp, the shadow floor and the rim, and all three shaders include it:
+  `body.gdshader` where it was written, the new `prop.gdshader` — which replaced
+  a `StandardMaterial3D` and changed nothing but the lighting — and
+  `ground.gdshader`. The floor takes four bands against a body's two, because it
+  is the one surface in this game that is genuinely curved: `GroundMesh` builds
+  6,561 smooth-shaded vertices from `Terrain`, and two bands across an arena is
+  two continents. It also takes no rim: on a floor the whole horizon is
+  silhouette, and a fresnel edge draws a bright band exactly where the fog is
+  trying to make things disappear.
 - **The painted skin plates are semi-realistic.** `skin_infected` and
   `skin_mutant` are rendered rot and hide; flat colour with drawn detail would
   suit the bands better. Regenerable from `art-src/textures/`.
@@ -321,7 +381,19 @@ Fill one in per model before downloading anything else.
   by side in `BodyShot -- roster` that is not three survivors, it is one survivor
   and two placeholders, and the character-select screen shows all three. Either
   the other two get bodies from the same source or the Drifter loses its own —
-  and the first authored body to win its lineup is not the one to give up.
+  and the first authored body to win its lineup is not the one to give up. Two
+  files finish it: `resources/bodies/courier.res` and `warden.res`.
+- **A horde variant's colour is a gameplay signal, and a downloaded body brings
+  its own.** One polyart zombie was baked into the walker slot and held back for
+  this and nothing else: it is a better body and it is a pale-skinned man, and
+  the walker is read as *infected* at 25 pixels by being green. A monster model
+  wants its role's colour in its albedo, or one surface per part so `--tint` can
+  put it there. `assets/models/SOURCE.md` has the picture and the decision.
+- **Half a horde is worse than none.** Nine variants, and an authored one beside
+  eight boxes reads as a bug rather than as an upgrade — more visible at 150
+  instances than the survivor roster's version of the same split is at three. The
+  order to do this in is walker, runner, spitter (the three that fill the screen),
+  and then brute and boss; the four in §4 stay procedural forever.
 - **No attribution surface**, per §6.
 - **The fog and sky are realistic in hue.** A stylised palette usually wants
   fewer, more saturated steps.

@@ -278,6 +278,12 @@ public partial class Horde : Node3D
                 foreach (EnemyTypeResource type in Types)
                     tallest = Mathf.Max(tallest, type.DesignHeightMeters * maxScale);
 
+                // One line saying which slots the shelf answered for. A
+                // convention that picks files up by name has exactly one failure
+                // mode — picking up a file nobody meant — and it is invisible by
+                // construction, because no code mentions the file.
+                BodyBakes.Announce();
+
                 // Capacity per variant rather than divided among them. A horde
                 // that happens to be all walkers is an ordinary early run, not an
                 // edge case, and a shared budget would silently stop drawing the

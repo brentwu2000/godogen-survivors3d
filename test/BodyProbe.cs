@@ -340,7 +340,14 @@ public partial class BodyProbe : SceneTree
             // disagrees with the table, and `BodyMeshLibrary` has never heard of
             // the variant — `ForVariant` falls through to the walker's build and
             // predicts a *biped's* standing height for a creature on four legs.
-            bool baked = !string.IsNullOrEmpty(_horde.Types[variant].BakedBodyPath);
+            // The shelf, not the field. `BakedBodyPath` is empty for every
+            // variant now and two of them are still drawn from a bake — see
+            // `BodyBakes`, which resolves `resources/bodies/<variant>.res` by
+            // name. Reading the field alone predicted a *procedural* height for
+            // a baked body and failed on the first model anybody dropped in,
+            // which is the one moment this probe most needs to be right.
+            bool baked = !string.IsNullOrEmpty(
+                BodyBakes.Resolve(_horde.Types[variant].BakedBodyPath, _horde.Types[variant].TypeName));
             float predicted = baked ? designed : BodyMeshLibrary.StandingHeight(spec);
 
             // Two links, checked separately. The mesh must be exactly as tall as

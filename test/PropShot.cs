@@ -115,7 +115,7 @@ public partial class PropShot : SceneTree
             MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.34f, 0.33f, 0.31f) },
         });
 
-        StandardMaterial3D material = PropLibrary.Material();
+        Material material = PropLibrary.Material();
 
         float span = kinds.Length * Spacing;
         float x = -span * 0.5f + Spacing * 0.5f;

@@ -25,9 +25,13 @@ blend shapes and per-instance mesh variants are all worth nothing here — becau
 which of two good-looking models is usable and none of it is guessable from a screenshot.
 
 **The survivor the player controls is an authored model**, and the rest of the bodies are still built
-by `MeshBuilder`. That split is the budget rather than a compromise: the player is one body on screen
-in the tier a boss occupies, so it costs 23,822 triangles against the horde's 70,000 for a hundred and
-fifty, and it is the only body the camera is pointed at.
+by `MeshBuilder`. Which of the twelve are which is decided by what is in `resources/bodies/`: a bake
+named after its slot *is* that slot's body, so applying a model is a file landing there and undoing it
+is deleting the file. `art-src/models/intake.ps1` takes a `.glb` to that file in one command, and
+`ART.md` is the brief for choosing one.
+
+The measured cost of doing it is in Performance and it is close to nothing: 200 bodies at 1,650
+triangles run marginally faster than 200 at 460, and 200 at 23,822 still hold 293 fps.
 
 The billboard sprite path is still there and still works, behind `Horde.SolidBodies` — it is the
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
@@ -1313,11 +1317,85 @@ baked with two blank white sclerae and looked possessed at any range close enoug
 bone is also the better classifier: a prop pinned to a hand bone now gets the arm swing rather than
 none.
 
+**A body is a file on a shelf, and that is the whole of "applying" a model.**
+`resources/bodies/<slot>.res` is the body for that slot — `walker` through `boss` from the enemy
+table, `drifter` / `courier` / `warden` from the survivor roster — and `BodyBakes` resolves it by
+name. Drop a bake in and it is drawn; delete it and the procedural body comes back. `BakedBodyPath`
+still wins where it is set and is empty on all twelve now.
+
+It replaced twelve string literals in two build tools, each of which had to be edited, compiled and
+re-run before anybody could *look* at a model — and looking at it is the decision. Two rounds of
+authored humanoids were judged too late, and part of the reason is that seeing one in the game was a
+twenty-minute errand. It is one command now: `art-src/models/intake.ps1` copies the file in, hashes
+it, says whether `SOURCE.md` already knows that hash, imports, reports the tree, counts **the named
+node's** triangles rather than the file's, checks the slot's tier, bakes with `slot:` — which
+resolves the destination and the design height, the two arguments nobody gets right — and writes the
+lineup and a screenshot of the running game.
+
+**Four things read a bake and only two of them were reading it from the resource.** `BodyRenderer`
+and `Player` were the pair anybody would think to change; `BodyProbe`, `EnemyTypeProbe` and
+`BodyShot` each tested `BakedBodyPath` for emptiness too, and each was wrong in a different way once
+the field went empty. `BodyProbe` predicted a *procedural* height for a baked body and failed on the
+first model dropped in, which is the one moment it most needs to be right. `BodyShot` drew the
+procedural body for a variant the game draws from a bake — a lineup of the thing being replaced,
+captioned as the replacement, which is worse than no lineup. All five go through `BodyBakes.Resolve`.
+
+**One polyart zombie was baked into the walker slot, measured, looked at, and held back.** As a body
+it beats the procedural walker outright: a lurching posture, a bloodstained vest, a face. As a horde
+variant it is a pale-skinned man, and the walker's green is a gameplay signal — variants are told
+apart at 25 pixels by colour before anything else, and a hundred and fifty of these read as a crowd
+of survivors. It also leaves the horde half authored and half boxes. The bake is committed as
+`resources/bodies/polyart_male_c.res`, which is not a slot name; renaming it to `walker.res` puts it
+in the game and deleting it takes it out, and that is the entire decision either way.
+
+**The floor and the cover are cel shaded now, and the horde had been for a phase without them.**
+`body.gdshader` banded the diffuse into two flat tones; `PropLibrary` handed every prop a
+`StandardMaterial3D` and `ground.gdshader` ran `diffuse_burley`, so the arena was a smoothly-lit
+floor and smoothly-lit crates under a banded crowd. The ramp, the shadow floor and the rim moved
+into `cel.gdshaderinc` unchanged and all three shaders include it. A prop is the case banding is
+*most* correct for: a body is flat facets approximating a limb, and a container is an actual box.
+
+**The floor takes four bands against a body's two, and that is not a compromise.** The include
+argues for two on the grounds that a body's facets quantise the light for free, so a third band
+lands between two facet values and reads as noise. `GroundMesh` builds a heightmapped surface of
+6,561 smooth-shaded vertices from `Terrain` — the one thing in this game where a mid tone describes
+real form, and where two bands across an arena would be two continents. It also takes no rim: on a
+floor the whole horizon is silhouette, and fresnel draws a bright band across the far edge exactly
+where the fog is meant to be hiding things.
+
 ## Performance
 
-RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds:
+RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds.
 
-| 500 enemies | Mean | Median | p95 | Draw calls | GC |
+**The triangle count of a body is not what the horde costs, and this is the
+measurement that says so.** Same scene, same session, 200 walkers, one variable —
+which body is on the shelf:
+
+| 200 walkers | Triangles each | Total | Mean | Median | p95 | Draw calls |
+| :--- | ---: | ---: | ---: | ---: | ---: | ---: |
+| procedural | ~460 | 92,000 | 1.64 ms | 0.90 ms | 2.03 ms | 70 |
+| authored, Polyart | 1,650 | 330,000 | 1.44 ms | 1.28 ms | 2.45 ms | 68 |
+| authored, tactical | 23,822 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
+| 500 mixed, procedural | ~460–570 | ~250,000 | 1.23 ms | 1.01 ms | 2.13 ms | 91 |
+
+3.6x the triangles cost nothing measurable. **52x the triangles cost 2.1x the
+frame time and still held 293 fps**, which is a body forty times over the budget
+`ART.md` used to publish, at 200 instances. The tier table there has been
+rewritten around these numbers.
+
+**The number this table used to give was 6.90 ms and it measured no rendering at
+all.** `HordePerf` was documented and run as `godot --headless --script
+test/HordePerf.cs`, and the dummy display driver draws nothing: all four rows
+above report 6.90 ms and 145 fps to the decimal under it, with `avg draw calls 0`
+printed underneath, which reads as a MultiMesh triumph rather than as an empty
+frame. The file's own doc comment said "not headless" for eleven phases, which is
+the same "a comment is not a check" that `test/Display.cs` exists for — and it
+now calls `Display.Required` like the five capture scripts do.
+
+The older sprite-path measurements, kept because the billboard fallback is still
+shipped and still has to hold up:
+
+| 500 enemies, sprites | Mean | Median | p95 | Draw calls | GC |
 | :--- | ---: | ---: | ---: | ---: | ---: |
 | walkers only | 1.94 ms | 1.09 ms | 2.11 ms | 19 | 0 |
 | mixed roster | 2.04 ms | 2.18 ms | 3.32 ms | 19 | 0 |
@@ -1594,7 +1672,9 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/sprites/blob_shadow.png` | generated | 128×128 | ground decal |
 | `assets/shaders/horde_billboard.gdshader` | hand-written | — | horde + projectiles |
 | `assets/shaders/vignette.gdshader` | hand-written | — | full-screen damage tint |
-| `assets/shaders/ground.gdshader` | hand-written | — | tiled floor, tinted per grid cell |
+| `assets/shaders/ground.gdshader` | hand-written | — | tiled floor, tinted per grid cell, cel shaded at four bands |
+| `assets/shaders/prop.gdshader` | hand-written | — | cover and scenery: vertex colour, cel shaded |
+| `assets/shaders/cel.gdshaderinc` | hand-written | — | the ramp, the shadow floor and the rim, included by all three |
 | `assets/shaders/effect.gdshader` | hand-written | — | additive billboard puffs |
 | `assets/shaders/ground_marker.gdshader` | hand-written | — | burning ground and the extraction ring |
 | `assets/textures/ground.png` | `art-src/textures/ground_raw.png`, via `make_ground.py` | 1024×1024, tileable | 4.5 m tile |
@@ -1667,13 +1747,19 @@ person**, not things that need code.
   wears kit; the Courier and the Warden are blocks in different colours. Either the other two get
   bodies from the same source or the Drifter loses its own, and the first authored body to win its
   lineup is not the one to give up. `ART.md §9` carries this as the largest remaining art
-  inconsistency after the props.
+  inconsistency after the props. What it needs is two files: `resources/bodies/courier.res` and
+  `warden.res`, one `intake.ps1` run each, no code.
+
+  **The horde has the same split available and it is held back on purpose.** One polyart zombie
+  bakes into the walker slot and looks better than the procedural walker; 150 of it read as a crowd
+  of pale survivors rather than as infected, because colour is how a variant is told apart at 25
+  pixels. See Decisions and `assets/models/SOURCE.md`.
 
   `CharacterResource.BakedBodyPath` and `EnemyTypeResource.BakedBodyPath` still work and are still
   read — `Player.CreateBody` loads the bake, appends the held weapon's procedural silhouette to the
   same surface, and falls back to `SoloBody` when the path is empty or the bake will not build; an
   empty path *is* the procedural path. **Two bakes are pointed at**: the stalker, because a quadruped
-  is a silhouette `MeshBuilder` cannot express, and `tactical_survivor.res` for the Drifter. The eight
+  is a silhouette `MeshBuilder` cannot express, and the Drifter. The eight
   dead `.res` files stay on disk and `BakeProbe` keeps checking them; nothing loads them.
 
   **The new one has the same provenance gap as the old one and it is not fixed, only bounded.**
@@ -1698,9 +1784,12 @@ person**, not things that need code.
   `export_presets.cfg` is written and committed — arm64, landscape locked, no permissions, `art-src/`
   excluded — so with those three in place it is one `godot --headless --export-debug "Android"`. A
   preset that has never produced an APK is a plan, not a build, and it is listed here as one.
-- **Mobile performance is unmeasured.** 150–200 concurrent enemies is a desktop measurement and an
-  estimate everywhere else. If a real device falls short, cut the distance-tiering thresholds before
-  cutting enemy count.
+- **Mobile performance is unmeasured**, and it is now the only place the triangle budget is still a
+  guess. 150–200 concurrent enemies is a desktop measurement and an estimate everywhere else, and
+  `ART.md §2`'s horde ceiling of ~4,000 triangles is a margin against a mobile GPU rather than
+  anything this machine objected to — it drew 200 bodies at 23,822 each. If a real device falls
+  short, cut the distance-tiering thresholds before cutting enemy count, and re-take the table in
+  Performance with the same three bodies.
 - **`test/TouchProbe.cs` needs a real display** and so has never run in the regression sweep. The
   headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
   whose tests are green only when someone runs them by hand.

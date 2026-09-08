@@ -416,13 +416,24 @@ public partial class BodyShot : SceneTree
 
         height = type.DesignHeightMeters;
 
-        if (!_raw && !string.IsNullOrEmpty(type.BakedBodyPath))
+        // Through `BodyBakes`, so this shows what the game draws rather than
+        // what the resource file mentions. A bake dropped onto the shelf under a
+        // variant's name is that variant's body from the moment it lands, and a
+        // lineup that kept drawing the procedural one would be a tool quietly
+        // narrowing what it shows — the same failure as the paragraph above.
+        //
+        // `raw` is the flag for the other question, and an intake wants both in
+        // one frame: `one:walker raw baked:res://…/walker.res` stands the
+        // procedural body beside the candidate, which is the comparison.
+        string path = BodyBakes.Resolve(type.BakedBodyPath, name);
+
+        if (!_raw && !string.IsNullOrEmpty(path))
         {
-            var baked = GD.Load<BakedBodyResource>(type.BakedBodyPath);
+            var baked = GD.Load<BakedBodyResource>(path);
             if (baked != null)
                 return BakedBody.Build(baked);
 
-            GD.PushWarning($"{name} names {type.BakedBodyPath} and it did not load");
+            GD.PushWarning($"{name} names {path} and it did not load");
             return null;
         }
 

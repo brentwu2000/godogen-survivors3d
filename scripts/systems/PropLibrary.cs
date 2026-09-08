@@ -163,15 +163,28 @@ public static class PropLibrary
 
     /// One shared material for every prop. Vertex colour is the albedo, so the
     /// palette lives in the geometry and this never has to grow a variant.
-    public static StandardMaterial3D Material() => new()
+    ///
+    /// **A `ShaderMaterial` now, and nothing about the props changed except how
+    /// they are lit.** This was a `StandardMaterial3D` with
+    /// `VertexColorUseAsAlbedo` and Godot's own Burley diffuse, which meant the
+    /// arena was smoothly-shaded cover under a cel-banded horde — the largest
+    /// remaining inconsistency in the look, per `ART.md §9`, and one that needed
+    /// no new art. `prop.gdshader` reads `COLOR` exactly as the old material did
+    /// and bands the diffuse with the same ramp `body.gdshader` uses; a box face
+    /// receives one amount of light, so the gradient across it was describing
+    /// nothing.
+    ///
+    /// Typed as `Material` rather than as the concrete class, because two
+    /// callers declared `StandardMaterial3D` locals and the only thing either of
+    /// them does with it is hand it to `SurfaceSetMaterial`.
+    ///
+    /// Loaded per call rather than cached, and that is deliberate: the two
+    /// lifetime bugs in the note below are what a shared `ShaderMaterial` across
+    /// arenas costs, and a material is not what an arena's frame time is spent
+    /// on.
+    public static Material Material() => new ShaderMaterial
     {
-        VertexColorUseAsAlbedo = true,
-        Roughness = 0.92f,
-        Metallic = 0.0f,
-
-        // Boxes are closed and correctly wound, so back faces are never needed —
-        // and leaving culling on is what keeps the shadow pass honest.
-        CullMode = BaseMaterial3D.CullModeEnum.Back,
+        Shader = GD.Load<Shader>("res://assets/shaders/prop.gdshader"),
     };
 
     /// Kinds whose geometry comes from an authored model rather than from boxes.

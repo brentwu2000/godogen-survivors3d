@@ -9,7 +9,15 @@
 // been twenty-five more, on the pass that has been held near twenty since
 // Phase 2.
 shader_type spatial;
-render_mode cull_back, diffuse_burley, specular_disabled;
+
+// No `diffuse_*`: the `light()` function below replaces the built-in diffuse
+// entirely, and the render mode would be read and ignored. It was
+// `diffuse_burley`, which is a model for a rough dielectric and describes this
+// floor well — and described it while the horde standing on it was banded into
+// two flat tones, which is the inconsistency `ART.md §9` named.
+render_mode cull_back, specular_disabled;
+
+#include "res://assets/shaders/cel.gdshaderinc"
 
 uniform sampler2D detail : source_color, filter_linear_mipmap, repeat_enable;
 
@@ -79,4 +87,19 @@ void fragment() {
 
     ALBEDO = base * mix(vec3(1.0), macro * 1.55, 0.4) * tint * shade;
     ROUGHNESS = 1.0;
+}
+
+void light() {
+	// **Four bands here against the horde's two, and the difference is that this
+	// surface is actually curved.** `cel.gdshaderinc` argues for two on the
+	// grounds that a body is flat facets which already quantise the light for
+	// free, so a third band lands between two facet values and reads as noise.
+	// The floor is the opposite case: `GroundMesh` builds a heightmapped surface
+	// of 6,561 smooth-shaded vertices from `Terrain`, and a rolling hill is one
+	// of the few things in this game where a mid tone describes real form. Two
+	// bands across an arena-sized surface is two continents.
+	//
+	// Set from `BuildMain` rather than defaulted here, because the uniform lives
+	// in the include and one default has to serve three shaders.
+	DIFFUSE_LIGHT += cel_lit(dot(NORMAL, LIGHT)) * ATTENUATION * LIGHT_COLOR * ALBEDO / PI;
 }
