@@ -1465,6 +1465,36 @@ pivot, so reconstruction moved the resting shot a few centimetres and the "pulli
 distance and nothing else" check read 0.996 against its threshold. Pitching rotates the real offset
 about the pivot, which is exact at rest by construction.
 
+**The five characters came back rebuilt against `ART.md` §10, and four of the five asks landed.**
+
+**The eyes are fixed and it took geometry.** Per-vertex sampling cannot reproduce a painting a few
+millimetres across inside a UV island, which is why every survivor had blown-white sclerae for three
+phases; the iris, pupil and highlight are separate meshes bound to `Head` now, and the sampler has
+something to sample. This is the defect that had been carried longest and it closed without a line of
+engine code.
+
+**`BakePose` removes the last guess from an intake.** One frame, arms down, empty-handed, in all five
+files — so the pose argument is a name rather than a search. Every earlier survivor's frame was found
+by trying three.
+
+**Emissive renders, and three of five characters use it.** Vertex alpha 0 on RIN's backpack stripes,
+MIKA's sleeve modules and YUNA's cross bars; AKIRA and SORA have none, because their greatsword and
+flying swords are separate equipment files rather than parts of the body. It is the cheapest visual
+return in the pipeline and it is still mostly unclaimed.
+
+**The colour ask was answered and my target for it was wrong.** I asked for one region of identity
+colour big enough to move the mean past `PaletteProbe`'s 0.35, and got exactly that — red jackets,
+a blue coat, a green medical shell, violet — and **four of the five means moved closer to the
+horde**, because a saturated red averaged with a face and black cloth is a desaturated warm grey. A
+body's mean cannot reach 0.35 while a face is in frame, and `CHARACTERS.md` had already said so
+before the ask went out.
+
+So `BakeProbe` prints a second number: **what share of the body sits past 0.35 from everything in the
+horde**. RIN 12.6%, MIKA 12.0%, AKIRA 26.0%, SORA 25.2%, YUNA 9.8% — and the stalker, a horde body
+used as a control, 0.0%. That control is why the number is trustworthy, and it is the standing
+request now. There is no threshold on it: five samples between 9.8% and 26.0% is not enough to set
+one.
+
 ## Performance
 
 RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds.
@@ -1924,23 +1954,17 @@ person**, not things that need code.
   shapes of their kind on screen. A good outcome from an unasserted property, not a safe one — the
   next survivor could be dark, matte and short-haired and nothing would catch it. `CHARACTERS.md`
   carries the table.
-- **No survivor has irises, and the fix is the one thing only the player can afford.** All five bake
-  exactly right — black jacket, ivory chest panel, red ribbons and headset plates, gloves,
-  thigh bands, lips, blush — and every one of them has blown-white sclerae with no iris. A vertex takes
-  one texel, which is exact for a flat patch of colour and wrong for *drawn detail*: the iris is
-  painted inside a UV island a few millimetres across and there are no vertices in it. It is
-  `RIN_Body`'s own sclera geometry that shows; the eyeballs behind it were tinted bright green to
-  check and nothing changed.
+- ~~**No survivor has irises.**~~ Fixed, and by the models rather than by the engine. The ask was
+  §10.1 of `ART.md`: per-vertex sampling cannot reproduce a painting a few millimetres across, so
+  give the iris *geometry*. It came back as an iris, a pupil and a highlight per eye as separate
+  meshes bound to `Head`, and all five survivors now bake with eyes — red on RIN, blue on MIKA and
+  YUNA, violet on SORA.
 
-  **The player is one mesh and one draw call, so it can carry the model's own UVs and its albedo
-  texture.** Nothing else in this game can — the horde is one `MultiMesh` per variant sampling a
-  shared `Texture2DArray`, which is what puts a hundred and fifty bodies in one call. `BakeBody`
-  currently spends both UV channels on the rig and the body atlas (`Rig` is one point on the flat
-  layer for a baked body, so no painted plate is applied at all), and `BakedBodyResource` has no
-  texture field. A survivor-only path — real UVs in a third channel or in place of the atlas, the
-  model's albedo on the material — would give every survivor a face for one draw call, and is the
-  next thing worth doing to how bodies look. At 20 pixels a head none of it is visible in play; it
-  is visible in `BodyShot` and in every close render, which is what a character-select screen is.
+  **The engine-side fix is therefore not needed and is still the right thing to know about.** A
+  survivor-only textured path — real UVs and the model's albedo on a mesh that draws once — would
+  have fixed faces for any model rather than for models that were asked. It is not scheduled: five
+  characters with eyes is the whole of what it would have bought, and the geometry answer costs
+  nothing at runtime while a second material path costs a code path forever.
 - **`test/TouchProbe.cs` needs a real display** and so has never run in the regression sweep. The
   headless dummy DisplayServer does not dispatch GUI input, so the touch layer is the one system
   whose tests are green only when someone runs them by hand.

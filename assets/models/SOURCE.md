@@ -179,37 +179,58 @@ optional.
 
 ### The five
 
-| Slot | Model | Triangles | Bake | Design height | Drawn at |
-| :--- | :--- | ---: | ---: | ---: | ---: |
-| `rin` | `ld_rin.glb` (LOD1) | 45,816 | 2.7 MB | 172 cm | 2.20 m |
-| `mika` | `ld_mika.glb` | 38,815 | 1.9 MB | 158 cm | 2.02 m |
-| `akira` | `ld_akira.glb` | 44,733 | 2.1 MB | 175 cm | 2.24 m |
-| `sora` | `ld_sora.glb` | 42,495 | 1.9 MB | 168 cm | 2.15 m |
-| `yuna` | `ld_yuna.glb` | 45,263 | 2.1 MB | 163 cm | 2.08 m |
+| Slot | Model | Triangles | Design height | Drawn at |
+| :--- | :--- | ---: | ---: | ---: |
+| `rin` | `chr_rin.glb` | 45,888 | 172 cm | 2.20 m |
+| `mika` | `chr_mika.glb` | 38,909 | 158 cm | 2.02 m |
+| `akira` | `chr_akira.glb` | 44,827 | 175 cm | 2.24 m |
+| `sora` | `chr_sora.glb` | 42,668 | 168 cm | 2.15 m |
+| `yuna` | `chr_yuna.glb` | 45,391 | 163 cm | 2.08 m |
 
-**LOD1 rather than LOD0, and the reason is the repository.** Each character
-ships three exports: LOD0 at 81,359 triangles and 16 MB, LOD1 at about 45,000
-and 9–12 MB, LOD2 at 22,421. `ART.md §2` measured the player tier and found one
-body's triangles unmeasurable against a horde's, so LOD0 would run — it is the
-committed *bake* that costs, and five LOD1 bakes are 11 MB. LOD2 would halve
-that; LOD1 is the size the production spec calls the normal-play tier and the
-player is the one body a screenshot is of.
+**These are the `art_revision` exports, built to `ART.md` §10 rather than chosen
+off a shelf**, and they are what the game loads. Each is one file with one
+animation — a single-frame `BakePose` — instead of an LOD chain and twenty named
+clips, which is what §10.6 asks for and roughly halves the download for the same
+body. The `ld_*` LOD exports of the previous revision are still in the artifact
+directory and are what the numbers below were first measured on.
 
-The sources are gitignored despite CC BY permitting them, and for size alone:
-five LOD1 files are 46 MB against 11 MB of bakes. One `intake.ps1` command
-rebuilds a bake from one.
+What the revision changed, and all of it was asked for in §10:
+
+- **The iris, the pupil and a highlight are separate meshes bound to `Head`.**
+  This is the one that mattered. Per-vertex sampling cannot reproduce a painting
+  a few millimetres across, so for three phases every survivor baked with blown
+  white sclerae; there is geometry there now and they bake with eyes.
+- **The identity colour is on a jacket rather than on piping.** Red on RIN and
+  AKIRA, blue on MIKA, green on YUNA, violet on SORA. See §10.4 for why the
+  number attached to that request was the wrong number, and what replaced it.
+- **Vertex alpha 0 on the glowing parts**, materials left OPAQUE — RIN's backpack
+  stripes, MIKA's sleeve modules, YUNA's cross bars. It renders. AKIRA and SORA
+  have none, because their weapons are in `equipment/` rather than on the body.
+- **White vertex RGB where there is a texture, vertex colour where there is not**,
+  so the bake's multiply never doubles a colour.
+- The root node is `CHR_<name>` and the bake still wants `yaw:180`.
+
+**About 40,000 triangles each, and the ceiling is the repository rather than the
+renderer.** `ART.md §2` measured the player tier and found one body's triangles
+unmeasurable against a horde's, so any of these would run at any size — it is the
+committed *bake* that costs, because the source is not committed. Five bakes are
+11 MB.
+
+The sources are gitignored despite CC BY permitting them, and for size alone.
+One `intake.ps1` command rebuilds a bake from one:
 
 ```bash
-powershell art-src/models/intake.ps1 -Model assets/models/ld_mika.glb     -Slot mika -Pose "Walk@0.25" -Yaw 180
+powershell art-src/models/intake.ps1 -Model assets/models/chr_mika.glb     -Slot mika -Pose "BakePose@0.0" -Yaw 180
 ```
 
-**`Walk@0.25` is the pose and it is the first time the frame was not guessed.**
-Every earlier survivor had one animation with a generic name, so the frame was
-found by trying three of them; these ship eighteen to twenty-one named clips
-each, including `Idle`, `Walk`, `Run` and `Sprint`. A quarter through a
-one-second walk cycle is the pass — legs together, arms hanging — which is what
-the shader's swing is *added to*. `Idle@0.0` was tried first and is the wrong
-frame: it holds the arms forward, so the bake stood there reaching.
+**`BakePose@0.0` is the pose, and it is the first time the frame was neither
+guessed nor hunted.** The bake freezes one frame and the walk after that is a
+sine added on top, so the frame wants to be what the sine is added *to*:
+standing square, legs together, arms hanging, nothing held. `ART.md §10.5` asked
+for exactly one keyframe of exactly that under exactly that name, and these have
+it. The revision before them shipped eighteen to twenty-one named clips and the
+frame was found by trying `Idle@0.0` (arms forward — the bake stood there
+reaching) and then `Walk@0.25` (the pass of a walk cycle, which is right).
 
 `yaw:180` because these face +Z like everything else that has come through here.
 
@@ -244,13 +265,17 @@ they were put MIKA's drone down the left edge of AKIRA's card three times.
 Design sheets and character designs are the user's own, supplied to this
 project; the CC BY obligation above is on the *body* beneath them.
 
-### Still no irises
+### The irises, which were the reason for §10 in the first place
 
-Unchanged and for the unchanged reason: per-vertex sampling cannot reproduce
-drawn detail, and an anime iris is a painting a few millimetres across inside a
-UV island with no vertices in it. All five bake with blown-white sclerae. The fix
-is in README's What's left and it is the same one — the player is one mesh and
-one draw call, so it can afford the model's own UVs and albedo texture.
+Fixed, by geometry, in the models. Three revisions of a survivor baked with blown
+white sclerae because an anime iris is a painting a few millimetres across inside
+a UV island with no vertices in it, and per-vertex sampling averages that away.
+An iris, a pupil and a highlight as their own meshes is a few dozen triangles and
+it is exact.
+
+The engine-side alternative — a survivor-only textured path with the model's own
+UVs — is not scheduled, and the reason is that this cost nothing at runtime while
+a second material path would cost a code path forever.
 
 ### The earlier passes are on disk and are not loaded
 

@@ -37,7 +37,17 @@ public partial class MovementProbe : SceneTree
     private const int SettleFrames = 10;
     private const int DriveFrames = 60;
     private const int TurnFrames = 45;
-    private const int StrafeFrames = 45;
+
+    /// The strafe leg runs for as long as the two forward legs, and that is the
+    /// point rather than a coincidence.
+    ///
+    /// **It was 45 frames and the probe failed one run in two.** All three legs
+    /// are measured against one `MovedEnough`, so a leg given three quarters of
+    /// the time has to clear the same distance — and from a spawn with cover
+    /// around it, where leg one covers 2.1 m of the 6.0 it would manage in the
+    /// open, three quarters of that is 1.47 m against a floor of 1.5. The number
+    /// was right and the duration was not.
+    private const int StrafeFrames = DriveFrames;
 
     /// How far the player has to get for a stage to count as movement. Well under
     /// what 60 frames at 6 m/s would cover in the open, because the spawn is not

@@ -104,27 +104,37 @@ The empirical gate is in §How it is judged. It is the one that decides.
 the colour wheel, deliberately ignoring value — because a survivor has to be legible in shadow and in
 sun, and brightness is the channel a dark biome takes away. Measured against RIN's bake:
 
-| | Mean colour | Chroma distance to nearest horde | Luminance |
-| :--- | :--- | ---: | ---: |
-| RIN v2, as drawn | `78686b` | **0.203** | 0.151 |
-| RIN v1, as drawn | `7d6c6e` | 0.217 | 0.162 |
-| Procedural survivor, authored torso | `3b75db` | 0.72 | 0.30 |
-| Darkest authored horde torso | `424752` | — | 0.279 |
-| Stalker, as drawn from its bake | `6b5f52` | 0.202 | 0.119 |
+| | Mean colour | Mean's chroma from nearest horde | Share past 0.35 | Luminance |
+| :--- | :--- | ---: | ---: | ---: |
+| RIN | `947e7e` | 0.221 | 12.6% | 0.226 |
+| MIKA | `a29fab` | 0.086 | 12.0% | 0.353 |
+| AKIRA | `a3827f` | 0.131 | **26.0%** | 0.253 |
+| SORA | `988a8c` | 0.146 | 25.2% | 0.266 |
+| YUNA | `a9a597` | 0.122 | 9.8% | 0.377 |
+| Procedural survivor, authored torso | `3b75db` | 0.72 | — | 0.30 |
+| **Stalker, a horde body, as a control** | `6b5f52` | 0.202 | **0.0%** | 0.119 |
 
-`BakeProbe` prints those first two lines on every sweep, which is the only place the *drawn* body is
+`BakeProbe` prints both numbers per bake on every sweep, which is the only place the *drawn* body is
 measured at all.
 
-**She fails the rule, and the metric is what is wrong.** A survivor's colour used to be three
-authored constants for torso, limbs and head; RIN's is forty thousand sampled texels of skin, black
-cloth, an ivory top and red trim, and the mean of *any* such body is near-grey. A rule that takes the
-mean therefore rejects every textured character there will ever be, which is not a statement about
-legibility. The last row is the proof from the other side: the stalker's own bake reads `6b5f52` at
-0.202, so a variant already in the game and never questioned sits exactly where RIN does.
+**The last column is the one to read and it took a wasted round of art to learn that.** The five were
+deliberately given expanded identity colour — red jackets, a blue coat, a green medical shell — to
+move the mean past 0.35, and four of the five means moved *closer* to the horde. A saturated red
+averaged with a face and black cloth is a desaturated warm grey; the mean cannot reach 0.35 while a
+face is in frame. The control row is the proof from the other side: a horde variant has 0.0% of
+itself past the line, and every survivor has between a tenth and a quarter.
 
-What actually separates her is the two things this rule set aside. **Value:** at 0.151 she is darker
-than every authored horde torso by a wide margin, on a field whose ground reads 0.5 and up — though
-not darker than the stalker's bake, which is worth knowing before a run puts the two together.
+**They all fail the rule on the mean, and the metric is what is wrong.** A survivor's colour used to
+be three authored constants for torso, limbs and head; each of these is thirty-odd thousand sampled
+texels of skin, cloth and trim, and the mean of *any* such body is near-grey. A rule that takes the
+mean rejects every textured character there will ever be, which is not a statement about legibility —
+the stalker's own bake reads `6b5f52` at 0.202, so a variant in the game since Phase 8 and never
+questioned sits exactly where the survivors do.
+
+What actually separates them is the two things this rule set aside. **Value:** the five run 0.226 to
+0.377 against a ground that reads 0.5 and up, so they are still the dark things on a bright field —
+though no longer by the margin RIN's near-black v2 had, because a coloured jacket is lighter than a
+black one.
 **Silhouette:** a human figure with a hip-length ponytail among nine boxes, which is the same
 argument §"The decision this overturns" already makes for the horde. From behind, v2's two crimson
 underlocks are the one saturated thing on her and they run the length of her back, which is the

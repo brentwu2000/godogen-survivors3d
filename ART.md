@@ -430,9 +430,16 @@ of what a character artist would reach for is on the discard list in §1.
 Five characters came through this pipeline in one production and every number
 below is measured off them rather than reasoned about.
 
-### 10.1 Give the iris geometry. This is the one real defect.
+### 10.1 Give the iris geometry. ~~This is the one real defect.~~ Done, and it worked.
 
-**All five survivors bake with blown-white eyes.** Everything else on them
+The iris, the pupil and a highlight arrived as separate meshes bound to `Head`,
+and all five survivors now bake with eyes: red on RIN, blue on MIKA and YUNA,
+violet on SORA. Nothing about the request needed adjusting once the geometry was
+there — the sampler had something to sample. The rest of this section is kept
+because it is the general rule, and the rule caught the one thing that could not
+be fixed downstream.
+
+**Before the fix, all five survivors baked with blown-white eyes.** Everything else on them
 arrives exact — the jackets, the piping, the buckles, the laces, the lips, the
 blush. The eyes do not, and the cause is not fixable at intake.
 
@@ -454,7 +461,7 @@ seam, a zip tooth, a stitch, a decal, an eyebrow, a lip line: if it is smaller
 than the distance between two vertices, it will not be in the game. Make it
 geometry or leave it out.
 
-### 10.2 Emissive is free, and nothing has ever used it
+### 10.2 Emissive is free, and almost nothing uses it yet
 
 `body.gdshader` reads **`1.0 - COLOR.a`** per vertex as how much that vertex
 burns from inside, at 2.4x. It costs nothing — no material, no light, no second
@@ -470,9 +477,16 @@ Author alpha **1** everywhere, and alpha **0** on the vertices meant to glow:
 | AKIRA | the blade's edge when it is meant to be hot |
 | RIN | the sight's dot, the red plate edges |
 
-Nothing in the roster does this today, so every one of them is matte. It is
-probably the largest visual return available per hour of work in this whole
-pipeline, and it does not touch the silhouette.
+**Three characters took this and two did not, and the two are the ones with the
+most to gain.** RIN glows on two backpack stripes, MIKA on two sleeve modules,
+YUNA on four cross bars — it renders, and on YUNA it is visibly the brightest
+thing on her. AKIRA and SORA have none, which is defensible as far as it goes:
+the greatsword and the six flying swords are in `equipment/` rather than on the
+body, so there was nothing on the character to light.
+
+That leaves the table above mostly unclaimed. It is still probably the largest
+visual return available per hour of work in this pipeline, and it does not touch
+the silhouette — and the equipment files want it as much as the bodies do.
 
 *(The baker dropped vertex alpha for one phase and nothing caught it, because the
 only thing using glow is the lantern and the lantern is a procedural body. It
@@ -498,26 +512,47 @@ attribute anywhere, filling the rest with white — which is fine now and was no
 before the multiply, when it silently beat the texture and baked a character
 white from head to foot.
 
-### 10.4 One large saturated area per character
+### 10.4 One large saturated area per character — and the target was wrong
 
-`PaletteProbe` requires the player to sit 0.35 from every horde body on the
-colour wheel, value deliberately excluded because a dark biome takes value away.
-Measured on the bakes, printed by `BakeProbe` on every sweep:
+The ask was right and the number attached to it was not, which is worth writing
+down at length because it was measured both ways.
 
-| | Reads as | Chroma from nearest horde body |
-| :--- | :--- | ---: |
-| RIN | `78686b` | 0.203 |
-| The rule | | 0.35 |
+**What was asked:** `PaletteProbe` requires the player to sit 0.35 from every
+horde body on the colour wheel, so put one region of identity colour on each
+character big enough to survive averaging — a coloured jacket rather than
+coloured piping.
 
-Every survivor is a near-black outfit with saturated *accents*, and a mean is not
-impressed by an accent. At 25 pixels a body **is** its average colour.
+**What came back:** exactly that. Red jackets on RIN and AKIRA, a blue coat on
+MIKA, a green medical shell on YUNA, violet on SORA — plainly, unmissably
+coloured, and every one of them is better for it.
 
-This is not a request to abandon the designs. It is one region big enough to
-survive averaging — a coloured jacket rather than coloured piping, a coloured
-skirt rather than a coloured tag. Each character already has the colour picked
-for them: RIN red, MIKA blue, AKIRA red, YUNA medical green, SORA purple. They
-are on the identity panels of the design sheets and almost none of it is on the
-bodies.
+**What the number did:** went the wrong way for four of the five.
+
+| | Reads as | Mean, from nearest horde body | Share of the body past 0.35 |
+| :--- | :--- | ---: | ---: |
+| RIN | `947e7e` | 0.221 | **12.6%** |
+| MIKA | `a29fab` | 0.086 | 12.0% |
+| AKIRA | `a3827f` | 0.131 | **26.0%** |
+| SORA | `988a8c` | 0.146 | 25.2% |
+| YUNA | `a9a597` | 0.122 | 9.8% |
+| *the stalker, a horde body, as a control* | `6b5f52` | 0.202 | **0.0%** |
+
+**A body's mean is an average over skin, and human skin is a large desaturated
+area.** A saturated red averaged with a face and black cloth is a desaturated
+warm grey — which is what every row above is. The mean cannot reach 0.35 while a
+face is in frame, and `CHARACTERS.md` had already said as much before this ask
+went out. Asking an artist to move a number that cannot move was the error, and
+it cost a round of work that fortunately improved the characters anyway.
+
+The last column is the number to read instead, and `BakeProbe` prints it now:
+**what share of the body is genuinely far from everything in the horde.** That is
+what an identity colour is for — not to shift an average but to put a patch on
+screen that belongs to nothing else out there. The control row is why it is
+trustworthy: a horde variant scores 0.0%.
+
+So the standing request is **the share, not the mean**, and there is no threshold
+on it yet because five samples between 9.8% and 26.0% is not enough to set one.
+More is better; 0% is a survivor wearing the horde's colours.
 
 ### 10.5 A one-frame bake pose
 

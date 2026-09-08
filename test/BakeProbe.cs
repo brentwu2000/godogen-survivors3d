@@ -412,9 +412,41 @@ public partial class BakeProbe : SceneTree
             foreach (Color torso in Palette.HordeTorsos())
                 nearest = Mathf.Min(nearest, chroma.DistanceTo(Palette.Chroma(torso)));
 
+            // **The mean was the only number here and asking an artist to move it
+            // was a badly specified request.** A body's mean is an average over
+            // skin, black cloth and whatever colour it wears, and human skin is a
+            // large desaturated area: five characters were given deliberately
+            // expanded identity colour — a red jacket, a blue coat, a green
+            // medical shell — and four of the five means moved *closer* to the
+            // horde, because a saturated red averaged with skin is a desaturated
+            // warm grey. The mean cannot reach 0.35 while a face is in frame, and
+            // `CHARACTERS.md` had already said as much before the ask went out.
+            //
+            // So the second number is the one to read: **what share of the body
+            // is genuinely far from every horde colour**. That is what an
+            // identity colour is for — not to shift an average, but to put a
+            // patch on screen that belongs to nothing else out there. It is
+            // per-vertex rather than per-area, which slightly over-weights dense
+            // geometry like a face, and that is the conservative direction.
+            int distinct = 0;
+            foreach (Color one in baked.Colours)
+            {
+                Vector2 here = Palette.Chroma(one);
+                float far = float.MaxValue;
+
+                foreach (Color torso in Palette.HordeTorsos())
+                    far = Mathf.Min(far, here.DistanceTo(Palette.Chroma(torso)));
+
+                if (far >= Palette.PlayerChromaSeparation)
+                    distinct++;
+            }
+
+            float share = (float)distinct / baked.Colours.Length;
+
             GD.Print($"    reads as {mean.LinearToSrgb().ToHtml(false)}, "
                    + $"luminance {0.2126f * mean.R + 0.7152f * mean.G + 0.0722f * mean.B:F3}, "
-                   + $"{nearest:F3} of chroma from the nearest horde torso");
+                   + $"mean {nearest:F3} from the nearest horde torso, "
+                   + $"{share * 100.0f:F1}% of it past {Palette.PlayerChromaSeparation:F2}");
         }
 
         return ok;
