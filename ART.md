@@ -8,6 +8,9 @@ of it is a list of things this renderer cannot do**, because that is what
 actually decides which of two good-looking models is usable, and it is not
 guessable from a screenshot.
 
+**§10 is for whoever can change the model rather than only choose one**, and it
+is where the five things worth asking a character artist for live.
+
 Read §1 before §5. A model that fails §1 cannot be fixed by any amount of work
 downstream, and three of the four most tempting properties an asset page
 advertises — animations, blend shapes, a high polygon count — are worth nothing
@@ -416,3 +419,154 @@ Fill one in per model before downloading anything else.
   assets arrived and required it. §6.
 - **The fog and sky are realistic in hue.** A stylised palette usually wants
   fewer, more saturated steps.
+---
+
+## 10. If you can change the model
+
+Everything above is about *choosing* something already made. This section is for
+whoever can open the source file and change it — and it is short, because most
+of what a character artist would reach for is on the discard list in §1.
+
+Five characters came through this pipeline in one production and every number
+below is measured off them rather than reasoned about.
+
+### 10.1 Give the iris geometry. This is the one real defect.
+
+**All five survivors bake with blown-white eyes.** Everything else on them
+arrives exact — the jackets, the piping, the buckles, the laces, the lips, the
+blush. The eyes do not, and the cause is not fixable at intake.
+
+`BakeBody` samples the albedo **once per vertex**. That is exact for a flat patch
+of colour and it is an average for drawn detail: an anime iris is a painting a few
+millimetres across inside a UV island that has no vertices in it, so the vertices
+around it all land on sclera white and the iris never existed. Tinting the
+existing 96-triangle eyeball a bright green to check changed nothing on screen —
+what is visible is the *face's own* sclera geometry inside `RIN_Body`, with the
+eyeball behind it.
+
+**The fix is a few triangles.** An iris disc and a pupil as their own small
+meshes, in front of the sclera, weighted to the eye or head bone. Eight triangles
+each is enough: the shader flat-shades, so a disc reads as a disc. Anything with
+geometry survives; anything painted does not.
+
+The same rule catches everything else of that kind before it is authored. A
+seam, a zip tooth, a stitch, a decal, an eyebrow, a lip line: if it is smaller
+than the distance between two vertices, it will not be in the game. Make it
+geometry or leave it out.
+
+### 10.2 Emissive is free, and nothing has ever used it
+
+`body.gdshader` reads **`1.0 - COLOR.a`** per vertex as how much that vertex
+burns from inside, at 2.4x. It costs nothing — no material, no light, no second
+draw — and it is the one channel a cel-shaded game most wants.
+
+Author alpha **1** everywhere, and alpha **0** on the vertices meant to glow:
+
+| Character | What should burn |
+| :--- | :--- |
+| SORA | the six flying swords, and the glyphs on them |
+| MIKA | the drone's eye, the panel strips, the tablet |
+| YUNA | the medical green — the cross, the field emitter, the gun's core |
+| AKIRA | the blade's edge when it is meant to be hot |
+| RIN | the sight's dot, the red plate edges |
+
+Nothing in the roster does this today, so every one of them is matte. It is
+probably the largest visual return available per hour of work in this whole
+pipeline, and it does not touch the silhouette.
+
+*(The baker dropped vertex alpha for one phase and nothing caught it, because the
+only thing using glow is the lantern and the lantern is a procedural body. It
+carries alpha through now.)*
+
+### 10.3 Colour: vertex colours or a texture, not both
+
+The bake multiplies the three glTF sources together, which is what the
+specification says they are: `COLOR_0` x `baseColorFactor` x `baseColorTexture`.
+
+So a model that carries a full albedo texture **and** meaningful vertex colours
+comes out twice-darkened. Pick one:
+
+- **A texture with white `COLOR_0`** — what the five survivors do, and it works:
+  at 38,000 vertices against a 2K atlas the face resolves lips and blush.
+- **Flat vertex colours with no texture** — better for anything that will be
+  small on screen, and the only thing that works for the horde.
+
+White is the multiplicative identity, so "white `COLOR_0`" and "no `COLOR_0`" are
+the same thing. What is not safe is a half-populated colour attribute: Blender's
+glTF exporter writes `COLOR_0` on **every** mesh of an object that has a colour
+attribute anywhere, filling the rest with white — which is fine now and was not
+before the multiply, when it silently beat the texture and baked a character
+white from head to foot.
+
+### 10.4 One large saturated area per character
+
+`PaletteProbe` requires the player to sit 0.35 from every horde body on the
+colour wheel, value deliberately excluded because a dark biome takes value away.
+Measured on the bakes, printed by `BakeProbe` on every sweep:
+
+| | Reads as | Chroma from nearest horde body |
+| :--- | :--- | ---: |
+| RIN | `78686b` | 0.203 |
+| The rule | | 0.35 |
+
+Every survivor is a near-black outfit with saturated *accents*, and a mean is not
+impressed by an accent. At 25 pixels a body **is** its average colour.
+
+This is not a request to abandon the designs. It is one region big enough to
+survive averaging — a coloured jacket rather than coloured piping, a coloured
+skirt rather than a coloured tag. Each character already has the colour picked
+for them: RIN red, MIKA blue, AKIRA red, YUNA medical green, SORA purple. They
+are on the identity panels of the design sheets and almost none of it is on the
+bodies.
+
+### 10.5 A one-frame bake pose
+
+The bake freezes **one frame of one animation** and the walk after that is a sine
+function added on top. So the frame wants to be the pose that sine is added *to*:
+standing square, legs together, arms hanging straight down, nothing held.
+
+An action named `BakePose` with exactly that, one keyframe, in every character,
+removes the last guess from an intake. Without one the frame is found by trying:
+`Idle@0.0` holds the arms forward and bakes a survivor standing there reaching;
+`Walk@0.25` is the pass of a walk cycle and is what these five use.
+
+### 10.6 Do not author these. They are discarded at intake.
+
+Not "not used yet" — read and thrown away, or never read at all.
+
+| | |
+| :--- | :--- |
+| Animations | One frame of one is kept. Twenty-one named clips per character cost twenty-one clips of work for one pose |
+| Facial morphs / blend shapes | Impossible. There is no per-instance mesh state and the bake is one frozen surface |
+| Normal maps | Nothing samples them, and they describe curvature on geometry that is flat facets |
+| ORM / roughness / metallic | `ROUGHNESS` is computed from the albedo's own luminance. Nothing reads a map |
+| LOD chains | One export is used. Ship the tier that will be used and skip the others |
+| Their own outline pass or toon shader | Replaced by `cel.gdshaderinc`. A model built around a screen-space outline arrives without one |
+| Transparent hair cards | Alpha is the glow channel here. A hair card at alpha 0.5 is a hair card that glows |
+| Held weapons | The game appends the silhouette of whatever is equipped. A stowed rifle on the model is a second rifle |
+
+### 10.7 Do author these
+
+| | |
+| :--- | :--- |
+| Skinned trim | 141 of RIN's 143 meshes are skinned and that is why she needed no flags. An unskinned mesh is skipped unless it hangs off a `BoneAttachment3D` |
+| Recognisable bone names | `UpperLeg.R`, `Forearm.L`, `Hand.L`, `Foot.L`, `Toe.L`. `Classify` matches the substrings `thigh/shin/calf/leg/foot/toe` and `arm/hand/shoulder/clavicle`, and takes the side from a `.l` / `.r` suffix or the words. **An unrecognised bone is torso, and a body whose legs are torso stands still while it walks** |
+| Feet at the origin, Y-up, metres | The bake normalises the height to the roster's number, so the model's own scale is free — but the *base* has to be the floor |
+| Weapons as separate files | As `RIN_AR01.glb` already is |
+| One export per character | LOD1-sized, ~40,000 triangles for a survivor. See §2 for why the number barely matters and 10.8 for where it does |
+
+### 10.8 The horde is the bigger prize, and it is a different brief
+
+Five survivors is five bodies the camera is pointed at, and it is nine variants
+and a hundred and fifty instances that fill the screen. Everything in §1 to §4
+applies to those and most of §10 does not:
+
+- **800–4,000 triangles**, flat vertex colours, **no texture**. A face is
+  triangles spent below the resolution anyone is looking at
+- **Colour is the gameplay tell.** A walker is read as infected at 25 pixels by
+  being green. A pale-skinned zombie is a survivor from a distance — this is
+  measured, and it is why the one authored horde body in this repo is held back
+- **Four of the nine can never be humanoid** — stalker, bulwark, bloater,
+  lantern. §4 says why
+- The lantern's chest organ is the one existing use of the alpha glow in 10.2,
+  and it is procedural. An authored lantern would want the same

@@ -884,6 +884,24 @@ public partial class BakeBody : SceneTree
                                                      vertexColour.B * c[i].B);
                     }
 
+                    // **The alpha is the glow, and the multiply above was
+                    // dropping it.** `body.gdshader` reads `1.0 - COLOR.a` as how
+                    // much of a vertex burns from inside — the lantern's chest
+                    // organ is the one thing using it, and it is a *procedural*
+                    // body, so nothing caught that a bake could no longer glow at
+                    // all. Every `new Color(r, g, b)` above is opaque by
+                    // construction, and the version before them read `c[i]`
+                    // whole.
+                    //
+                    // Taken from the model's own vertex colour and from nowhere
+                    // else. A material's `AlbedoColor` alpha means transparency,
+                    // which is a different thing wearing the same channel: a
+                    // model with one glass visor would otherwise have bloomed
+                    // white. Opaque when the model says nothing, which is every
+                    // model so far.
+                    if (i < c.Length)
+                        vertexColour.A = c[i].A;
+
                     allColours.Add(vertexColour);
 
                     string bone;

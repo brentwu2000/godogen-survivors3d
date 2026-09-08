@@ -1,6 +1,6 @@
 # Survivors 3D
 
-An extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). A turnable third-person camera,
+An extraction horde-survivor in Godot 4.7.1 (C# / .NET 9). A mouse-driven third-person camera,
 Vampire-Survivors crowd density, Tarkov's loot-fight-extract stakes: what you carry out is banked,
 what you die holding is gone.
 
@@ -52,10 +52,16 @@ godot --headless --quit              # scene loads clean
 godot                                # play — opens at the base
 ```
 
-WASD/arrows move, weapons fire themselves and reload themselves, `[F]` secures the top item into the
-safe box, `[Q]` uses a carried item, `[G]` throws one, `[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]`
-answer a level-up — or click the card. At the base, `[1]`/`[2]`/`[3]` take a contract and `[R]` rerolls
-the board for credits.
+**The mouse is the camera and WASD is the movement, which is the ordinary third-person scheme.** The
+cursor is captured when a run starts: moving the mouse turns the view and pitches it between 50° and
+10° above the horizon, `[W]`/`[S]` walk along the view, `[A]`/`[D]` strafe across it, and `[Esc]`
+gives the cursor back — a click inside the window takes it again. `[Z]`/`[X]` still turn the view for
+anyone playing with the pointer free, and so does dragging with the right button.
+
+Weapons fire themselves and reload themselves, `[F]` secures the top item into the safe box, `[Q]`
+uses a carried item, `[G]` throws one, `[Tab]` swaps weapons, and `[1]`/`[2]`/`[3]` answer a level-up
+— or click the card. At the base, `[1]`/`[2]`/`[3]` take a contract, `[R]` rerolls the board, and
+`[C]` at the gate opens the roster.
 
 **On a touchscreen the layout is one stick and four buttons.** The left half of the screen is a
 floating move stick, whose origin is wherever the thumb lands; the bottom right is an arc of four
@@ -1425,6 +1431,40 @@ character ships three exports; LOD0 is 81,359 triangles and Performance below sa
 triangles do not register. It is the committed *bake* that costs, because the source is not committed:
 five LOD1 bakes are 11 MB and five LOD0 bakes would be nearer twenty.
 
+**`[A]`/`[D]` strafe now, and it deleted a geometry problem rather than tuning one.** They turned the
+view for eleven phases, which is a coherent scheme and the wrong one for a camera the mouse drives:
+two controls that both change the heading fight each other, and the player ends up steering by the
+difference between them. Under mouse-look the keys have to mean translation and only the mouse means
+direction.
+
+What it removed is bigger than what it added. Turn-and-advance moves at v while turning at ω, so the
+tightest arc it can trace has radius v/ω — 6.0 m/s against 150°/s is 2.29 m — and **anything inside
+that circle cannot be walked to at all, only orbited**. `BotDrive` exists entirely because of it and
+opens by saying so; two of `BalanceSweep`'s twelve seeds spent sixty seconds circling a crate 2.3 m
+away with the flow field pointing straight at it, and it was read as a level bug for three phases
+because every diagnostic agreed the route was correct. Four independent keys have no turning circle.
+`BotDrive.Steer` is now a projection onto two axes instead of forty lines of turning geometry, and its
+`turnRadius` parameter is documented as dead rather than tuned.
+
+**`MovementProbe` had to be rewritten and its new third assertion is the one that matters.** It
+checks that `[D]` *translates* along the view's right — and that it does not turn the view, which is
+what says the old scheme is gone rather than merely switched off. Under turn-and-advance that leg
+yawed the rig 112° and moved the player almost nowhere. The orbit leg stays and is now easy, which is
+the point of keeping it: it is what would notice if anything ever put turn-and-advance back.
+
+**The camera pitches, between 50° and 10° above the horizon, and the rest angle is read off the scene
+rather than restated.** `BuildMain` builds the camera at −26° and the rig takes that as its resting
+pose, so a run nobody touches the mouse in is framed exactly as every screenshot in this file was.
+The limits are what stops the mouse breaking the framing: past 50° it is the top-down orthographic
+view this game deliberately left, and above 10° the horizon rises far enough that the fog stops
+hiding the arena's edge.
+
+Rebuilding the camera offset from a distance and an angle was the first attempt and `CameraProbe`
+caught it: the scene's camera sits at `(0, d sin t, d cos t)` from the rig's origin and not from the
+pivot, so reconstruction moved the resting shot a few centimetres and the "pulling in changes the
+distance and nothing else" check read 0.996 against its threshold. Pitching rotates the real offset
+about the pivot, which is exact at rest by construction.
+
 ## Performance
 
 RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds.
@@ -1796,8 +1836,15 @@ Everything the player looks at has had a pass, the numbers behind it are recorde
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
 
-- **Every balance table below the first one was taken with a driver that could not reach two of the
-  twelve layouts.** Both defects are fixed and neither was in the game — see Decisions — but the
+- **Every balance table was taken under a control scheme the game no longer has.** `[A]`/`[D]`
+  strafe now instead of turning the view, which changes how fast a player crosses ground, how much
+  of a horde can be walked out of, and the reachability of everything the old turning circle put out
+  of range. The tables are still the right *shape* — the comparisons between weapons are between
+  weapons — and every absolute second in them was measured by a driver that could not strafe. The
+  first table to settle anything is the first one to re-take, and this is now the larger of the two
+  reasons why.
+- **Every balance table below the first one was also taken with a driver that could not reach two of
+  the twelve layouts.** Both defects are fixed and neither was in the game — see Decisions — but the
   tables were not re-taken, because a driver change is not a design change and each is a quarter of an
   hour. They are still the right shape and the right comparisons. **Re-take the one that matters
   before it settles anything.**

@@ -11,7 +11,11 @@ public partial class Player : CharacterBody3D
     /// to answer "is this the controls or is this the thing I just changed" when
     /// a movement bug shows up, and a scheme that has rotted in a branch nobody
     /// runs cannot answer anything.
-    [Export] public bool TurnToSteer { get; set; } = true;
+    /// The old scheme: `[A]`/`[D]` turn the view instead of strafing.
+    ///
+    /// Off. See `Steer` for why, which is mostly that a mouse-driven camera and
+    /// turn-and-advance are two controls for one quantity.
+    [Export] public bool TurnToSteer { get; set; }
 
     /// A solid body instead of a billboard sprite.
     ///
@@ -762,19 +766,56 @@ public partial class Player : CharacterBody3D
     /// is a throttle and a virtual stick pushed halfway should walk.
     public Vector2 Steer(Vector2 stick, float step)
     {
-        if (!TurnToSteer || _rig == null)
+        if (_rig == null)
             return stick;
 
-        // Negated: pushing right turns the view clockwise seen from above, which
-        // is the direction the world appears to swing left. Getting this backwards
-        // is not subtle and is also not caught by any test that only checks
-        // whether the player moved.
-        if (stick.X != 0.0f)
-            _rig.Turn(-stick.X * Mathf.DegToRad(TurnRateDegrees) * step);
+        // **`[A]`/`[D]` strafe now, and they used to turn the view.**
+        //
+        // Turn-and-advance is a coherent scheme and it was the wrong one for a
+        // camera the mouse drives. Two controls that both change the heading
+        // fight each other: the hand on the mouse turns the view, the hand on the
+        // keys turns the view, and the player ends up steering by the difference
+        // between them. Under mouse-look the keys have to mean *translation* and
+        // only the mouse means direction.
+        //
+        // It also deletes a geometry problem rather than tuning one. Turn-and-
+        // advance moves at v while turning at ω, so the tightest arc it can trace
+        // has radius v/ω — 6.0 m/s against 150°/s is 2.29 m, and anything inside
+        // that circle cannot be walked to at all, only orbited. `BotDrive` exists
+        // entirely because of that, `RouteMemory` exists to tell one failure mode
+        // of it from another, and two of `BalanceSweep`'s twelve seeds spent
+        // sixty seconds circling a crate 2.3 m away. Four independent keys have
+        // no turning circle.
+        //
+        // `TurnToSteer` keeps the old scheme reachable, and it is off by default
+        // now. It is not dead code: the sprite path and the fixed-camera layout
+        // both still work, and a scheme this game shipped for eleven phases is
+        // worth being able to put a screenshot next to.
+        if (TurnToSteer)
+        {
+            if (stick.X != 0.0f)
+                _rig.Turn(-stick.X * Mathf.DegToRad(TurnRateDegrees) * step);
 
-        // Negated for the same reason `move_up` is −Y: the stick's vertical axis
-        // is screen-space and points down.
-        return _rig.Forward() * -stick.Y;
+            return _rig.Forward() * -stick.Y;
+        }
+
+        // Camera-relative, which is what "forward" means when the camera is the
+        // only thing that decides where forward is.
+        //
+        // `-stick.Y` for the reason `move_up` is −Y: the stick's vertical axis is
+        // screen space and points down. `Right` is `Forward` turned a quarter
+        // clockwise seen from above, so pushing `[D]` moves the player toward the
+        // right of the screen — which is the only definition of "right" a player
+        // holding a mouse has.
+        Vector2 forward = _rig.Forward();
+        var right = new Vector2(-forward.Y, forward.X);
+
+        Vector2 move = right * stick.X + forward * -stick.Y;
+
+        // Normalised past unit length rather than always: a stick pushed half way
+        // should move half as fast, and two keys held at once should not move 41%
+        // faster than one.
+        return move.LengthSquared() > 1.0f ? move.Normalized() : move;
     }
 
     /// Throws away one unit of the worst thing being carried.

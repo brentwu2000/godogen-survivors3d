@@ -107,9 +107,11 @@ $tiers = @{
     # time. 27,488 triangles and 51,353 measure 1.30 ms and 1.32 as the player,
     # which is noise; their .res files are 1.6 MB and 2.9 MB, which is not. See
     # ART.md section 2.
-    drifter = @{ OnScreen =   1; Budget = 120000 }
-    courier = @{ OnScreen =   1; Budget = 120000 }
-    warden  = @{ OnScreen =   1; Budget = 120000 }
+    rin     = @{ OnScreen =   1; Budget = 120000 }
+    mika    = @{ OnScreen =   1; Budget = 120000 }
+    akira   = @{ OnScreen =   1; Budget = 120000 }
+    sora    = @{ OnScreen =   1; Budget = 120000 }
+    yuna    = @{ OnScreen =   1; Budget = 120000 }
 }
 
 $slot = $Slot.ToLower()
@@ -119,7 +121,7 @@ if (-not $tiers.ContainsKey($slot)) {
     exit 1
 }
 
-$survivor = @('drifter', 'courier', 'warden') -contains $slot
+$survivor = @('rin', 'mika', 'akira', 'sora', 'yuna') -contains $slot
 
 function Step($n, $what) {
     Write-Host ""

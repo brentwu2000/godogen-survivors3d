@@ -29,6 +29,26 @@ public partial class CameraRig : Node3D
     /// Radians of turn per pixel of right-drag. A hundred pixels is about 34°.
     [Export] public float DragRadiansPerPixel { get; set; } = 0.006f;
 
+    /// Radians of turn per pixel of *captured* mouse movement.
+    ///
+    /// Slower than the drag, and the difference is what the gesture is. A drag is
+    /// deliberate and bounded by the arm; captured motion is continuous, so the
+    /// same figure that feels responsive in a drag feels like the view is being
+    /// thrown. 0.0032 is about 18° per hundred pixels.
+    [Export] public float LookRadiansPerPixel { get; set; } = 0.0032f;
+
+    /// How far the view may pitch, in degrees, and where it rests.
+    ///
+    /// **The rest angle is the number the whole game was framed against**, so it
+    /// is read off the scene rather than written here — `BuildMain` builds the
+    /// camera at -26° and this reads the child's own rotation at startup. The
+    /// limits are what stops the mouse breaking the framing: past -50° it is the
+    /// top-down orthographic view this game deliberately left, and above -10° the
+    /// horizon rises far enough that the fog stops hiding the arena's edge and the
+    /// sky fills a third of the screen.
+    [Export] public float PitchMinDegrees { get; set; } = -50.0f;
+    [Export] public float PitchMaxDegrees { get; set; } = -10.0f;
+
     /// Higher is tighter. Low values read as a lazy camera, which hides enemies
     /// entering from the direction of travel.
     [Export] public float FollowRate { get; set; } = 8.0f;
@@ -123,6 +143,13 @@ public partial class CameraRig : Node3D
     /// three times between them.
     private float _dragYaw;
 
+    /// Pitch in radians, and the distance the camera sits at. Both derived from
+    /// the scene's own camera at startup so the resting shot is unchanged.
+    private float _pitch;
+    private float _pitchDelta;
+    private float _restPitch;
+    private Vector3 _baseOffset;
+
     private float _shake;
     private float _shownHealth = -1.0f;
     private ulong _rng = 0x8EBC6AF09C88C6E3UL;
@@ -138,10 +165,62 @@ public partial class CameraRig : Node3D
 
         _camera = GetNodeOrNull<Camera3D>("Camera");
         if (_camera != null)
+        {
             _restOffset = _camera.Position;
+
+            // The scene's angle and offset, kept as the resting pose rather than
+            // restated here. Pitching rotates *this* offset about the pivot, so at
+            // the startup pitch the shot is the scene's own to the last decimal.
+            //
+            // **Rebuilding the offset from a distance and an angle was wrong and
+            // `CameraProbe` caught it.** The scene's camera sits at
+            // `(0, d sin t, d cos t)` measured from the rig's origin and not from
+            // the pivot, so reconstructing it as `pivot + (0, d sin t, d cos t)`
+            // moved the shot a few centimetres — enough that the probe's "pulling
+            // in changes the distance and nothing else" check read 0.996 against
+            // its threshold. A rotation of the real offset is exact at rest by
+            // construction, which is the property that check is about.
+            _restPitch = Mathf.DegToRad(_camera.RotationDegrees.X);
+            _pitch = _restPitch;
+            _baseOffset = _restOffset;
+        }
 
         if (_target != null)
             GlobalPosition = Flatten(_target.GlobalPosition);
+    }
+
+    /// Turns the accumulated mouse pitch into a camera angle and offset.
+    ///
+    /// The rig owns yaw and the *camera* owns pitch, which is why this writes the
+    /// child rather than this node's rotation: a pitched rig would tilt the plane
+    /// the player is being followed across, and `Flatten` exists precisely so
+    /// that following happens on the ground.
+    ///
+    /// The offset is recomputed from the pitch rather than rotated, so the camera
+    /// stays exactly `_restDistance` from the pivot at every angle — a rotation
+    /// applied to a stored offset accumulates error and the shot creeps closer
+    /// over a long run.
+    private void ApplyPitch()
+    {
+        if (_camera == null || _baseOffset == Vector3.Zero)
+            return;
+
+        if (_pitchDelta != 0.0f)
+        {
+            _pitch = Mathf.Clamp(_pitch + _pitchDelta,
+                                 Mathf.DegToRad(PitchMinDegrees),
+                                 Mathf.DegToRad(PitchMaxDegrees));
+            _pitchDelta = 0.0f;
+        }
+
+        // Nothing to do at rest, which is every frame of every probe: none of
+        // them move a mouse, so the shot they measure is the scene's untouched.
+        if (_pitch == _restPitch)
+            return;
+
+        var pivot = new Vector3(0.0f, PivotHeight, 0.0f);
+        _restOffset = pivot + (_baseOffset - pivot).Rotated(Vector3.Right, _pitch - _restPitch);
+        _camera.RotationDegrees = new Vector3(Mathf.RadToDeg(_pitch), 0.0f, 0.0f);
     }
 
     /// Asks the world whether the shot is blocked.
@@ -245,18 +324,46 @@ public partial class CameraRig : Node3D
 
     public Vector2 Forward() => Forward(Yaw);
 
-    /// Right-drag turns the view, which is the mouse's whole job now.
+    /// The mouse is the view.
     ///
     /// It used to aim: the cursor was projected onto the ground plane and the
     /// player faced it. That works under a camera that cannot turn and stops
     /// working under one that can — the world sweeps beneath a stationary cursor
     /// as the view comes round, so the player spins while the hand holding the
-    /// mouse is still. Turning to face something is the control scheme now, and
-    /// the mouse is one of the three ways to do it.
+    /// mouse is still.
+    ///
+    /// **Captured motion is the scheme now and the right-drag is the fallback.**
+    /// With the cursor captured this is a third-person camera in the ordinary
+    /// sense: the mouse turns and pitches the view, `[W]`/`[S]`/`[A]`/`[D]`
+    /// translate the player across the ground relative to it, and the two never
+    /// mean the same thing — which is what went wrong when `[A]`/`[D]` also
+    /// turned. See `Player.Steer`.
+    ///
+    /// The drag stays for the cursor-visible case, which is every probe in
+    /// `test/` and anyone playing in a window with the pointer free.
     public override void _UnhandledInput(InputEvent @event)
     {
-        if (@event is InputEventMouseMotion motion
-            && (motion.ButtonMask & MouseButtonMask.Right) != 0)
+        if (@event is not InputEventMouseMotion motion)
+            return;
+
+        // Captured: the mouse *is* the view, with no button held. `GameRoot` owns
+        // the capture and `[Esc]` gives the cursor back — see there for why that
+        // has to exist.
+        //
+        // Both axes accumulate and are applied in `_Process` rather than here,
+        // because a mouse reports several motion events per frame and turning the
+        // rig on each one does the same work three times for one result.
+        if (Input.MouseMode == Input.MouseModeEnum.Captured)
+        {
+            _dragYaw -= motion.Relative.X * LookRadiansPerPixel;
+
+            // Up on the mouse looks up, which raises the camera's angle toward
+            // the horizon. Not inverted, because nothing else on this platform is.
+            _pitchDelta -= motion.Relative.Y * LookRadiansPerPixel;
+            return;
+        }
+
+        if ((motion.ButtonMask & MouseButtonMask.Right) != 0)
         {
             _dragYaw -= motion.Relative.X * DragRadiansPerPixel;
         }
@@ -286,6 +393,8 @@ public partial class CameraRig : Node3D
         float keys = Input.GetActionStrength("view_right") - Input.GetActionStrength("view_left");
         Turn(-keys * Mathf.DegToRad(TurnRateDegrees) * step + _dragYaw);
         _dragYaw = 0.0f;
+
+        ApplyPitch();
 
         // Rotation is set every frame rather than only when the yaw changes.
         // Nothing else writes this node's rotation, and a conditional here would

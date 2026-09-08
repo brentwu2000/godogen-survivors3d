@@ -1,7 +1,7 @@
 using Godot;
 
-/// Drives the main scene with synthetic input and reports whether turn-and-
-/// advance is really wired the way it claims to be.
+/// Drives the main scene with synthetic input and reports whether the control
+/// scheme is really wired the way it claims to be.
 ///
 ///   godot --headless --script test/MovementProbe.cs
 ///
@@ -15,12 +15,19 @@ using Godot;
 /// probe would have passed or failed for reasons unrelated to whether anything
 /// worked.
 ///
-/// What replaces it is the one property that makes the scheme worth having —
-/// **the direction of travel follows the view**. Three stages, and they have to
-/// be in this order: advancing at rest, turning without advancing, then advancing
-/// again to see that the heading came with the camera. The third stage is the
-/// only one that can catch the bug this scheme is prone to, which is a forward
-/// vector computed once and cached.
+/// It then became a test of turn-and-advance, which the game shipped for eleven
+/// phases and no longer does: the mouse drives the camera now and `[A]`/`[D]`
+/// strafe. So the contract is four properties, and they have to be measured in
+/// this order:
+///
+/// - `[W]` advances along the view.
+/// - `[D]` translates along the view's *right* and does not turn it. That last
+///   half is what says the old scheme is gone rather than merely switched off.
+/// - The view keys turn without translating, because turning in place is how a
+///   player aims.
+/// - `[W]` after a turn advances along the *new* view. This is the only stage
+///   that catches a forward vector computed once and cached, which every other
+///   stage would pass with a stale number.
 ///
 /// Deliberately does NOT use SceneBuildUtil.Run: that helper quits as soon as
 /// its callback returns, which is right for a builder and fatal for a probe that
@@ -30,6 +37,7 @@ public partial class MovementProbe : SceneTree
     private const int SettleFrames = 10;
     private const int DriveFrames = 60;
     private const int TurnFrames = 45;
+    private const int StrafeFrames = 45;
 
     /// How far the player has to get for a stage to count as movement. Well under
     /// what 60 frames at 6 m/s would cover in the open, because the spawn is not
@@ -52,7 +60,10 @@ public partial class MovementProbe : SceneTree
 
     private Vector3 _legStart;
     private float _yawBefore;
+    private float _yawBeforeStrafe;
     private float _yawAfterTurn;
+    private Vector2 _strafeLeg;
+    private float _strafeYawDrift;
     private Vector2 _firstLeg;
     private Vector2 _secondLeg;
     private float _turnDrift;
@@ -105,9 +116,10 @@ public partial class MovementProbe : SceneTree
                 return true;
             }
 
-            if (!_player.TurnToSteer)
+            if (_player.TurnToSteer)
             {
-                GD.PushError("PROBE FAILED — TurnToSteer is off, so this measures the old scheme");
+                GD.PushError("PROBE FAILED — TurnToSteer is on, so the horizontal keys turn the "
+                           + "view and this measures a scheme the game no longer ships");
                 Quit(1);
                 return true;
             }
@@ -125,21 +137,37 @@ public partial class MovementProbe : SceneTree
             Input.ActionPress("move_up");
         }
 
+        // Strafe. `[D]` moves the player toward the right of the screen and does
+        // **not** turn the view, which is the whole of what changed when the
+        // mouse took over the camera. Under the old scheme this leg would have
+        // yawed the rig and translated nothing.
         if (_frame == SettleFrames + DriveFrames)
         {
             Input.ActionRelease("move_up");
             _firstLeg = Flat(_player!.GlobalPosition - _legStart);
 
-            // Turn right, and only turn. Nothing should translate: turning in
-            // place is how the player aims, and a scheme where it also shuffled
-            // you sideways would make standing and shooting impossible.
             _legStart = _player.GlobalPosition;
+            _yawBeforeStrafe = _rig!.Yaw;
             Input.ActionPress("move_right");
         }
 
-        if (_frame == SettleFrames + DriveFrames + TurnFrames)
+        // Turn, and only turn, through the view keys. Nothing should translate:
+        // turning in place is how the player aims, and a scheme where it also
+        // shuffled you sideways would make standing and shooting impossible.
+        if (_frame == SettleFrames + DriveFrames + StrafeFrames)
         {
             Input.ActionRelease("move_right");
+            _strafeLeg = Flat(_player!.GlobalPosition - _legStart);
+            _strafeYawDrift = Mathf.RadToDeg(
+                Mathf.Wrap(_rig!.Yaw - _yawBeforeStrafe, -Mathf.Pi, Mathf.Pi));
+
+            _legStart = _player.GlobalPosition;
+            Input.ActionPress("view_right");
+        }
+
+        if (_frame == SettleFrames + DriveFrames + StrafeFrames + TurnFrames)
+        {
+            Input.ActionRelease("view_right");
             _yawAfterTurn = _rig!.Yaw;
             _turnDrift = Flat(_player!.GlobalPosition - _legStart).Length();
 
@@ -148,7 +176,7 @@ public partial class MovementProbe : SceneTree
             Input.ActionPress("move_up");
         }
 
-        if (_frame == SettleFrames + 2 * DriveFrames + TurnFrames)
+        if (_frame == SettleFrames + 2 * DriveFrames + StrafeFrames + TurnFrames)
         {
             Input.ActionRelease("move_up");
             _secondLeg = Flat(_player!.GlobalPosition - _legStart);
@@ -156,17 +184,15 @@ public partial class MovementProbe : SceneTree
             // Leg three: something two metres away and ninety degrees off the
             // heading, driven through `BotDrive` rather than through raw keys.
             //
-            // **This is the one leg that is about the driver rather than the
-            // scheme.** Turn-and-advance traces arcs of radius `v/ω` — 2.29 m at
-            // 6 m/s and 150°/s — so a driver that advances while it turns settles
-            // onto that circle around anything nearer than its diameter and stays
-            // there. Two `BalanceSweep` seeds spent sixty seconds orbiting a crate
-            // 2.3 m out with the flow field pointing straight at it, and every
-            // diagnostic said the route was correct because it was.
-            //
-            // Ninety degrees off is the geometry at its worst without being the
-            // degenerate 180. From the cleared spawn, so this measures the driver
-            // and not the seed's choice of obstacle.
+            // **This leg is a monument and it should stay passing forever.** Under
+            // turn-and-advance a driver traced arcs of radius `v/ω` — 2.29 m at
+            // 6 m/s and 150°/s — so it settled onto that circle around anything
+            // nearer than its diameter and stayed there. Two `BalanceSweep` seeds
+            // spent sixty seconds orbiting a crate 2.3 m out with the flow field
+            // pointing straight at it, and every diagnostic said the route was
+            // correct because it was. Strafing has no turning circle at all, so
+            // this is now easy — and it is exactly the check that would notice if
+            // anything ever put the old scheme back.
             _player.GlobalPosition = Vector3.Zero;
             _player.Velocity = Vector3.Zero;
             Vector2 forward = CameraRig.Forward(_rig!.Yaw);
@@ -174,7 +200,7 @@ public partial class MovementProbe : SceneTree
             _orbitClosest = float.MaxValue;
         }
 
-        if (_frame <= SettleFrames + 2 * DriveFrames + TurnFrames)
+        if (_frame <= SettleFrames + 2 * DriveFrames + StrafeFrames + TurnFrames)
             return false;
 
         if (_orbitEnded == 0)
@@ -183,12 +209,11 @@ public partial class MovementProbe : SceneTree
             Vector2 toTarget = _orbitTarget - at;
             _orbitClosest = Mathf.Min(_orbitClosest, toTarget.Length());
 
-            float radius = _player.MoveSpeed * (1.0f + _player.AdrenalineBoost)
-                           / Mathf.DegToRad(_rig!.TurnRateDegrees);
-            BotDrive.Steer(toTarget, _rig.Yaw, toTarget.Length(), radius);
+            BotDrive.Steer(toTarget, _rig!.Yaw, toTarget.Length());
 
             if (_orbitClosest > OrbitArrived
-                && _frame < SettleFrames + 2 * DriveFrames + TurnFrames + OrbitFrames)
+                && _frame < SettleFrames + 2 * DriveFrames + StrafeFrames
+                            + TurnFrames + OrbitFrames)
             {
                 return false;
             }
@@ -222,7 +247,24 @@ public partial class MovementProbe : SceneTree
         // error here is the difference between a camera that follows the key and
         // one that runs away from it, and it is invisible to any test that only
         // asks whether the yaw changed.
-        Check(turned < -20.0f, $"[D] turned {turned:F1}° — right must turn clockwise, so negative");
+        Check(turned < -20.0f, $"[X] turned {turned:F1}° — right must turn clockwise, so negative");
+
+        // The strafe, which is the leg this scheme is named for.
+        Vector2 rightBefore = new(-forwardBefore.Y, forwardBefore.X);
+
+        GD.Print($"strafe: moved {_strafeLeg.Length():F2}m, {Off(_strafeLeg, rightBefore):F1}° off "
+               + $"the view's right, and turned the view {_strafeYawDrift:F1}°");
+
+        Check(_strafeLeg.Length() > MovedEnough,
+            $"[D] moved {_strafeLeg.Length():F2}m — the horizontal keys have to translate");
+        Check(Off(_strafeLeg, rightBefore) < 25.0f,
+            $"[D] went {Off(_strafeLeg, rightBefore):F1}° off the view's right");
+
+        // **And it must not turn.** This is the assertion that the old scheme is
+        // gone rather than merely unused: under turn-and-advance this leg yawed
+        // the rig 112° and translated almost nothing.
+        Check(Mathf.Abs(_strafeYawDrift) < 5.0f,
+            $"[D] turned the view {_strafeYawDrift:F1}° — strafing is not steering");
 
         Check(_firstLeg.Length() > MovedEnough, $"advancing from rest moved {_firstLeg.Length():F2}m");
         Check(_secondLeg.Length() > MovedEnough, $"advancing after the turn moved {_secondLeg.Length():F2}m");
@@ -241,8 +283,8 @@ public partial class MovementProbe : SceneTree
 
         GD.Print($"leg 3: closed to {_orbitClosest:F2}m of a target {OrbitRange:F1}m away and 90° off");
         Check(_orbitClosest <= OrbitArrived,
-            $"never got closer than {_orbitClosest:F2}m — a driver that advances while turning "
-            + "orbits anything inside v/w and cannot close");
+            $"never got closer than {_orbitClosest:F2}m — strafing has no turning circle, so "
+            + "this closes unless something put turn-and-advance back");
 
         CheckRouteMemory();
 

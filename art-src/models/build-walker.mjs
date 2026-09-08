@@ -15,6 +15,7 @@ if (typeof globalThis.FileReader === 'undefined') {
 // The authored bodies are warnings drawn with mass and contour; BakeBody owns
 // their palette and animation data, while this file owns the silhouette.
 const specs = {
+  drifter: { height: 2.2, width: .48, limb: .065, depth: .24, lean: 4, hip: .48, shoulder: .80, head: .93, headR: .070, survivor: true },
   walker:  { height: 2.0, width: .43, limb: .055, depth: .20, lean: 5,  hip: .47, shoulder: .79, head: .925, headR: .075 },
   runner:  { height: 1.8, width: .25, limb: .038, depth: .13, lean: 38, hip: .55, shoulder: .78, head: .91, headR: .050, runner: true },
   brute:   { height: 3.0, width: .99, limb: .162, depth: .47, lean: -2, hip: .38, shoulder: .78, head: .855,headR: .045, brute: true },
@@ -159,17 +160,27 @@ async function build(name, s) {
     ball('Chest',[0,organY,organZ-s.depth*.025],[s.width*.16,(shoulderY-hipY)*.17,s.depth*.16],3,7)
   }
 
-  const active=parts.slice(0,s.organ?4:3)
+  if(name==='drifter') {
+    const front = leanZ(hipY) - s.depth * .58
+    // One low belt and one dominant diagonal. Both are manufactured, readable
+    // from the normal camera distance, and deliberately quieter than every
+    // later survivor's kit: Drifter is the silhouette zero.
+    tube('Hips',[[-s.width*.42,hipY+(shoulderY-hipY)*.05,front],[s.width*.42,hipY+(shoulderY-hipY)*.05,front]],[[s.limb*.30,s.limb*.30],[s.limb*.30,s.limb*.30]],5,3)
+    tube('Spine',[[-s.width*.27,hipY+(shoulderY-hipY)*.12,front-s.limb*.12],[s.width*.20,shoulderY-(shoulderY-hipY)*.04,leanZ(shoulderY)-s.depth*.55]],[[s.limb*.34,s.limb*.22],[s.limb*.34,s.limb*.22]],5,3)
+    ball('Hips',[s.width*.38,hipY-(shoulderY-hipY)*.05,front],[s.limb*.75,s.limb*1.05,s.limb*.48],3,6)
+  }
+
+  const active=parts.slice(0,(s.organ||s.survivor)?4:3)
   if(active.some(p=>p.length===0)) throw new Error(`${name}: empty required surface`)
   const groups=active.map(p=>BufferGeometryUtils.mergeGeometries(p,false))
   let geometry=BufferGeometryUtils.mergeGeometries(groups,true).toNonIndexed(); geometry.computeVertexNormals(); geometry.name=`${name}Geometry`
-  const materials=['Torso','Limbs','Head','Organ'].slice(0,active.length).map(neutral)
+  const materials=['Torso','Limbs','Head',s.survivor?'Kit':'Organ'].slice(0,active.length).map(neutral)
   const mesh=new THREE.SkinnedMesh(geometry,materials);mesh.name=`${name}Mesh`;mesh.add(root);mesh.bind(new THREE.Skeleton(bones))
   const scene=new THREE.Group();scene.name=name;scene.add(mesh);scene.updateMatrixWorld(true)
   const triangles=geometry.attributes.position.count/3,budget=name==='boss'?900:600
   if(triangles>budget) throw new Error(`${name}: triangle budget exceeded by ${triangles-budget} (${triangles}/${budget})`)
   const exporter=new GLTFExporter();let glb=await exporter.parseAsync(scene,{binary:true,onlyVisible:false});glb=expandMaterialGroups(glb)
-  const out=join(dirname(fileURLToPath(import.meta.url)),'..','..','assets','models');mkdirSync(out,{recursive:true});writeFileSync(join(out,`${name}.glb`),Buffer.from(glb))
+  const out=join(dirname(fileURLToPath(import.meta.url)),'..','..','assets','models',s.survivor?'survivors':'');mkdirSync(out,{recursive:true});writeFileSync(join(out,`${name}.glb`),Buffer.from(glb))
   console.log(`${name}.glb ${triangles} triangles; ${active.length} surfaces; ${bones.length} bones; hip ${hipY.toFixed(3)} m; shoulder ${shoulderY.toFixed(3)} m; hand ${handY.toFixed(3)} m; head ${h.toFixed(3)} m`)
 }
 

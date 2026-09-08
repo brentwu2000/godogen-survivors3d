@@ -20,28 +20,39 @@ using Godot;
 /// that gets fixed in one file and left wrong in the other two.
 public static class BotDrive
 {
-    /// How closely aligned counts as aligned, as a dot product.
+    /// Below this, a component of the desired direction is not worth a key.
     ///
-    /// 0.995 is about 5.7°. Not tighter: the turn is applied once per physics
-    /// tick at 150°/s, so a single tick moves the heading 2.5° and a deadband
-    /// narrower than that would overshoot, correct, overshoot, and read as a bot
-    /// with a tremor. Not looser either — 10° of error over a 40 m walk is 7 m
-    /// off, which is a miss.
-    private const float Aligned = 0.995f;
+    /// 0.08 is about 5°. Its only job is to stop a bot walking almost due north
+    /// from also tapping `move_right` sixty times a second — the movement would
+    /// be within a degree of correct and the input log would read as a tremor.
+    private const float Deadband = 0.08f;
 
     private static readonly string[] Actions =
         { "move_up", "move_down", "move_left", "move_right" };
 
-    /// Presses the keys that steer toward `desired` and advance along it.
+    /// Presses the keys that move toward `desired`.
     ///
     /// `yaw` is the rig's, and `desired` is in world XZ — the same space
     /// `CameraRig.Forward` returns, so a caller with a flow-field direction can
     /// pass it straight in.
     ///
-    /// `distance` and `turnRadius` are what stop the bot orbiting something it is
-    /// standing next to; both default to "do not check", so a caller that has
-    /// neither behaves exactly as this did before they existed. See the note on
-    /// `inside` below.
+    /// **This file used to be forty lines of turning geometry and it is now a
+    /// projection onto two axes, because the game's controls changed under it.**
+    /// The note above is kept because it is the reason this class exists at all:
+    /// `[A]`/`[D]` turned the view, so a direction did *not* decompose into four
+    /// independent keys, and a driver that assumed it did spun on the spot
+    /// forever while every diagnostic agreed the route was correct.
+    ///
+    /// `Player.Steer` strafes now. A direction decomposes into four independent
+    /// keys again — which is what every driver in this repository assumed in the
+    /// first place — and the turning circle that made two of `BalanceSweep`'s
+    /// twelve seeds orbit a crate 2.3 m away does not exist, because nothing
+    /// turns to move.
+    ///
+    /// `distance` and `turnRadius` are still accepted and are no longer read. A
+    /// turning radius is v/ω and ω is zero now. They stay in the signature rather
+    /// than being taken out of three callers for no behavioural gain, and they
+    /// stay documented as dead so that nobody tunes them.
     public static void Steer(Vector2 desired, float yaw,
                              float distance = float.PositiveInfinity,
                              float turnRadius = 0.0f)
@@ -55,57 +66,22 @@ public static class BotDrive
         Vector2 target = desired.Normalized();
         Vector2 forward = CameraRig.Forward(yaw);
 
-        float aligned = forward.Dot(target);
+        // `Right` is `Forward` turned a quarter clockwise seen from above, which
+        // is the same basis `Player.Steer` builds. Both have to agree or the bot
+        // presses the key for the opposite side, and the failure looks like a
+        // pathing bug rather than a sign error.
+        var right = new Vector2(-forward.Y, forward.X);
 
-        // The z-component of forward × target, which is positive when the target
-        // is clockwise from the heading seen from above — the direction
-        // `move_right` turns. Deriving the side from a cross product rather than
-        // from comparing angles avoids the wrap at ±π, which is where an
-        // angle-difference bot turns the long way round for no visible reason.
-        float side = forward.X * target.Y - forward.Y * target.X;
+        float along = forward.Dot(target);
+        float across = right.Dot(target);
 
-        // Dead astern. The cross product is zero at exactly 180° and the bot
-        // would press neither key and advance backwards away from the target
-        // forever — the one input where "no correction needed" and "maximum
-        // correction needed" produce the same number. Pick a side; either is
-        // half a turn.
-        if (side == 0.0f && aligned < 0.0f)
-            side = 1.0f;
-
-        bool turning = aligned < Aligned;
-        Set("move_right", turning && side > 0.0f);
-        Set("move_left", turning && side < 0.0f);
-
-        // Turn first when the target is inside the turning circle, and only
-        // there.
-        //
-        // **This is a geometric dead end, not a tuning problem.** Turn-and-advance
-        // moves at v while turning at ω, so the tightest arc it can trace has
-        // radius v/ω — 6.0 m/s against 150°/s is 2.29 m. A bot that keeps pressing
-        // forward while off-heading therefore settles onto exactly that circle
-        // around whatever it is chasing, and no amount of time gets it closer: two
-        // of the twelve `BalanceSweep` seeds sent it round a crate 2.3 m out for
-        // sixty seconds with the flow field pointing straight at the thing. It was
-        // read as a level bug for three phases because every diagnostic agreed the
-        // route was correct — which it was.
-        //
-        // Outside the circle the note below still holds and nothing changes: a bot
-        // that stopped dead at every corner would be standing still in a horde,
-        // which is a different game from the one being measured. Inside it, a
-        // second of turning on the spot is the only thing that arrives at all.
-        //
-        // `turnRadius` is the caller's own v/ω rather than a constant here,
-        // because speed is a growth option and a bot that bought four of them
-        // orbits nearly twice as wide.
-        bool inside = distance < turnRadius * 2.0f;
-
-        // Advance while still turning, as long as the target is not behind.
-        // Waiting for the turn to finish before moving produces a bot that stops
-        // dead at every corner, which is both slower and — because it is standing
-        // still in a horde while it turns — a different game from the one being
-        // measured.
-        Set("move_up", aligned > 0.0f && !(inside && turning));
-        Set("move_down", false);
+        // `move_up` is −Y, so forward is the up key. Two keys at once is an
+        // ordinary diagonal and `Player.Steer` normalises the pair, so a bot can
+        // hold any of the eight directions a player can and no more.
+        Set("move_up", along > Deadband);
+        Set("move_down", along < -Deadband);
+        Set("move_right", across > Deadband);
+        Set("move_left", across < -Deadband);
     }
 
     /// Lets go of everything this class presses.
