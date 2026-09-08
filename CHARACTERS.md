@@ -8,13 +8,13 @@ this file extends that roster and **overturns exactly one of its decisions**, wh
 below rather than quietly reversed.
 
 **The modelling half of this brief has been overtaken from an unexpected direction: the Drifter's
-body is a model now, not a `MeshBuilder` composition.** RIN — `rin_v1_reference.glb`, 27,488
-triangles, refined against a supplied reference sheet — bakes to `resources/bodies/drifter.res`,
+body is a model now, not a `MeshBuilder` composition.** RIN — `rin_v2.glb`, 51,353 triangles across
+143 mesh objects, built against a supplied design sheet — bakes to `resources/bodies/drifter.res`,
 which is where `BodyBakes` looks for a survivor called Drifter. She satisfies the part of this brief
 that mattered most, §"The kit is where the silhouette lives", without any of it being modelled here:
 cropped tactical jacket over an ivory panel, thigh bands and straps, gloves, headset, a stowed rifle,
 and a ponytail long enough to be a silhouette on its own. See README's Decisions and `ART.md §2` for
-why a 27,488-triangle body costs nothing here, and README's What's left for the one thing wrong with
+why a 51,353-triangle body costs nothing here, and README's What's left for the one thing wrong with
 her, which is that she has no irises.
 
 **A survivor's body is a file on a shelf now, so this brief is one intake command away from being
@@ -100,22 +100,31 @@ The empirical gate is in §How it is judged. It is the one that decides.
 the colour wheel, deliberately ignoring value — because a survivor has to be legible in shadow and in
 sun, and brightness is the channel a dark biome takes away. Measured against RIN's bake:
 
-| | Mean colour | Saturation | Chroma distance to nearest horde | Luminance |
-| :--- | :--- | ---: | ---: | ---: |
-| RIN, as drawn | `7d6c6e` | 0.275 | **0.217** (bulwark `8f8a80`) | 0.162 |
-| Procedural survivor | `3b75db` | 0.72 | 0.72 | 0.30 |
-| Darkest horde variant | `424752` | 0.19 | — | 0.279 |
+| | Mean colour | Chroma distance to nearest horde | Luminance |
+| :--- | :--- | ---: | ---: |
+| RIN v2, as drawn | `78686b` | **0.203** | 0.151 |
+| RIN v1, as drawn | `7d6c6e` | 0.217 | 0.162 |
+| Procedural survivor, authored torso | `3b75db` | 0.72 | 0.30 |
+| Darkest authored horde torso | `424752` | — | 0.279 |
+| Stalker, as drawn from its bake | `6b5f52` | 0.202 | 0.119 |
 
-**She fails it, and the metric is what is wrong.** A survivor's colour used to be three authored
-constants for torso, limbs and head; RIN's is twenty-three thousand sampled texels of skin, black
-cloth, an ivory panel and red trim, and the mean of *any* such body is near-grey. A rule that takes
-the mean therefore rejects every textured character there will ever be, which is not a statement
-about legibility.
+`BakeProbe` prints those first two lines on every sweep, which is the only place the *drawn* body is
+measured at all.
 
-What actually separates her is the two things this rule set aside. **Value:** at 0.162 she is
-1.7 times darker than the darkest thing in the horde, on a field whose ground reads 0.5 and up.
+**She fails the rule, and the metric is what is wrong.** A survivor's colour used to be three
+authored constants for torso, limbs and head; RIN's is forty thousand sampled texels of skin, black
+cloth, an ivory top and red trim, and the mean of *any* such body is near-grey. A rule that takes the
+mean therefore rejects every textured character there will ever be, which is not a statement about
+legibility. The last row is the proof from the other side: the stalker's own bake reads `6b5f52` at
+0.202, so a variant already in the game and never questioned sits exactly where RIN does.
+
+What actually separates her is the two things this rule set aside. **Value:** at 0.151 she is darker
+than every authored horde torso by a wide margin, on a field whose ground reads 0.5 and up — though
+not darker than the stalker's bake, which is worth knowing before a run puts the two together.
 **Silhouette:** a human figure with a hip-length ponytail among nine boxes, which is the same
-argument §"The decision this overturns" already makes for the horde.
+argument §"The decision this overturns" already makes for the horde. From behind, v2's two crimson
+underlocks are the one saturated thing on her and they run the length of her back, which is the
+angle the player actually sees for a whole run.
 
 Neither is asserted by anything, and the honest reading is that a textured survivor's legibility is
 currently a play-test rather than a probe.

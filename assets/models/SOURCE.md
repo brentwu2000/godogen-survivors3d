@@ -149,10 +149,12 @@ horde costs.
 
 | | |
 | :--- | :--- |
-| In repo | `rin_v1_reference.glb`, baked to `resources/bodies/drifter.res` |
-| Authored in | `godogen-master/artifacts/rin_v1_reference/` — work blend, refine script, four-view previews, changelog |
-| sha256 (glb) | `f87e3e6dd43e57d71084740b545e171ca62260907dafe1bca3a936d1fa159082` |
-| Contents | 27,488 triangles, 57 mesh objects, 60 surfaces, one skeleton of 88 `mixamorig_*` bones, one 8.3 s `Animation`, a 2048 albedo atlas |
+| In repo | `rin_v2.glb`, baked to `resources/bodies/drifter.res` |
+| Authored in | `godogen-master/artifacts/rin_v2/` — work blend, build script, six previews, changelog. `rin_v1_reference/` and `rin_v1/` are the earlier passes |
+| Contents | 51,353 triangles, 143 mesh objects, 145 surfaces, **141 of them skinned**, one skeleton of 88 `mixamorig_*` bones, one 8.3 s `Animation` |
+| Rest height | 1.72 m, applied by a uniform-scale node under an identity-scale root. The bake normalises to the roster's 2.2 m regardless |
+| Rifle | a separate `RIN_AR01.glb` and deliberately not in the character |
+| sha256 (glb) | `fdf73f05475f04aad8861ca2c0bd52006675962314984055f6892f966228b985` |
 | Underlying character | `game-ready-low-poly-tactical-character.zip`, nested `source/ForSketchfab.zip/CharacterIdle.fbx` |
 | Licence | **not established.** See below |
 
@@ -176,14 +178,36 @@ call the Polyart pack and `rigged_anime_girl_cc0.blend` got, for the same reason
 and with the same escape: fill in a licence and the line comes out.
 
 ```bash
-powershell art-src/models/intake.ps1 -Model assets/models/rin_v1_reference.glb     -Slot drifter -Pose "Animation@2.5" -Yaw 180
+powershell art-src/models/intake.ps1 -Model assets/models/rin_v2.glb     -Slot drifter -Pose "Animation@2.5" -Yaw 180
 ```
 
 `slot:drifter` resolves both the destination and the 2.2 m the survivor roster
 asks for. The animation is called `Animation`; frame 2.5 s is an idle with the
 arms down, which is what the shader's swing is added to.
 
-### What is wrong with it, and it is the eyes
+### What v2 changed, and what it cost
+
+**141 of 143 meshes are skinned, against 38 of 57 in v1.** That is the single
+most useful difference to this pipeline: `BakeBody` skips an unskinned mesh on a
+rigged model unless it hangs off a `BoneAttachment3D`, so a model whose trim is
+skinned needs nothing explained to it. Every one of the eleven ponytail locks,
+the crimson underlocks, the boot laces and hooks, the belt loops and rivets, the
+thigh quick-releases and the jacket's zip tape came through.
+
+**The rifle left the character**, which removes a small absurdity: the game
+appends the silhouette of whatever weapon is equipped to the player's own mesh,
+so v1 carried a stowed rifle *and* a drawn one.
+
+Cost, measured as the player rather than reasoned: 27,488 -> 51,353 triangles
+moved the frame mean from 1.30 ms to 1.32 — noise. The bake went from 1.6 MB to
+2.9 MB, which is not noise, because the bake is the committed half. `ART.md §2`
+carries the table and the ceiling that follows from it.
+
+The two crimson underlocks are worth naming as a legibility gain rather than a
+detail: from behind, which is how the player is seen for a whole run, they read
+as two red stripes down the back at any range the body is visible at.
+
+### What is wrong with it, and it is still the eyes
 
 **The whites of RIN's eyes bake blown white with no iris.** Everything else on
 the model is exact — black jacket, ivory chest panel, red ribbons and headset
@@ -206,13 +230,13 @@ than one vertex colour per vertex. Nothing else in the game can.
 At the range the game is played the head is about twenty pixels and none of this
 is visible. It is visible in `BodyShot` and in any close render.
 
-### The previous survivor is still on disk and is not loaded
+### The earlier passes are on disk and are not loaded
 
-`tactical_character.glb` is RIN's own ancestor — the same
-`game-ready-low-poly-tactical-character.zip` — and was the Drifter's body for one
-phase. It is not committed either, and nothing points at it now: the shelf holds
-`drifter.res` and `BakeBody -- ... slot:drifter` overwrote it. Kept as the
-fallback if RIN has to come out in a hurry.
+`rin_v1_reference.glb` (27,488 triangles) and `tactical_character.glb` — RIN's
+own ancestor, the same supplied archive — were each the Drifter's body for one
+phase. Neither is committed and nothing points at either: the shelf holds one
+`drifter.res` and each bake overwrote the last. Kept as the fallback if v2 has to
+come out in a hurry, and as a record of what improved.
 
 ## Quaternius — Zombie Apocalypse Kit
 

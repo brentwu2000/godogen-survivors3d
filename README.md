@@ -1363,6 +1363,26 @@ real form, and where two bands across an arena would be two continents. It also 
 floor the whole horizon is silhouette, and fresnel draws a bright band across the far edge exactly
 where the fog is meant to be hiding things.
 
+**RIN v2, and the interesting part is that 141 of her 143 meshes are skinned.** v1 had 38 of 57, and
+the difference matters to this pipeline more than any of the modelling does: `BakeBody` skips an
+unskinned mesh on a rigged model unless it hangs off a `BoneAttachment3D`, because on a Quaternius
+pack those are the ten weapons lying loose in the file. A model whose trim is skinned needs nothing
+explained to it — eleven ponytail locks, crimson underlocks, boot laces and hooks, belt loops and
+rivets, thigh quick-releases and the jacket's zip tape all came through on the first bake.
+
+The rifle also left the character, which removes a small absurdity: the game appends the silhouette
+of whatever weapon is equipped to the player's own mesh, so v1 carried a stowed rifle *and* a drawn
+one. And the two crimson underlocks are a legibility gain rather than a detail — from behind, which
+is how the player is seen for an entire run, they read as two red stripes down her back at any range
+she is visible at, which is the one saturated thing on a body the chroma rule calls grey.
+
+**Doubling the player's triangles cost 0.02 ms and 1.3 MB, and only one of those is a real number.**
+27,488 to 51,353 moved the frame mean from 1.30 ms to 1.32, which is noise — one body does not
+register against a horde spending between 92,000 and 4.7 million triangles. The bake went from 1.6 MB
+to 2.9 MB, and the bake is the half that is committed, because the source cannot be. That is the
+ceiling on a survivor and it is why `ART.md §2` now puts the player tier at ~120,000 triangles
+instead of at 40,000 — the old number was a horde rule wearing the player's name.
+
 ## Performance
 
 RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds.
@@ -1377,6 +1397,17 @@ which body is on the shelf:
 | authored, Polyart | 1,650 | 330,000 | 1.44 ms | 1.28 ms | 2.45 ms | 68 |
 | authored, tactical | 23,822 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
 | 500 mixed, procedural | ~460–570 | ~250,000 | 1.23 ms | 1.01 ms | 2.13 ms | 91 |
+
+And the player, which is one body and therefore the cheap half of every one of those rows:
+
+| 200 walkers, procedural + this player | Triangles | Mean | Median | p95 | Draw calls |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| RIN v1 | 27,488 | 1.30 ms | 0.91 ms | 2.03 ms | 70 |
+| RIN v2 | 51,353 | 1.32 ms | 0.95 ms | 1.94 ms | 70 |
+
+Doubling the player's triangles moved the mean 0.02 ms. What it did move is the committed bake:
+1.6 MB to 2.9 MB, which is the real ceiling on a survivor and the reason `ART.md §2` puts the player
+tier at ~120,000 rather than at whatever the GPU would take.
 
 3.6x the triangles cost nothing measurable. **52x the triangles cost 2.1x the
 frame time and still held 293 fps**, which is a body forty times over the budget
@@ -1792,11 +1823,13 @@ person**, not things that need code.
   Performance with the same three bodies.
 - **A textured survivor's legibility in a crowd is unasserted, and RIN fails the rule that used to
   cover it.** `PaletteProbe` stage 3 wants 0.35 of chroma between the player and every horde torso,
-  value deliberately excluded because a dark biome takes value away. RIN's drawn mean is `7d6c6e` at
-  0.217 from the bulwark's grey. The metric is what broke: a survivor's colour used to be three
-  authored constants and is now twenty-three thousand sampled texels of skin, black cloth and an
-  ivory panel, whose mean is near-grey for *any* authored character. What separates her instead is
-  value — 0.162 against the horde's 0.279 and up — and silhouette, and nothing checks either. The
+  value deliberately excluded because a dark biome takes value away. RIN v2's drawn mean is `78686b` at
+  0.203 from the nearest, and the stalker's own bake — a variant in the game since Phase 8 and never
+  questioned — reads `6b5f52` at 0.202, which is the same place. The metric is what broke: a survivor's colour used to be three
+  authored constants and is now forty thousand sampled texels of skin, black cloth and an
+  ivory top, whose mean is near-grey for *any* authored character. What separates her instead is
+  value — 0.151 against every authored horde torso's 0.279 and up — and silhouette, and `BakeProbe`
+  prints both numbers per bake now without ruling on them. The
   place it should have broken *was* checked: Cold Storage's dark floor and 7–28 m fog is where a
   dark survivor was expected to vanish, and she is one of the easiest figures to find there, because
   additive fog lightens a dark body and because an ivory panel and a hip-length ponytail are the only

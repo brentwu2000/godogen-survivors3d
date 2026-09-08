@@ -63,6 +63,8 @@ off, player moving so the flow field rebuilds:
 | Procedural | ~460 | 200 | 92,000 | 1.64 ms | 0.90 ms | 2.03 ms | 70 |
 | Polyart zombie | 1,650 | 200 | 330,000 | **1.44 ms** | 1.28 ms | 2.45 ms | 68 |
 | Tactical character | 23,822 | 200 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
+| RIN v1, as the player | 27,488 | 1 | 27,488 | 1.30 ms | 0.91 ms | 2.03 ms | 70 |
+| RIN v2, as the player | 51,353 | 1 | 51,353 | 1.32 ms | 0.95 ms | 1.94 ms | 70 |
 
 **A 3.6x increase in triangles cost nothing measurable, and a 52x increase cost
 2.1x the frame time and still held 293 fps.** The horde is not triangle-bound
@@ -82,7 +84,16 @@ from that number.
 | Horde — walker, runner, spitter | 150 | up to ~4,000 | Rarely, on this GPU |
 | Standard — brute | 10–20 | up to ~20,000 | No |
 | Boss / elite | 1–2 | 20,000–40,000 | No |
-| **Player** | **1** | **20,000–40,000** | **Never** |
+| **Player** | **1** | **up to ~120,000** | **Never** |
+
+**The player row's limit is the repository, not the renderer.** Doubling the
+player from 27,488 to 51,353 triangles moved the frame mean by 0.02 ms, which is
+noise — one body's triangles do not register against a horde that is spending
+92,000 to 4.7 million. What does register is that the bake is committed and the
+source is not: RIN v1's `.res` is 1.6 MB and v2's is 2.9 MB, so ~120,000
+triangles is where a survivor starts costing seven megabytes of tracked binary
+per version. The other reason to stop is the mobile GPU, which is unmeasured
+here as it is everywhere.
 
 The horde row is the only one that moved and it is deliberately not the measured
 ceiling. 23,822 at 200 instances runs, so ~4,000 is not a limit — it is a margin
@@ -209,7 +220,8 @@ qualities this renderer discards.
 ### Reject on sight
 
 - Over 40,000 triangles with no lower-poly version in the pack — decimating that
-  far destroys the silhouette
+  far destroys the silhouette. **A horde rule.** For the player the number is
+  ~120,000 and the reason is the size of the committed bake; see §2
 - Static / unrigged, unless it is scenery. A body needs a rig to be classified
   into legs and arms
 - Bone names that are not recognisable words. `BakeBody.Classify` matches

@@ -103,9 +103,13 @@ $tiers = @{
     lantern = @{ OnScreen = 150; Budget = 2000 }
     brute   = @{ OnScreen =  20; Budget = 6000 }
     boss    = @{ OnScreen =   2; Budget = 40000 }
-    drifter = @{ OnScreen =   1; Budget = 40000 }
-    courier = @{ OnScreen =   1; Budget = 40000 }
-    warden  = @{ OnScreen =   1; Budget = 40000 }
+    # The survivors' ceiling is the size of the committed bake, not the frame
+    # time. 27,488 triangles and 51,353 measure 1.30 ms and 1.32 as the player,
+    # which is noise; their .res files are 1.6 MB and 2.9 MB, which is not. See
+    # ART.md section 2.
+    drifter = @{ OnScreen =   1; Budget = 120000 }
+    courier = @{ OnScreen =   1; Budget = 120000 }
+    warden  = @{ OnScreen =   1; Budget = 120000 }
 }
 
 $slot = $Slot.ToLower()

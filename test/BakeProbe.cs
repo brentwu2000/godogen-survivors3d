@@ -372,6 +372,51 @@ public partial class BakeProbe : SceneTree
         GD.Print($"  {path}: {posture}, {baked.Triangles} tris, {baked.StandingHeight:F2} m, "
                + $"{moving} moving vertices, pivots {hip:F2}–{shoulder:F2} m");
 
+        // The colour the body actually reads as, and how far that is from the
+        // nearest thing in the horde.
+        //
+        // **Reported and not ruled on, and the reason is that the rule does not
+        // transfer.** `PaletteProbe` stage 3 requires 0.35 of chroma between the
+        // player and every horde torso, which is the right rule for three
+        // authored constants and the wrong one for forty thousand sampled texels
+        // of skin, black cloth and an ivory panel: the mean of any authored
+        // character is near-grey, so a threshold here would reject every
+        // textured body there will ever be. RIN reads 0.217 from the bulwark's
+        // grey and is nonetheless the easiest figure to find on screen, on
+        // silhouette and on value.
+        //
+        // So this is a number that appears in every sweep rather than a gate. A
+        // survivor swap that halves the separation is then visible in the diff
+        // of a probe's output, which is the only place it *can* be visible —
+        // nothing else measures the drawn body at all, and `CHARACTERS.md`
+        // carries the table this line is compared against.
+        //
+        // At 25 pixels a body is its own average colour, which is why the mean is
+        // the right aggregate and not, say, the most saturated part of it.
+        if (baked.Colours.Length > 0)
+        {
+            float r = 0.0f, g = 0.0f, b = 0.0f;
+            foreach (Color one in baked.Colours)
+            {
+                r += one.R;
+                g += one.G;
+                b += one.B;
+            }
+
+            var mean = new Color(r / baked.Colours.Length,
+                                 g / baked.Colours.Length,
+                                 b / baked.Colours.Length);
+
+            Vector2 chroma = Palette.Chroma(mean);
+            float nearest = float.MaxValue;
+            foreach (Color torso in Palette.HordeTorsos())
+                nearest = Mathf.Min(nearest, chroma.DistanceTo(Palette.Chroma(torso)));
+
+            GD.Print($"    reads as {mean.LinearToSrgb().ToHtml(false)}, "
+                   + $"luminance {0.2126f * mean.R + 0.7152f * mean.G + 0.0722f * mean.B:F3}, "
+                   + $"{nearest:F3} of chroma from the nearest horde torso");
+        }
+
         return ok;
     }
 
