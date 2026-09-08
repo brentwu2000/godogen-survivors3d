@@ -5,6 +5,7 @@ using Godot;
 ///
 ///   godot --script test/BaseShot.cs
 ///   godot --script test/BaseShot.cs -- rich   (credits to see the shop working)
+///   godot --script test/BaseShot.cs -- roster[:2]   (the survivor select)
 ///
 /// Not headless — the null rendering driver has nothing to capture. The profile
 /// on disk is backed up and restored: a screenshot does not spend a save.
@@ -15,6 +16,9 @@ public partial class BaseShot : SceneTree
 
     private string? _backup;
     private int _frame;
+    private bool _roster;
+    private int _pick;
+    private Node? _scene;
 
     public override void _Initialize()
     {
@@ -28,9 +32,40 @@ public partial class BaseShot : SceneTree
             ? FileAccess.GetFileAsString(ProfilePath)
             : null;
 
-        if (System.Array.IndexOf(OS.GetCmdlineUserArgs(), "rich") >= 0)
+        string[] args = OS.GetCmdlineUserArgs();
+
+        // Ten extractions, so three survivors are open and two are not. A
+        // roster shot with everything unlocked does not show the locked state,
+        // and the locked state is half of what the screen is for.
+        foreach (string argument in args)
         {
-            var profile = new Profile { Credits = 2600, RunsSurvived = 4, RunsLost = 1 };
+            if (!argument.StartsWith("roster", System.StringComparison.Ordinal))
+                continue;
+
+            _roster = true;
+            int at = argument.IndexOf(':');
+            if (at > 0 && int.TryParse(argument[(at + 1)..], out int pick))
+                _pick = pick;
+        }
+
+        if (System.Array.IndexOf(args, "rich") >= 0 || _roster)
+        {
+            var profile = new Profile
+            {
+                Credits = 2600,
+                RunsSurvived = _roster ? 10 : 4,
+                RunsLost = 1,
+
+                // **Without this the capture photographs the run.** A profile
+                // that has never seen the base is sent straight into a game by
+                // `BaseScreen._Ready` — deliberately, because everything on that
+                // screen is an answer to a question a new player has not been
+                // asked. `ChangeSceneToFile` is deferred, so the first frames
+                // still draw the base and the shot came out as the roster screen
+                // with a run's HUD over it and a NullReferenceException
+                // underneath.
+                HasSeenBase = true,
+            };
             profile.AddToStash("Circuit Board", 2);
             profile.AddToStash("Antiviral Serum", 1);
             profile.Proficiency[(int)WeaponCategory.Firearm] = 6;
@@ -49,13 +84,24 @@ public partial class BaseShot : SceneTree
         }
 
         // Not the developer's save file. See `Fresh`.
-        Fresh.Profile(scene);
+        if (!_roster)
+            Fresh.Profile(scene);
 
         GetRoot().AddChild(scene);
+        _scene = scene;
     }
 
     public override bool _Process(double delta)
     {
+        // Opened on the first frame rather than straight after `AddChild`, and
+        // the difference is that `_Ready` has run by then. `_Initialize` is
+        // before the root window is set up, so a node added there has entered
+        // the tree and is not yet *ready* — `BaseScreen._Ready` had not built the
+        // portrait panel, and `ShowRoster` dereferenced a null `TextureRect`
+        // while the screenshot came out looking almost right.
+        if (_frame == 1 && _roster)
+            _scene?.GetNode<BaseScreen>("Panel").ShowRoster(_pick);
+
         if (++_frame < 20)
             return false;
 

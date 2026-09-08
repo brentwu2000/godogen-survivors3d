@@ -145,98 +145,119 @@ The perf question it was meant to answer came back conclusively and is in
 and 200 bodies at 23,822 triangles measure 3.41. Triangles are not what the
 horde costs.
 
-## RIN — the survivor the player controls
+## PROJECT LAST DAWN — the five survivors
+
+**The licence is known now, and it has a name.** Three phases of this register
+carried "not recorded" in the author and licence rows for the body the player
+controls. The LAST DAWN production ran the provenance down: the original is
+*Game Ready Low Poly Tactical Character* by **DanlyVostok**, and the evidence is
+in the file rather than in a claim — `asset.extras` on the companion GLB carries
+the title, author, licence and listing URL, and `asset.generator` identifies
+Sketchfab.
 
 | | |
 | :--- | :--- |
-| In repo | `rin_v2.glb`, baked to `resources/bodies/drifter.res` |
-| Authored in | `godogen-master/artifacts/rin_v2/` — work blend, build script, six previews, changelog. `rin_v1_reference/` and `rin_v1/` are the earlier passes |
-| Contents | 51,353 triangles, 143 mesh objects, 145 surfaces, **141 of them skinned**, one skeleton of 88 `mixamorig_*` bones, one 8.3 s `Animation` |
-| Rest height | 1.72 m, applied by a uniform-scale node under an identity-scale root. The bake normalises to the roster's 2.2 m regardless |
-| Rifle | a separate `RIN_AR01.glb` and deliberately not in the character |
-| sha256 (glb) | `fdf73f05475f04aad8861ca2c0bd52006675962314984055f6892f966228b985` |
-| Underlying character | `game-ready-low-poly-tactical-character.zip`, nested `source/ForSketchfab.zip/CharacterIdle.fbx` |
-| Licence | **not established.** See below |
+| Original | Game Ready Low Poly Tactical Character |
+| Author | **DanlyVostok** — <https://sketchfab.com/1799danly> |
+| Listing | <https://sketchfab.com/3d-models/game-ready-low-poly-tactical-character-68213c7d97a04b1b963599180210f5bd> |
+| Licence | **CC BY 4.0** — <https://creativecommons.org/licenses/by/4.0/> |
+| Archive | `game-ready-low-poly-tactical-character.zip`, nested `source/ForSketchfab.zip/CharacterIdle.fbx` |
+| Derived by | PROJECT LAST DAWN, in `godogen-master/artifacts/last_dawn_characters/` |
+| Attribution record | that artifact's `THIRD_PARTY_ASSETS.md`, and `reports/source_embedded_metadata.json` for the extracted metadata and hashes |
 
-**The provenance is traceable now and the licence still is not, and those are two
-different facts.** `artifacts/rin_v1/docs/SOURCE_LICENSE.md` records what the
-supplied archives contained: no licence document, no author attribution, no
-receipt, no listing URL. The inner archive is named `ForSketchfab.zip`, which
-places the original on Sketchfab and makes **Free Standard** the likely terms —
-the row in `ART.md §6` that permits use in a product and forbids redistributing
-the file. That is a strong inference and not a record, so it is written as one.
+The listing itself returned HTTP 403 on 2026-09-08, so the row above rests on the
+embedded metadata rather than on a fetched snapshot. The licence deed was
+reachable.
 
-The body, skinning, face, base clothing, textures and idle come from that
-archive. Authored locally for RIN: nine ponytail locks, two ribbons and a clasp,
-the cropped jacket and its harness, the thigh bands and straps, the headset red
-plates, the shoulder patch, and the stowed rifle in nineteen pieces. Red irises
-were baked into the atlas from the supplied textures; the head was narrowed 7%
-and shortened 3.5%.
+**Which means the attribution is now a shipping requirement.** `ART.md §6` has
+said since it was written that CC BY needs the credit to reach the *player* and
+that this game had no surface for one — "an unscheduled dependency, and it should
+be scheduled". It is scheduled: the roster screen carries the notice, because
+that is the screen where these five illustrations and the bodies under them are
+on display. `BaseScreen.RosterScreen` is the two lines, and they are not
+optional.
 
-**So the `.glb` is in `.gitignore` and the bake is committed**, which is the same
-call the Polyart pack and `rigged_anime_girl_cc0.blend` got, for the same reason
-and with the same escape: fill in a licence and the line comes out.
+### The five
+
+| Slot | Model | Triangles | Bake | Design height | Drawn at |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| `rin` | `ld_rin.glb` (LOD1) | 45,816 | 2.7 MB | 172 cm | 2.20 m |
+| `mika` | `ld_mika.glb` | 38,815 | 1.9 MB | 158 cm | 2.02 m |
+| `akira` | `ld_akira.glb` | 44,733 | 2.1 MB | 175 cm | 2.24 m |
+| `sora` | `ld_sora.glb` | 42,495 | 1.9 MB | 168 cm | 2.15 m |
+| `yuna` | `ld_yuna.glb` | 45,263 | 2.1 MB | 163 cm | 2.08 m |
+
+**LOD1 rather than LOD0, and the reason is the repository.** Each character
+ships three exports: LOD0 at 81,359 triangles and 16 MB, LOD1 at about 45,000
+and 9–12 MB, LOD2 at 22,421. `ART.md §2` measured the player tier and found one
+body's triangles unmeasurable against a horde's, so LOD0 would run — it is the
+committed *bake* that costs, and five LOD1 bakes are 11 MB. LOD2 would halve
+that; LOD1 is the size the production spec calls the normal-play tier and the
+player is the one body a screenshot is of.
+
+The sources are gitignored despite CC BY permitting them, and for size alone:
+five LOD1 files are 46 MB against 11 MB of bakes. One `intake.ps1` command
+rebuilds a bake from one.
 
 ```bash
-powershell art-src/models/intake.ps1 -Model assets/models/rin_v2.glb     -Slot drifter -Pose "Animation@2.5" -Yaw 180
+powershell art-src/models/intake.ps1 -Model assets/models/ld_mika.glb     -Slot mika -Pose "Walk@0.25" -Yaw 180
 ```
 
-`slot:drifter` resolves both the destination and the 2.2 m the survivor roster
-asks for. The animation is called `Animation`; frame 2.5 s is an idle with the
-arms down, which is what the shader's swing is added to.
+**`Walk@0.25` is the pose and it is the first time the frame was not guessed.**
+Every earlier survivor had one animation with a generic name, so the frame was
+found by trying three of them; these ship eighteen to twenty-one named clips
+each, including `Idle`, `Walk`, `Run` and `Sprint`. A quarter through a
+one-second walk cycle is the pass — legs together, arms hanging — which is what
+the shader's swing is *added to*. `Idle@0.0` was tried first and is the wrong
+frame: it holds the arms forward, so the bake stood there reaching.
 
-### What v2 changed, and what it cost
+`yaw:180` because these face +Z like everything else that has come through here.
 
-**141 of 143 meshes are skinned, against 38 of 57 in v1.** That is the single
-most useful difference to this pipeline: `BakeBody` skips an unskinned mesh on a
-rigged model unless it hangs off a `BoneAttachment3D`, so a model whose trim is
-skinned needs nothing explained to it. Every one of the eleven ponytail locks,
-the crimson underlocks, the boot laces and hooks, the belt loops and rivets, the
-thigh quick-releases and the jacket's zip tape came through.
+**141 of RIN's 143 meshes are skinned**, and the same is true of the other four
+in proportion. That is the property that makes a model cheap to intake: every
+strap, buckle, lace and hair lock comes through without a flag, because
+`BakeBody` only skips an unskinned mesh that is not attached to a bone.
 
-**The rifle left the character**, which removes a small absurdity: the game
-appends the silhouette of whatever weapon is equipped to the player's own mesh,
-so v1 carried a stowed rifle *and* a drawn one.
+### The bone names changed and the classifier did not have to
 
-Cost, measured as the player rather than reasoned: 27,488 -> 51,353 triangles
-moved the frame mean from 1.30 ms to 1.32 — noise. The bake went from 1.6 MB to
-2.9 MB, which is not noise, because the bake is the committed half. `ART.md §2`
-carries the table and the ceiling that follows from it.
+These rigs are `Root / Hips / Spine / Chest / Neck / Head` with
+`UpperArm.L`, `Forearm.L`, `Hand.L`, `UpperLeg.R`, `LowerLeg.R`, `Foot.R`,
+`Toe.R` — not the `mixamorig_*` names every earlier import used.
+`BakeBody.Classify` matches on the substrings `arm` / `hand` / `leg` / `foot` /
+`toe` and takes the side from a `.l` or `.r` suffix, so all of it lands
+correctly with nothing added. Worth stating because it is the one place an
+intake fails silently: an unrecognised bone name is torso, and a body whose legs
+are torso stands still while it walks.
 
-The two crimson underlocks are worth naming as a legibility gain rather than a
-detail: from behind, which is how the player is seen for a whole run, they read
-as two red stripes down the back at any range the body is visible at.
+### The portraits
 
-### What is wrong with it, and it is still the eyes
+`assets/ui/portraits/*.png`, cut from the roster design sheet by
+`art-src/ui/cut_portraits.py`. The five individual design sheets each carry a
+hero illustration and cropping those gave five cards that did not match — the
+sheets differ in aspect, the name plate sits somewhere different on each, and
+RIN's is not in the left column at all. The roster sheet's top band already is
+five equal panels with the same framing, so slicing it is the whole job. The
+panel offsets in that script are measured off the sheet rather than divided out
+of it, because the panels are composed art and are not evenly spaced — assuming
+they were put MIKA's drone down the left edge of AKIRA's card three times.
 
-**The whites of RIN's eyes bake blown white with no iris.** Everything else on
-the model is exact — black jacket, ivory chest panel, red ribbons and headset
-plates, gloves, thigh bands, the rifle's red accents, even the lips and the
-blush.
+Design sheets and character designs are the user's own, supplied to this
+project; the CC BY obligation above is on the *body* beneath them.
 
-The cause is the one thing `PaletteImage` says per-vertex sampling cannot do. A
-vertex takes one texel, which is exact for a flat patch of colour and wrong for
-*drawn detail*: the iris is painted inside a UV island a few millimetres across
-and there are no vertices in it. It is the face's own sclera geometry inside
-`RIN_Body` that is visible — the 96-triangle eyeballs sit behind it, and tinting
-them bright green to check changed nothing on screen.
+### Still no irises
 
-`tint:<node>=rrggbb` was added while chasing this and does not fix it; it stays
-because naming a surface beats counting to it at sixty surfaces. The fix that
-would work is in README's What's left: **the player is one mesh and one draw
-call, so it can afford to carry the model's own UVs and albedo texture** rather
-than one vertex colour per vertex. Nothing else in the game can.
-
-At the range the game is played the head is about twenty pixels and none of this
-is visible. It is visible in `BodyShot` and in any close render.
+Unchanged and for the unchanged reason: per-vertex sampling cannot reproduce
+drawn detail, and an anime iris is a painting a few millimetres across inside a
+UV island with no vertices in it. All five bake with blown-white sclerae. The fix
+is in README's What's left and it is the same one — the player is one mesh and
+one draw call, so it can afford the model's own UVs and albedo texture.
 
 ### The earlier passes are on disk and are not loaded
 
-`rin_v1_reference.glb` (27,488 triangles) and `tactical_character.glb` — RIN's
-own ancestor, the same supplied archive — were each the Drifter's body for one
-phase. Neither is committed and nothing points at either: the shelf holds one
-`drifter.res` and each bake overwrote the last. Kept as the fallback if v2 has to
-come out in a hurry, and as a record of what improved.
+`rin_v2.glb`, `rin_v1_reference.glb` and `tactical_character.glb` were each the
+player's body for one phase, in that order backwards. None is committed and
+nothing points at any of them. They are the same lineage as these five — the
+same DanlyVostok original — and are kept as a record of what improved.
 
 ## Quaternius — Zombie Apocalypse Kit
 

@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CharacterResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_dsflw"]
+
+[resource]
+script = ExtResource("1_dsflw")
+CharacterName = "YUNA"
+Blurb = "closes its own wounds, and the crowd bleeds for touching it"
+Role = "SUPPORT / MEDIC"
+PortraitPath = "res://assets/ui/portraits/yuna.png"
+MaxHealth = 125.0
+MoveSpeed = 5.6
+CarryCapacity = 16
+BodyHeight = 2.08
+Torso = Color(0.24, 0.44, 0.4, 1)
+Limb = Color(0.26, 0.32, 0.3, 1)
+Head = Color(0.9, 0.8, 0.66, 1)
+StartingThorns = 0.3
+StartingRegen = 0.5
+OpensAfter = 16

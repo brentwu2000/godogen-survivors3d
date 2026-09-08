@@ -25,6 +25,21 @@ public partial class CharacterResource : Resource
     /// on sight is a menu.
     [Export] public string Blurb { get; set; } = "";
 
+    /// What this survivor is, in two or three words: `ASSAULT`, `RECON / TECH`.
+    ///
+    /// Separate from `Blurb`, which says what playing them is like. The role is
+    /// the label on their design sheet and on the select screen's card; the blurb
+    /// is the sentence underneath. One is identity and the other is advice.
+    [Export] public string Role { get; set; } = "";
+
+    /// The character-select illustration, or empty for a survivor with none.
+    ///
+    /// A path rather than a `Texture2D`, for the reason every other asset
+    /// reference in these resources is: a `.tres` holding a resource reference
+    /// loads the texture whenever the roster is read, which on this screen is
+    /// every keypress. `BaseScreen` loads the one it is showing.
+    [Export] public string PortraitPath { get; set; } = "";
+
     // --- What the body is -----------------------------------------------------
 
     [Export] public float MaxHealth { get; set; } = 100.0f;
@@ -69,6 +84,93 @@ public partial class CharacterResource : Resource
 
     /// Extra metres on the reach for searching a crate.
     [Export] public float SearchRadiusBonus { get; set; }
+
+    /// A chance, per physics tick, that contact damage does not land. 0 to 1.
+    [Export] public float StartingDodge { get; set; }
+
+    /// A fraction of contact damage returned to whatever touched the player.
+    [Export] public float StartingThorns { get; set; }
+
+    /// Health per second, from the first second.
+    [Export] public float StartingRegen { get; set; }
+
+    /// Grants this survivor's head start to a run's modifiers.
+    ///
+    /// **One method, because this list was hand-copied into four places.** The
+    /// fields above, `Player.ApplyCharacter` and three separate stages of
+    /// `CharacterProbe` each enumerated the same four abilities — so a fifth was
+    /// four edits, and the probe stages that check "the default carries no
+    /// ability" and "this survivor gains something" would have gone on passing
+    /// while ignoring it. That is the failure this project keeps paying for: a
+    /// hand-written list of a growing thing's members goes stale in the
+    /// direction that hides the bug.
+    ///
+    /// Added rather than assigned, except chill which takes the maximum: a
+    /// trinket that granted a blade before this ran would otherwise be silently
+    /// thrown away.
+    public void GrantTo(RunModifiers mods)
+    {
+        mods.OrbitBlades += StartingBlades;
+        mods.Chill = Mathf.Max(mods.Chill, StartingChill);
+        mods.LootValueScale *= LootValueScale;
+        mods.SearchRadiusBonus += SearchRadiusBonus;
+        mods.Dodge += StartingDodge;
+        mods.Thorns += StartingThorns;
+        mods.Regen += StartingRegen;
+    }
+
+    /// Whether this survivor grants anything at all.
+    ///
+    /// Measured by granting to a fresh `RunModifiers` and asking whether
+    /// anything moved, rather than by testing each field again — which is the
+    /// same list a third time and the same way for it to go stale.
+    public bool HasAbility
+    {
+        get
+        {
+            var mods = new RunModifiers();
+            GrantTo(mods);
+
+            return mods.OrbitBlades > 0 || mods.Chill > 0.0f
+                || Mathf.Abs(mods.LootValueScale - 1.0f) > 0.001f
+                || mods.SearchRadiusBonus > 0.0f || mods.Dodge > 0.0f
+                || mods.Thorns > 0.0f || mods.Regen > 0.0f;
+        }
+    }
+
+    /// The ability in words, for the select screen and for a probe's output.
+    ///
+    /// Empty when there is none, which is RIN and is correct rather than a gap.
+    public string AbilityLine
+    {
+        get
+        {
+            var parts = new System.Collections.Generic.List<string>();
+
+            if (StartingBlades > 0)
+                parts.Add(StartingBlades == 1 ? "1 blade" : $"{StartingBlades} blades");
+
+            if (StartingChill > 0.0f)
+                parts.Add($"chill {StartingChill:F2}");
+
+            if (Mathf.Abs(LootValueScale - 1.0f) > 0.001f)
+                parts.Add($"loot x{LootValueScale:F2}");
+
+            if (SearchRadiusBonus > 0.0f)
+                parts.Add($"reach +{SearchRadiusBonus:F1} m");
+
+            if (StartingDodge > 0.0f)
+                parts.Add($"dodge {StartingDodge:F2}");
+
+            if (StartingThorns > 0.0f)
+                parts.Add($"thorns {StartingThorns:F2}");
+
+            if (StartingRegen > 0.0f)
+                parts.Add($"regen {StartingRegen:F1}/s");
+
+            return string.Join(", ", parts);
+        }
+    }
 
     // --- Getting hold of one ---------------------------------------------------
 

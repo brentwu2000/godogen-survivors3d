@@ -257,10 +257,18 @@ is the register; every download goes in it with a URL, a sha256 and a date.
 | **CC BY-NC / NC-ND** | No | No | Non-commercial forecloses shipping |
 | **"Royalty free"** | Unknown | Unknown | Not a licence. It is a pricing model. Find the actual terms |
 
-**The attribution gap.** CC-BY requires the credit to reach the end user, not
-only the repository — and this game has no credits screen. The word "Credits" in
-the code is the in-game currency. Any plan built on CC-BY assets has that as an
-unscheduled dependency, and it should be scheduled.
+**The attribution gap is closed, and it closed because a CC-BY asset arrived.**
+This paragraph used to say the credit has to reach the end user, that the game
+had no credits screen, and that any plan built on CC-BY assets carried that as an
+unscheduled dependency. The five survivors are CC BY 4.0 — see
+`assets/models/SOURCE.md` — so the dependency was scheduled the same phase they
+were: `BaseScreen.RosterScreen` carries the notice, on the screen where those
+five illustrations and the bodies under them are on display.
+
+Two things follow for anything sourced next. A CC-BY asset is now **cheap** rather
+than blocked: the surface exists and adding a line to it is a line. And the
+notice is load-bearing — it is not decoration on that screen, and a rewrite of it
+that drops those two lines is a licence breach rather than a formatting change.
 
 ---
 
@@ -388,13 +396,11 @@ Fill one in per model before downloading anything else.
 - **The painted skin plates are semi-realistic.** `skin_infected` and
   `skin_mutant` are rendered rot and hide; flat colour with drawn detail would
   suit the bands better. Regenerable from `art-src/textures/`.
-- **The roster is now two species.** The Drifter is an authored body wearing kit;
-  the Courier and the Warden are `MeshBuilder` blocks in different colours. Side
-  by side in `BodyShot -- roster` that is not three survivors, it is one survivor
-  and two placeholders, and the character-select screen shows all three. Either
-  the other two get bodies from the same source or the Drifter loses its own —
-  and the first authored body to win its lineup is not the one to give up. Two
-  files finish it: `resources/bodies/courier.res` and `warden.res`.
+- ~~**The roster is now two species.**~~ Done. All five survivors are authored
+  bodies from one production, which is what the entry asked for — and it took two
+  files per survivor rather than a modelling project, because the shelf is a
+  directory. RIN, MIKA, AKIRA, SORA and YUNA at 38,815 to 45,816 triangles each.
+  The horde is still boxes, which is now the only split left.
 - **A horde variant's colour is a gameplay signal, and a downloaded body brings
   its own.** One polyart zombie was baked into the walker slot and held back for
   this and nothing else: it is a better body and it is a pale-skinned man, and
@@ -406,6 +412,7 @@ Fill one in per model before downloading anything else.
   instances than the survivor roster's version of the same split is at three. The
   order to do this in is walker, runner, spitter (the three that fill the screen),
   and then brute and boss; the four in §4 stay procedural forever.
-- **No attribution surface**, per §6.
+- ~~**No attribution surface**~~. Done, on the roster screen, because CC BY 4.0
+  assets arrived and required it. §6.
 - **The fog and sky are realistic in hue.** A stylised palette usually wants
   fewer, more saturated steps.

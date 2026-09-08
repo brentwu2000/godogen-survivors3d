@@ -90,9 +90,7 @@ public partial class CharacterProbe : SceneTree
 
         // And it has no ability, because an ability on the default is an ability
         // every existing balance number was measured with.
-        if (first.StartingBlades != 0 || first.StartingChill > 0.0f
-            || Mathf.Abs(first.LootValueScale - 1.0f) > 0.001f
-            || first.SearchRadiusBonus > 0.0f)
+        if (first.HasAbility)
         {
             GD.PushError($"  {first.CharacterName} carries an ability into a game tuned without one");
             ok = false;
@@ -151,10 +149,7 @@ public partial class CharacterProbe : SceneTree
             }
 
             // And it has to be better at *something*, or it is a handicap.
-            if (!health && !speed && !bulk
-                && one.StartingBlades == 0 && one.StartingChill <= 0.0f
-                && Mathf.Abs(one.LootValueScale - 1.0f) < 0.001f
-                && one.SearchRadiusBonus <= 0.0f)
+            if (!health && !speed && !bulk && !one.HasAbility)
             {
                 GD.PushError($"  {one.CharacterName} gives up something and gains nothing");
                 ok = false;
@@ -219,21 +214,12 @@ public partial class CharacterProbe : SceneTree
         foreach (CharacterResource one in CharacterBook.All)
         {
             var mods = new RunModifiers();
+            one.GrantTo(mods);
 
-            mods.OrbitBlades += one.StartingBlades;
-            mods.Chill = Mathf.Max(mods.Chill, one.StartingChill);
-            mods.LootValueScale *= one.LootValueScale;
-            mods.SearchRadiusBonus += one.SearchRadiusBonus;
-
-            bool any = mods.OrbitBlades > 0 || mods.Chill > 0.0f
-                    || Mathf.Abs(mods.LootValueScale - 1.0f) > 0.001f
-                    || mods.SearchRadiusBonus > 0.0f;
-
-            if (any)
+            if (one.HasAbility)
                 withAbilities++;
 
-            GD.Print($"  {one.CharacterName,-8} blades {mods.OrbitBlades}, chill {mods.Chill:F2}, "
-                   + $"loot x{mods.LootValueScale:F2}, reach +{mods.SearchRadiusBonus:F1} m");
+            GD.Print($"  {one.CharacterName,-8} {(one.AbilityLine.Length > 0 ? one.AbilityLine : "no ability")}");
         }
 
         // The premise. With no abilities anywhere this stage passes on a system

@@ -48,6 +48,8 @@ public partial class BaseScreen : Control
             label.AddThemeColorOverride("font_color", new Color(0.94f, 0.93f, 0.88f));
         }
 
+        BuildPortrait();
+
         _profile = SaveSystem.Load();
         _catalogue = new ShopCatalogue();
         _shelter = GetParent()?.GetNodeOrNull<Shelter>("Shelter");
@@ -82,6 +84,27 @@ public partial class BaseScreen : Control
     /// on _UnhandledInput is one no probe can press a key on.
     public override void _Process(double delta)
     {
+        // The roster takes every key it uses while it is open, and returns
+        // rather than falling through: [E] means "take this survivor" here and
+        // "buy what the cursor is on" underneath, and a screen that did both on
+        // one press would sell something every time somebody chose a character.
+        if (_choosing)
+        {
+            if (Input.IsActionJustPressed("ui_down"))
+                PickMove(1);
+            else if (Input.IsActionJustPressed("ui_up"))
+                PickMove(-1);
+            else if (Input.IsActionJustPressed("interact"))
+                PickConfirm();
+            else if (Input.IsActionJustPressed("interact_second"))
+                _choosing = false;
+            else
+                return;
+
+            Redraw();
+            return;
+        }
+
         if (Input.IsActionJustPressed("ui_down"))
             Move(1);
         else if (Input.IsActionJustPressed("ui_up"))
@@ -152,7 +175,7 @@ public partial class BaseScreen : Control
             // it the other way — but both of the armoury's keys already mean
             // something. The gate is not a consolation: it is the last thing
             // before launching and it is literally the question "who is going".
-            case Fitting.Gate: CycleCharacter(); break;
+            case Fitting.Gate: OpenRoster(); break;
 
             default:
                 (_, _, string second) = Shelter.Prompt(Focus);
@@ -404,35 +427,235 @@ public partial class BaseScreen : Control
         Persist();
     }
 
-    /// Cycles the survivor, skipping any not yet earned.
+    // --- The roster screen -----------------------------------------------------
+    //
+    // **A screen of its own now, and the note this replaces argued against one.**
+    // It said choosing a survivor is not a separate act from equipping one —
+    // "the Warden's fourteen bulk changes what is worth buying and the Courier's
+    // twenty-eight changes it the other way, so the two are one decision made in
+    // two rooms" — and that reasoning still holds and is why this opens *at the
+    // gate*, on top of the shop screen, and closes back onto it.
+    //
+    // What changed is what there is to choose between. Cycling was right for
+    // three lines of text; there are five survivors with illustrations now, and
+    // pressing [C] four times to see the fifth is not a choice, it is a
+    // carousel. The same note admitted this about the biomes two paragraphs
+    // later: "one more and pressing [B] five times to get back to where you
+    // started is worse than a list."
+
+    /// True while the roster is open over the shop screen.
+    private bool _choosing;
+
+    /// Which survivor the cursor is on, which is not yet which one is chosen.
+    /// Confirming is a keypress, so a player can look at all five without
+    /// committing — the previous version changed the choice on every press.
+    private int _pick;
+
+    private TextureRect _portrait = null!;
+    private ColorRect _portraitBack = null!;
+
+    /// The illustration panel, built in code rather than in `Base.tscn`.
     ///
-    /// At the gate rather than on a screen of its own. A roster screen would make
-    /// choosing a survivor a separate act from equipping one, and it is not: the
-    /// Warden's fourteen bulk changes what is worth buying and the Courier's
-    /// twenty-eight changes it the other way, so the two are one decision made in
-    /// two rooms.
-    private void CycleCharacter()
+    /// The scene is hand-authored and a node added to it is a node someone has
+    /// to keep in step with this file; the two are one thing. It also sidesteps
+    /// the serialisation trap `godot.md` documents, which nothing here would hit
+    /// and which has cost this project two days on other nodes.
+    ///
+    /// Sized and placed against the gap the scene already leaves: `ScreenBack`
+    /// ends at x=928 and `SideBack` begins at x=1440, so a 255-wide card centred
+    /// in that gap sits between them without moving either.
+    private void BuildPortrait()
+    {
+        _portraitBack = new ColorRect
+        {
+            Name = "PortraitBack",
+            Color = new Color(0.04f, 0.05f, 0.07f, 0.86f),
+            OffsetLeft = 1044.0f,
+            OffsetTop = 32.0f,
+            OffsetRight = 1324.0f,
+            OffsetBottom = 608.0f,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+        };
+
+        _portrait = new TextureRect
+        {
+            Name = "Portrait",
+            // 264 x 560, which is the portraits' own 292 x 619 aspect to
+            // within a pixel. `KeepAspectCovered` crops whatever does not fit,
+            // and at 254 wide it was cropping four per cent off each side —
+            // which is where the name is.
+            OffsetLeft = 1052.0f,
+            OffsetTop = 40.0f,
+            OffsetRight = 1316.0f,
+            OffsetBottom = 600.0f,
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+
+            // Aspect kept and the card cropped rather than squashed. The five
+            // portraits are cut from one sheet at one size, so this never
+            // actually crops — it is here so that a sixth at a different aspect
+            // arrives letterboxed instead of stretched, which is the failure
+            // nobody notices in a screenshot.
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCovered,
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Visible = false,
+        };
+
+        // Added to this node, which *is* the panel: `BaseScreen` is the script
+        // on `Base.tscn`'s `Panel` Control, not a child of it. Added after
+        // `ScreenBack` and `Screen` and therefore drawn over them, which is what
+        // an overlay is.
+        AddChild(_portraitBack);
+        AddChild(_portrait);
+    }
+
+    /// Opens the roster at whoever is currently chosen.
+    private void OpenRoster()
+    {
+        _choosing = true;
+        _pick = _profile.Character;
+        _message = "";
+    }
+
+    /// Opens the roster with the cursor somewhere in particular.
+    ///
+    /// For `BaseShot`, which photographs this screen and cannot press [C]: the
+    /// shelter decides which fitting the player is standing at, and a capture
+    /// script that had to walk to the gate first would be a capture script
+    /// testing the shelter. Public because a screenshot of a screen nobody can
+    /// reach is the failure this exists to avoid — the roster went three
+    /// versions without a picture of it for exactly that reason.
+    public void ShowRoster(int pick)
+    {
+        _choosing = true;
+        _pick = Mathf.Clamp(pick, 0, CharacterBook.All.Length - 1);
+        _message = "";
+        Redraw();
+    }
+
+    /// Moves the cursor, over locked survivors rather than around them.
+    ///
+    /// A locked entry is shown and is landed on, because "AKIRA opens after 8
+    /// extractions" is information and a name that cannot be reached is not.
+    /// Confirming on one is what refuses.
+    private void PickMove(int step)
     {
         int count = CharacterBook.All.Length;
-        for (int step = 1; step <= count; step++)
-        {
-            int next = (_profile.Character + step) % count;
-            if (!CharacterBook.Allows(_profile, next))
-                continue;
+        _pick = (_pick + step + count) % count;
+    }
 
-            _profile.Character = next;
-            _message = $"playing as {CharacterBook.Load(next).CharacterName}";
-            Persist();
+    /// Takes the survivor under the cursor, or says why not.
+    private void PickConfirm()
+    {
+        if (!CharacterBook.Allows(_profile, _pick))
+        {
+            CharacterResource locked = CharacterBook.Load(_pick);
+            _message = $"{locked.CharacterName} opens after {locked.OpensAfter} extractions";
             return;
         }
 
-        // Not silence. A key that appears to do nothing is read as a broken key,
-        // and the honest answer — "you have not earned another one" — is also the
-        // one that tells the player there is something to earn.
-        CharacterResource next2 = CharacterBook.Load((_profile.Character + 1) % count);
-        _message = count > 1
-            ? $"{next2.CharacterName} opens after {next2.OpensAfter} extractions"
-            : "only one survivor so far";
+        _profile.Character = _pick;
+        _choosing = false;
+        _message = $"playing as {CharacterBook.Load(_pick).CharacterName}";
+        Persist();
+    }
+
+    /// Puts the roster on the screen and the illustration beside it.
+    ///
+    /// Loaded on every keypress and that is deliberate: `PortraitPath` is a path
+    /// rather than a `Texture2D` in the `.tres` precisely so the roster can be
+    /// read without pulling five illustrations into memory, and Godot's resource
+    /// cache means the second press of a key costs a dictionary lookup.
+    private void DrawRoster()
+    {
+        CharacterResource shown = CharacterBook.Load(_pick);
+
+        var art = string.IsNullOrEmpty(shown.PortraitPath)
+            ? null
+            : GD.Load<Texture2D>(shown.PortraitPath);
+
+        // A survivor with no illustration shows no panel rather than an empty
+        // one. Five have one; the sixth is the case worth not crashing on.
+        if (art == null && !string.IsNullOrEmpty(shown.PortraitPath))
+            GD.PushWarning($"BaseScreen: {shown.CharacterName} names {shown.PortraitPath} "
+                         + "and it did not load");
+
+        _portrait.Texture = art;
+        _portrait.Visible = art != null;
+        _portraitBack.Visible = art != null;
+
+        // Greyed rather than hidden, so a locked survivor is a thing the player
+        // can see they have not earned. The illustration is the reward as much as
+        // the numbers are.
+        _portrait.Modulate = CharacterBook.Allows(_profile, _pick)
+            ? Colors.White
+            : new Color(0.42f, 0.44f, 0.50f);
+
+        _screen.Text = Unix(RosterScreen());
+        _side.Text = Unix(_shelter == null ? SideColumn() : PromptColumn());
+    }
+
+    /// The roster, drawn into the same label the shop uses.
+    ///
+    /// Five rows of numbers rather than five paragraphs, because what a player is
+    /// comparing at this moment is three numbers and an ability — the blurb says
+    /// what the survivor is *for* and belongs on the one under the cursor, not on
+    /// all five at once.
+    private string RosterScreen()
+    {
+        var text = new System.Text.StringBuilder();
+
+        text.AppendLine("ROSTER     [W]/[S] look     [E] take     [C] back");
+        text.AppendLine();
+
+        CharacterResource[] all = CharacterBook.All;
+
+        for (int i = 0; i < all.Length; i++)
+        {
+            CharacterResource one = all[i];
+            bool open = CharacterBook.Allows(_profile, i);
+            bool here = i == _pick;
+
+            // The cursor is a character in the text rather than a colour, for the
+            // same reason the shop's is: this label has one font and one colour,
+            // and a second colour would be a theme override per line.
+            string mark = here ? ">" : " ";
+            string tick = i == _profile.Character ? "*" : " ";
+
+            text.AppendLine($"{mark}{tick} {i + 1:00}  {one.CharacterName,-6} {one.Role,-18} "
+                          + (open
+                              ? $"{one.MaxHealth,3:F0} hp  {one.MoveSpeed:F1} m/s  {one.CarryCapacity,2} bulk"
+                              : $"locked — {one.OpensAfter} extractions"));
+        }
+
+        CharacterResource shown = CharacterBook.Load(_pick);
+
+        text.AppendLine();
+        text.AppendLine($"   {shown.CharacterName} — {shown.Blurb}");
+        text.AppendLine(shown.AbilityLine.Length > 0
+            ? $"   starts with {shown.AbilityLine}"
+            : "   starts with nothing, and every price in the shop is set for that");
+
+        // The one thing on this screen that is not about choosing.
+        //
+        // **CC BY 4.0 requires the credit to reach the player, not the
+        // repository**, and these five illustrations and the bodies under them
+        // are that licence's subject. `ART.md §6` carried this as an unscheduled
+        // dependency for three phases on the grounds that the game had no
+        // credits surface; the roster screen is where the assets themselves are
+        // on display, which makes it the honest place rather than a convenient
+        // one. `assets/models/SOURCE.md` carries the full notice.
+        if (_message.Length > 0)
+        {
+            text.AppendLine();
+            text.AppendLine($"   {_message}");
+        }
+
+        text.AppendLine();
+        text.AppendLine("   characters from PROJECT LAST DAWN, based on \"Game Ready Low Poly");
+        text.AppendLine("   Tactical Character\" by DanlyVostok, CC BY 4.0 — modified");
+
+        return text.ToString();
     }
 
     /// Steps to the next place the player has opened, skipping the rest.
@@ -517,6 +740,15 @@ public partial class BaseScreen : Control
 
     private void Redraw()
     {
+        if (_choosing)
+        {
+            DrawRoster();
+            return;
+        }
+
+        _portrait.Visible = false;
+        _portraitBack.Visible = false;
+
         var text = new System.Text.StringBuilder();
 
         text.AppendLine($"BASE     credits {_profile.Credits}     " +

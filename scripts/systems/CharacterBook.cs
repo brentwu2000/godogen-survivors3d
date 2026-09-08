@@ -12,7 +12,8 @@ public static class CharacterBook
 
     /// Sorted by this list rather than by directory order, which differs between
     /// the editor and an exported build.
-    private static readonly string[] Order = { "drifter", "courier", "warden" };
+    private static readonly string[] Order =
+        { "rin", "mika", "akira", "sora", "yuna" };
 
     public static CharacterResource[] All
     {
@@ -36,7 +37,7 @@ public static class CharacterBook
             // survivor, and a run with no character at all is a player with zero
             // health — which reads as a physics bug rather than as a missing file.
             if (loaded.Count == 0)
-                loaded.Add(new CharacterResource { CharacterName = "Drifter" });
+                loaded.Add(new CharacterResource { CharacterName = "RIN" });
 
             WarnAboutAnythingNotInOrder();
 

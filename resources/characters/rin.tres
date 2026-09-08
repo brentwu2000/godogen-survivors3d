@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="CharacterResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_ytwxp"]
+
+[resource]
+script = ExtResource("1_ytwxp")
+CharacterName = "RIN"
+Blurb = "no edges, no gaps; everything the shop sells is priced for this one"
+Role = "ASSAULT"
+PortraitPath = "res://assets/ui/portraits/rin.png"

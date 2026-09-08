@@ -518,12 +518,9 @@ public partial class Player : CharacterBody3D
         BodyHeight = who.BodyHeight;
 
         // The ability, as a head start on the deck rather than a mechanic of its
-        // own. Added rather than assigned: a trinket that granted a blade before
-        // this ran would otherwise be silently thrown away.
-        Mods.OrbitBlades += who.StartingBlades;
-        Mods.Chill = Mathf.Max(Mods.Chill, who.StartingChill);
-        Mods.LootValueScale *= who.LootValueScale;
-        Mods.SearchRadiusBonus += who.SearchRadiusBonus;
+        // own. `GrantTo` is the one place the list of them lives — it used to be
+        // spelled out here and in three stages of `CharacterProbe`.
+        who.GrantTo(Mods);
     }
 
     /// One finished body mesh, and the height a `MultiMesh` needs to bound it.

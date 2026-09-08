@@ -1,15 +1,17 @@
 [gd_resource type="Resource" script_class="CharacterResource" format=3]
 
-[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_ogn4e"]
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_6wvuu"]
 
 [resource]
-script = ExtResource("1_ogn4e")
-CharacterName = "Warden"
+script = ExtResource("1_6wvuu")
+CharacterName = "AKIRA"
 Blurb = "holds ground; a blade already turning, and the floor is cold"
+Role = "MELEE / BERSERKER"
+PortraitPath = "res://assets/ui/portraits/akira.png"
 MaxHealth = 140.0
 MoveSpeed = 5.3
 CarryCapacity = 14
-BodyHeight = 2.25
+BodyHeight = 2.24
 Torso = Color(0.3, 0.28, 0.44, 1)
 Limb = Color(0.24, 0.24, 0.3, 1)
 Head = Color(0.7, 0.58, 0.46, 1)

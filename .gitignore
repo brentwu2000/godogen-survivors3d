@@ -80,3 +80,16 @@ assets/models/rin_v2.glb
 assets/models/rin_v2.glb.import
 assets/models/rin_v2_*.png
 assets/models/rin_v2_*.png.import
+
+# PROJECT LAST DAWN's five characters. **CC BY 4.0 permits committing these** —
+# see `assets/models/SOURCE.md`, which finally has an author, a URL and a licence
+# after three phases of blanks. They stay out for size alone: five LOD1 exports
+# are 47 MB, against 11 MB for the five bakes that are committed and are what the
+# game actually loads. `art-src/models/intake.ps1` rebuilds a bake from one in a
+# single command.
+assets/models/ld_*.glb
+assets/models/ld_*.glb.import
+assets/models/ld_*.png
+assets/models/ld_*.png.import
+assets/models/ld_*.jpg
+assets/models/ld_*.jpg.import

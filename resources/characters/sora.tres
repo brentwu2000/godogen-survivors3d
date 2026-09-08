@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CharacterResource" format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/CharacterResource.cs" id="1_i5tsa"]
+
+[resource]
+script = ExtResource("1_i5tsa")
+CharacterName = "SORA"
+Blurb = "the fastest thing on the map, and the easiest to kill"
+Role = "PSIONIC / BLADE"
+PortraitPath = "res://assets/ui/portraits/sora.png"
+MaxHealth = 70.0
+MoveSpeed = 7.1
+CarryCapacity = 17
+BodyHeight = 2.15
+Torso = Color(0.34, 0.26, 0.48, 1)
+Limb = Color(0.22, 0.2, 0.3, 1)
+Head = Color(0.86, 0.74, 0.64, 1)
+StartingDodge = 0.12
+OpensAfter = 12

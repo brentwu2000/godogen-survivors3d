@@ -17,10 +17,14 @@ and a ponytail long enough to be a silhouette on its own. See README's Decisions
 why a 51,353-triangle body costs nothing here, and README's What's left for the one thing wrong with
 her, which is that she has no irises.
 
-**A survivor's body is a file on a shelf now, so this brief is one intake command away from being
-answered rather than a modelling project.** `resources/bodies/courier.res` and `warden.res` are the
-two names that would finish the roster, and `art-src/models/intake.ps1 -Slot courier` is the command
-that writes one. Nothing below has to change for that to work.
+**And the whole roster is answered now.** Five survivors, five authored bodies, one production:
+RIN, MIKA, AKIRA, SORA and YUNA — `resources/bodies/{rin,mika,akira,sora,yuna}.res`, one
+`intake.ps1` run each. The three that existed kept their numbers to the digit and took the first
+three names, because `CharacterBook.Order` is a fixed list and the profile stores an index into it.
+SORA and YUNA are the Scout and the Revenant designed below, under the names their models came with.
+
+The `.tres` files are `rin` through `yuna` and so are the body slots, which is the property worth
+having: `intake.ps1 -Slot mika` needs no table to look anything up in.
 
 What that changes about the pages below: the *rules* a bakeable body has to obey are unchanged and are
 still enforced by `BakeBody`, so read them before putting any model through it. The *seven-survivor

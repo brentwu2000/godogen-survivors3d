@@ -238,9 +238,42 @@ public partial class BodyShot : SceneTree
 
         foreach (CharacterResource who in roster)
         {
-            Add(shader, BodyMeshLibrary.ForPlayer(who.BodyHeight, BodyMeshLibrary.Carry.Longarm,
-                                                  who.Torso, who.Limb, who.Head),
-                root, x);
+            // The shelf first, the same as the horde path below and for the same
+            // reason: `roster` drew five procedural bodies while the game drew
+            // five bakes, so the picture answering "does this roster read as five
+            // people" was of five things that are not in the game. `raw` is how
+            // to ask the other question.
+            //
+            // Every survivor with a bake takes it; a survivor without one is
+            // still a `MeshBuilder` body, which is what makes a half-authored
+            // roster visible here rather than only in play.
+            ArrayMesh? baked = null;
+            string path = BodyBakes.Resolve(who.BakedBodyPath, who.CharacterName);
+
+            if (!_raw && !string.IsNullOrEmpty(path))
+            {
+                var resource = GD.Load<BakedBodyResource>(path);
+                baked = resource != null ? BakedBody.Build(resource) : null;
+
+                if (baked == null)
+                    GD.PushWarning($"{who.CharacterName} names {path} and it did not load");
+            }
+
+            if (baked != null)
+            {
+                var body = new SoloBody(shader, baked, who.BodyHeight, 40.0f);
+                root.AddChild(body.Node);
+                _bodies.Add(body);
+                _placements.Add(new Vector3(x, 0.0f, 0.0f));
+                _specs.Add(BodyMeshLibrary.ForPlayer(who.BodyHeight));
+            }
+            else
+            {
+                Add(shader, BodyMeshLibrary.ForPlayer(who.BodyHeight, BodyMeshLibrary.Carry.Longarm,
+                                                      who.Torso, who.Limb, who.Head),
+                    root, x);
+            }
+
             x += Spacing;
         }
 

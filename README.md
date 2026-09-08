@@ -12,7 +12,7 @@ it.
 
 **Nine enemy variants** as solid low-poly bodies rigged in the vertex stage, across **five places**
 that ask different questions of a build, from a rail yard to a laboratory interior with its own light.
-**Three survivors**, chosen before the loadout. **Fifteen weapons**, none of them a strictly better
+**Five survivors**, chosen on a roster screen before the loadout. **Fifteen weapons**, none of them a strictly better
 version of another. Threat is a *place* — danger zones you choose to enter — rather than a spawn rate,
 and a map leans toward one kind of them rather than holding one of each. The growth deck has five
 lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
@@ -24,11 +24,12 @@ of that file is a list of things this renderer cannot do — a `MultiMesh` has n
 blend shapes and per-instance mesh variants are all worth nothing here — because that is what decides
 which of two good-looking models is usable and none of it is guessable from a screenshot.
 
-**The survivor the player controls is RIN**, an authored model, and the rest of the bodies are still
-built by `MeshBuilder`. Which of the twelve are which is decided by what is in `resources/bodies/`: a bake
-named after its slot *is* that slot's body, so applying a model is a file landing there and undoing it
-is deleting the file. `art-src/models/intake.ps1` takes a `.glb` to that file in one command, and
-`ART.md` is the brief for choosing one.
+**Five survivors, all authored models** — RIN, MIKA, AKIRA, SORA and YUNA, from one production, chosen
+on a roster screen with the illustration each was designed from. The horde is still built by
+`MeshBuilder`. Which of the fourteen bodies are which is decided by what is in `resources/bodies/`: a
+bake named after its slot *is* that slot's body, so applying a model is a file landing there and
+undoing it is deleting the file. `art-src/models/intake.ps1` takes a `.glb` to that file in one
+command, and `ART.md` is the brief for choosing one.
 
 The measured cost of doing it is in Performance and it is close to nothing: 200 bodies at 1,650
 triangles run marginally faster than 200 at 460, and 200 at 23,822 still hold 293 fps.
@@ -1383,6 +1384,47 @@ to 2.9 MB, and the bake is the half that is committed, because the source cannot
 ceiling on a survivor and it is why `ART.md §2` now puts the player tier at ~120,000 triangles
 instead of at 40,000 — the old number was a horde rule wearing the player's name.
 
+**Five survivors, and the roster went from a keypress to a screen.** RIN, MIKA, AKIRA, SORA and YUNA
+arrive as one production with models, eighteen to twenty-one named animations each, and a design sheet
+apiece. The three existing survivors kept their numbers to the digit and took the first three names —
+`CharacterBook.Order` is a fixed list and the profile stores an *index*, so renaming entry zero from
+Drifter to RIN leaves every saved profile pointing at the same hundred-health survivor. SORA and YUNA
+are the Scout and the Revenant `CHARACTERS.md` had already designed and costed, under new names.
+
+**The note that argued against a select screen was right and is now out of date.** It said choosing a
+survivor is not a separate act from equipping one — "the Warden's fourteen bulk changes what is worth
+buying and the Courier's twenty-eight changes it the other way" — which is why the roster opens *at
+the gate*, over the shop screen, and closes back onto it. What changed is that cycling was right for
+three lines of text and is a carousel for five characters with illustrations. The same note had
+already admitted this about the biomes two paragraphs later.
+
+**The ability list was hand-copied into four places and adding two survivors would have made it
+six.** `CharacterResource`'s fields, `Player.ApplyCharacter` and three stages of `CharacterProbe` each
+enumerated the same four abilities, so the probe stages that check "the default carries no ability"
+and "this survivor gains something" would have gone on passing while ignoring the two new ones. There
+is one `GrantTo` now, plus a `HasAbility` that measures by granting to a fresh `RunModifiers` and
+asking whether anything moved — rather than testing each field again, which is the same list a third
+time and the same way for it to go stale.
+
+**`BodyShot -- roster` was drawing five procedural bodies while the game drew five bakes.** The horde
+path had been fixed to read the shelf a phase earlier and the roster path had not, so the picture that
+answers "does this roster read as five people" was of five things that are not in the game. It reads
+the shelf now, and `raw` is how to ask the other question.
+
+**The licence is known, so the attribution surface stopped being optional.** Three phases of
+`SOURCE.md` carried "not recorded" for the author and licence of the body the player controls; the
+LAST DAWN production ran it down to *Game Ready Low Poly Tactical Character* by DanlyVostok, **CC BY
+4.0**, with the evidence in the file's own `asset.extras` rather than in a claim. `ART.md §6` had said
+since it was written that CC BY needs the credit to reach the *player*, that this game had no surface
+for one, and that this was an unscheduled dependency. It is on the roster screen, which is where those
+five illustrations and the bodies under them are on display — not decoration there, and a rewrite that
+drops those two lines is a licence breach rather than a formatting change.
+
+**LOD1 rather than LOD0, and the constraint is the repository rather than the renderer.** Each
+character ships three exports; LOD0 is 81,359 triangles and Performance below says one body's
+triangles do not register. It is the committed *bake* that costs, because the source is not committed:
+five LOD1 bakes are 11 MB and five LOD0 bakes would be nearer twenty.
+
 ## Performance
 
 RTX 3070 Ti, 1080p, vsync off, player moving so the field actually rebuilds.
@@ -1713,6 +1755,7 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/skin_mutant.png` | `art-src/textures/skin_mutant_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | brute, bloater, bulwark, boss, lantern |
 | `assets/textures/skin_survivor.png` | `art-src/textures/skin_survivor_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | every survivor |
 | `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
+| `assets/ui/portraits/*.png` | the roster design sheet, via `art-src/ui/cut_portraits.py` | 5 x 292x619 | the survivor select cards |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
@@ -1774,12 +1817,10 @@ person**, not things that need code.
   baker was never at fault: `screenshots/bake_vs_raw.png` shows a bake reproducing its input exactly.
   The models were bad, and the ninth is not — see Decisions.
 
-  **So the roster is now two species, and the character-select screen shows all three.** The Drifter
-  wears kit; the Courier and the Warden are blocks in different colours. Either the other two get
-  bodies from the same source or the Drifter loses its own, and the first authored body to win its
-  lineup is not the one to give up. `ART.md §9` carries this as the largest remaining art
-  inconsistency after the props. What it needs is two files: `resources/bodies/courier.res` and
-  `warden.res`, one `intake.ps1` run each, no code.
+  **All five survivors are authored bodies now and the horde is the only split left.** The roster
+  arrived as one production — RIN, MIKA, AKIRA, SORA and YUNA at 38,815 to 45,816 triangles — so what
+  was "one survivor and two placeholders" is five people with a height spread from 2.02 m to 2.24 m.
+  It cost two files per survivor rather than a modelling project, because the shelf is a directory.
 
   **The horde has the same split available and it is held back on purpose.** One polyart zombie
   bakes into the walker slot and looks better than the procedural walker; 150 of it read as a crowd
@@ -1836,9 +1877,9 @@ person**, not things that need code.
   shapes of their kind on screen. A good outcome from an unasserted property, not a safe one — the
   next survivor could be dark, matte and short-haired and nothing would catch it. `CHARACTERS.md`
   carries the table.
-- **The player's face has no eyes, and the fix is the one thing only the player can afford.** RIN
-  bakes exactly right — black jacket, ivory chest panel, red ribbons and headset plates, gloves,
-  thigh bands, lips, blush — and the whites of her eyes are blown white with no iris. A vertex takes
+- **No survivor has irises, and the fix is the one thing only the player can afford.** All five bake
+  exactly right — black jacket, ivory chest panel, red ribbons and headset plates, gloves,
+  thigh bands, lips, blush — and every one of them has blown-white sclerae with no iris. A vertex takes
   one texel, which is exact for a flat patch of colour and wrong for *drawn detail*: the iris is
   painted inside a UV island a few millimetres across and there are no vertices in it. It is
   `RIN_Body`'s own sclera geometry that shows; the eyeballs behind it were tinted bright green to

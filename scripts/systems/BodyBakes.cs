@@ -4,8 +4,9 @@ using Godot;
 ///
 /// `resources/bodies/<slot>.res` is the body for that slot, and the slot names
 /// are the ones the game already uses: `walker` … `boss` from
-/// `EnemyTypeResource.TypeName`, and `drifter` / `courier` / `warden` from
-/// `CharacterResource.CharacterName` lowercased. Drop a file in and it is drawn;
+/// `EnemyTypeResource.TypeName`, and the five survivors from
+/// `CharacterResource.CharacterName` lowercased — so `rin` through `yuna`. Drop a
+/// file in and it is drawn;
 /// take it out and the procedural body comes back.
 ///
 /// **This exists because pointing a `BakedBodyPath` at a model is a code edit,
@@ -136,6 +137,6 @@ public static class BodyBakes
     {
         "walker", "runner", "brute", "bloater", "spitter",
         "boss", "stalker", "bulwark", "lantern",
-        "drifter", "courier", "warden",
+        "rin", "mika", "akira", "sora", "yuna",
     };
 }
