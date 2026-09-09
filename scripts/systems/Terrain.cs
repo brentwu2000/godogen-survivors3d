@@ -86,6 +86,21 @@ public static class Terrain
     /// Puts a point on the ground, keeping its X and Z.
     public static Vector3 Plant(Vector3 at) => new(at.X, Height(at.X, at.Z), at.Z);
 
+    /// Which way the ground faces, by central difference.
+    ///
+    /// Half a metre either side rather than an epsilon. The field is two summed
+    /// noise octaves whose fine wavelength is metres, so a tiny step reads the
+    /// slope of one texel of noise — correct, and not the slope anything the size
+    /// of a body actually rests on. Half a metre is about the footprint of the
+    /// things this is used to lay flat.
+    public static Vector3 Normal(float x, float z)
+    {
+        const float step = 0.5f;
+        float dx = Height(x + step, z) - Height(x - step, z);
+        float dz = Height(x, z + step) - Height(x, z - step);
+        return new Vector3(-dx, 2.0f * step, -dz).Normalized();
+    }
+
     /// A rectangle laid over the ground rather than across it.
     ///
     /// **Every flat marker in the game was a `PlaneMesh` and the ground stopped

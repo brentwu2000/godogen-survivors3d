@@ -420,7 +420,7 @@ public partial class RunGrowth : Node
             _ => CommonWeight,
         };
 
-    private void OnEnemyKilled(int type, byte elite, Vector3 position)
+    private void OnEnemyKilled(int type, byte elite, Vector3 position, Vector2 impulse)
     {
         if (_horde == null || type < 0 || type >= _horde.Types.Length)
             return;

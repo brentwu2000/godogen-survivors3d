@@ -101,12 +101,25 @@ public partial class WeaponHandler : Node3D
     /// nothing and lets the effect be built from damage, spread, rate and trait
     /// rather than from a four-way switch.
     public event System.Action<WeaponResource, Vector3, Vector2>? Fired;
-    /// Something was hit, and by how much.
+    /// Something was hit, by how much, and whether the roll went the player's way.
     ///
     /// The damage is what makes a spark worth scaling: a knife tick and a
     /// marksman round both used to produce the same flare, so the one piece of
     /// feedback that could have said "that landed properly" said nothing.
-    public event System.Action<Vector3, WeaponCategory, float>? Hit;
+    ///
+    /// **Crit is carried rather than inferred, and it has to be.** It multiplies
+    /// damage, so a listener could in principle guess from the size of the number
+    /// — except that the number it would have to compare against is the weapon's
+    /// effective damage at its current level, scaled by the target's armour, its
+    /// elite mark and any charge held, none of which reaches the screen. The one
+    /// system that knows a crit happened is the one that rolled it, and it is one
+    /// bool.
+    ///
+    /// It is true only on the attack's own hits: a chain jump, a conducted arc
+    /// and the back half of a cleave all inherit the damage and none of them
+    /// inherit the announcement. The roll is once per attack, so the flash is
+    /// once per attack.
+    public event System.Action<Vector3, WeaponCategory, float, bool>? Hit;
 
     /// Where a chain arc went from and to. Drawn by `EffectDirector`, which owns
     /// every particle in the game.
@@ -613,7 +626,8 @@ public partial class WeaponHandler : Node3D
         // twelve percent chance into "one of them took extra", every time, which
         // is a different and much duller card.
         float damage = weapon.GetEffectiveDamage(level);
-        if (Mods.CritChance > 0.0f && NextFloat() < Mods.CritChance)
+        bool crit = Mods.CritChance > 0.0f && NextFloat() < Mods.CritChance;
+        if (crit)
             damage *= Mods.CritMultiplier;
 
         // Charge: the only trait in the game that pays for *not* attacking.
@@ -661,7 +675,8 @@ public partial class WeaponHandler : Node3D
                     killed = ResolveReaction(weapon, index, damage);
                 if (!killed)
                     ApplyOnHit(weapon, index);
-                RecordHit(weapon.Category, where, damage);
+                RecordHit(weapon.Category, where, damage, crit);
+                crit = false;
             }
 
             // Cleave: the same reach, behind as well, for a fraction of the
@@ -712,7 +727,8 @@ public partial class WeaponHandler : Node3D
                 weapon.Trait == WeaponTrait.Ricochet ? weapon.TraitCount : 0,
                 weapon.Trait == WeaponTrait.Blast ? weapon.TraitAmount : 0.0f,
                 Look(weapon).Tint,
-                Look(weapon).Scale);
+                Look(weapon).Scale,
+                crit);
             return;
         }
 
@@ -726,7 +742,15 @@ public partial class WeaponHandler : Node3D
         float perPellet = weapon.Trait == WeaponTrait.Spread ? weapon.TraitAmount : 1.0f;
 
         for (int pellet = 0; pellet < pellets; pellet++)
-            Hitscan(weapon, origin, ApplySpread(direction, cone), range, damage * perPellet, knockback);
+        {
+            Hitscan(weapon, origin, ApplySpread(direction, cone), range, damage * perPellet,
+                    knockback, crit);
+
+            // Eight pellets from one pull are one attack and one roll. Spending
+            // the flag on the first pellet that connects is what keeps a critting
+            // shotgun a bright single event rather than eight of them.
+            crit = false;
+        }
     }
 
     /// One instantaneous line, resolved against the horde.
@@ -736,7 +760,7 @@ public partial class WeaponHandler : Node3D
     /// swap-tolerant walk are all easy to get subtly wrong, and a second copy
     /// written for pellets would drift from the one the rifle uses.
     private void Hitscan(WeaponResource weapon, Vector3 origin, Vector2 shot,
-                         float range, float damage, float knockback)
+                         float range, float damage, float knockback, bool crit = false)
     {
         int hits = _horde!.QueryRay(origin, shot, range, HitscanThickness, _hitList);
         int remaining = weapon.Penetration + Mods.Pierce;
@@ -762,7 +786,8 @@ public partial class WeaponHandler : Node3D
                 killed = ResolveReaction(weapon, index, damage);
             if (!killed)
                 ApplyOnHit(weapon, index);
-            RecordHit(weapon.Category, where, damage);
+            RecordHit(weapon.Category, where, damage, crit);
+            crit = false;
             remaining--;
         }
     }
@@ -876,7 +901,9 @@ public partial class WeaponHandler : Node3D
                 Shatter(target, Projectiles.Damage[i]);
             if (!killed)
                 Conduct(target, WeaponCategory.BowCrossbow, Projectiles.Damage[i]);
-            RecordHit(WeaponCategory.BowCrossbow, position, Projectiles.Damage[i]);
+            RecordHit(WeaponCategory.BowCrossbow, position, Projectiles.Damage[i],
+                      Projectiles.Crit[i]);
+            Projectiles.Crit[i] = false;
 
             // Detonate where it connected, and stop.
             //
@@ -1014,7 +1041,7 @@ public partial class WeaponHandler : Node3D
             Vector3 to = _horde.Pool.Position[target];
             _horde.Damage(target, impactDamage * ConductFraction, Vector2.Zero);
             _hits[(int)category]++;
-            Hit?.Invoke(to, category, impactDamage * ConductFraction);
+            Hit?.Invoke(to, category, impactDamage * ConductFraction, false);
             Chained?.Invoke(from, to);
         }
     }
@@ -1113,10 +1140,10 @@ public partial class WeaponHandler : Node3D
     /// rather than a flat number that is enormous early and irrelevant late.
     /// Passed as zero from the paths that have no meaningful figure — a swing
     /// that already resolved, a tracer — and the arc simply does not fire.
-    private void RecordHit(WeaponCategory category, Vector3 where, float damage)
+    private void RecordHit(WeaponCategory category, Vector3 where, float damage, bool crit = false)
     {
         _hits[(int)category]++;
-        Hit?.Invoke(where, category, damage);
+        Hit?.Invoke(where, category, damage, crit);
 
         if (damage <= 0.0f || Mods.ChainChance <= 0.0f || _horde == null)
             return;
@@ -1145,7 +1172,7 @@ public partial class WeaponHandler : Node3D
 
         // A chain jump reads as a smaller event than the shot that started it,
         // because it is: the chain does a fraction of the damage.
-        Hit?.Invoke(to, category, damage * ChainFraction);
+        Hit?.Invoke(to, category, damage * ChainFraction, false);
 
         // And the jump itself, which nothing drew.
         //

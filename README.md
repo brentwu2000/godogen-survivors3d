@@ -17,7 +17,7 @@ version of another. Threat is a *place* — danger zones you choose to enter —
 and a map leans toward one kind of them rather than holding one of each. The growth deck has five
 lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
 audio and music that follows the run's shape, a HUD of bars rather than labels, a minimap that records
-where you have been rather than revealing the map, and hit feedback.
+where you have been rather than revealing the map, and a fight that leaves evidence on the floor.
 
 **The look is cel-shaded stylised**, and `ART.md` is the brief anyone sourcing a model works to. Most
 of that file is a list of things this renderer cannot do — a `MultiMesh` has no skeleton, so animations,
@@ -38,7 +38,7 @@ The billboard sprite path is still there and still works, behind `Horde.SolidBod
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
 scene with it so it cannot quietly rot.
 
-Sweep clean at 47 probes; the table below lists 34 of them and is the older set. Two of those 47
+Sweep clean at 48 probes; the table below lists 34 of them and is the older set. Two of those 48
 had been failing on their own bookkeeping rather than on anything they measure — `PaletteProbe`
 printed "palette ok" where `sweep.ps1` looks for "PROBE OK", and `RouteMemory` is a helper class
 the sweep was trying to run as a probe. Build gate re-verified 2026-09-08.
@@ -112,6 +112,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
+| `test/ImpactProbe.cs` | yes | The feedback that is not a muzzle flash: a kill stains the floor downrange of the shove and on the ground, the floor clears itself and never overflows, both blend channels carry puffs, a crit emits more than the same shot without one, and a burning body is on fire while an identical cold one is not |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet, burst, chill and mark each do what only they do — the last two also that the status is *spent* rather than permanent |
 | `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
 | `test/FirstRunProbe.cs` | yes | A fresh profile has not seen the base, an older save has, and opening the game on a new profile lands in a run without a keypress |
@@ -126,6 +127,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/GaitShot.cs` | no | A strip of frames while a movement key is held, under the game's own camera, printing travel against the facing and against the view's right (`-- hold:move_right`). It is the print that matters: strafing must read 90° off the facing and 0° off the right |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
 | `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills and a detonation just before the shutter) |
+| `test/EffectShot.cs` | no | The effect vocabulary as a row on the ground — flash, spark, smoke, gore, crit, splat, scorch — held still and spaced out. `-- bare` photographs the same seeded frame with nothing staged, and the difference is the measurement: this floor draws brown and grey patches of its own, and twice a stain that was rendering perfectly was read off a single picture as absent |
 | `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
 
@@ -847,6 +849,86 @@ orange disc over a quarter of the screen, which reads as a rendering fault. The 
 counting bright pixels across the captured run found about sixty per frame out of two million, an effect
 system that technically runs. The only meaningful ruler is the character — 2.2 m of player is about
 130 px, so a metre is roughly sixty pixels and anything under half a metre is a speck.
+
+**One blend mode was never going to be enough, and moving to daylight is what proved it.** Every puff
+in the game was drawn additively, which is right for anything that emits and has no ceiling: a pale
+plume over the bright half of the frame climbs to white. At dusk that never showed, because the field
+behind it was near-black and had nowhere to climb to. On a daylit ground it is most of "the effects
+look like lens dirt" — smoke read as haze, and a kill's spray of four additive puffs went white and
+lost the horde's green entirely. `render_mode` is the one thing a shader cannot decide per instance,
+so the pool is one pool split across two passes at upload: `effect.gdshader` adds, `effect_soft.gdshader`
+blends, and `effect_body.gdshaderinc` is everything else about them, which is everything but that line.
+One extra draw call and a branch.
+
+What blending buys is *not* darkness. That was the first reason written down and it is wrong:
+instance colours are linear, and the arena's grass measures **0.058 linear** — a pixel of 0.27 — so
+anything a person would type as "dark grey" is several times brighter than the floor it is drawn over.
+A plume that reads as smoke here is a pale one, which is what powder smoke looks like anyway. What
+blending buys is the ceiling: the same plume converges *to its own colour*, lightening a dark floor and
+darkening a bright sky, and occluding what is behind it either way.
+
+**The stains had to go an order of magnitude darker than they read on the page, for the same reason.**
+A splat authored at (0.20, 0.17, 0.12) — which anybody would call dark brown — blended over the grass
+and came out *brighter* and warmer: a worn patch of bare earth, indistinguishable from the tan tiles the
+ground shader already draws. Measured against the same seeded frame with nothing staged it lifted the
+floor from (68, 86, 58) to (86, 109, 62), which is the opposite of a stain. Under 0.03 the arithmetic
+goes the other way: (0.020, 0.028, 0.010) now takes it to (60, 77, 41), and the scorch to (52, 65, 44).
+Hue is what keeps the two apart from each other and from the arena — the splat stays inside the horde's
+green, the scorch has no hue at all.
+
+**That comparison is why `EffectShot` takes two pictures.** This floor draws brown and grey patches of
+its own — biome tint, scatter debris, the ground texture — and twice a stain that was rendering
+perfectly well was read off a single screenshot as absent, once as "the marks do not render" and once
+as "the marks render too light". `-- bare` photographs the same seeded frame with nothing staged, and
+the difference between the two is a number rather than an opinion. It also caught the third version of
+the same mistake: the row was staged seven metres *in front* of the player, twenty from the camera, and
+this biome's fog had washed both stains out by then. They were drawing correctly and fogging correctly,
+which is the worst way for a picture to be wrong.
+
+**A muzzle flash is a shape, not a size.** Sized off the weapon's damage the old ball was a fifteen-
+centimetre speck — nine pixels, under the width of the HUD's own font — and growing it enough to see
+turned it into a floating orange disc, because a soft radial ball has no shape to grow into. Every puff
+in the game was that one texture, so a flash, a blood burst and a plume of smoke differed only in size
+and colour, and size and colour are both magnitudes. There are three shapes now, in one
+`Texture2DArray` selected per instance: a ball, a four-pointed star with a hot core, and a lumpy
+edge-soft blob with no core at all. The star is mostly transparent, so it can be a metre across and
+still put only a small bright core on screen — and it lasts four frames rather than five, because
+shape buys legibility that duration used to have to.
+
+**A body comes apart along the shot that killed it.** The burst used to scatter uniformly, which reads
+as a body deciding to stop existing: the shot could have come from anywhere. `KillDetail` carries the
+knockback now, unscaled by the variant's resistance, because what the effect wants is the *bearing* of
+the shot and a brute taking knockback at 0.2x is still being shot at from somewhere. It is zero for
+everything that kills without a direction — burning ground, bleed, a blast the victim was merely
+standing inside — and those scatter, correctly.
+
+**Two cards the player could buy had no picture, and both are now drawn.** Crit multiplies damage, and
+damage already scales the impact puff, so the only evidence of the twelve percent was that a target
+occasionally died a shot early — indistinguishable from having aimed at a weaker one. It is carried on
+the `Hit` event rather than inferred, because the number a listener would have to compare against is
+the weapon's effective damage at its level, scaled by armour, elite mark and any charge held, none of
+which reaches the screen. The roll is once per attack, so the flash is once per attack: a shotgun's
+eight pellets and a scythe's five bodies each say it once. Ignite was worse — it is one of the eight
+things in this game that cannot be bought, opened by killing sixty in a run, and what it bought was a
+`Pool.Burn` field nothing drew. A burning enemy looked exactly like one that was not, right up until it
+fell over. It gets fire over the body rather than a hit flash, for the reason immediately below, and
+the scan is a rotating window over the pool because a molotov can leave forty things alight.
+
+**A shot that takes time to arrive leaves a wake.** Travel time is the whole of what separates a
+projectile weapon from a hitscan one — a bow's shot has to be led, and leading something you can barely
+see is guesswork. One small quad crossing thirty metres is a fleck; a fleck with three metres of fading
+behind it is a trajectory. Only the shots that are real get one: a hitscan tracer is already a
+zero-damage projectile fired purely to be seen, and a wake behind every round of an automatic at seven
+a second is a beam weapon rather than a rifle. Zero damage is the existing marker for "cosmetic" — the
+collision stage skips on it too — so this needed no new field. The wake takes the projectile's own
+tint, because per-shot tint is what stopped fifteen weapons crossing the screen identically and a trail
+in one authored colour would undo half of it.
+
+**A swing is drawn as the arc it covers.** Reach and sweep are the whole of a melee weapon's identity
+and neither was on screen: a knife at 1.6 m over 90° and a scythe at 3.4 m over 200° drew the same
+streak at different lengths. The puffs step along the weapon's own arc at its own radius now, brightest
+in the middle of the sweep, each living a hair longer than the one before — which is what makes a
+static line read as a blade travelling.
 
 **Damage over time must not raise the hit flash.** The flash confirms that a discrete shot landed, and
 burning ground applies damage sixty times a second — so it re-lit every enemy standing in it every tick,
@@ -1853,7 +1935,10 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/shaders/ground.gdshader` | hand-written | — | tiled floor, tinted per grid cell, cel shaded at four bands |
 | `assets/shaders/prop.gdshader` | hand-written | — | cover and scenery: vertex colour, cel shaded |
 | `assets/shaders/cel.gdshaderinc` | hand-written | — | the ramp, the shadow floor and the rim, included by all three |
-| `assets/shaders/effect.gdshader` | hand-written | — | additive billboard puffs |
+| `assets/shaders/effect.gdshader` | hand-written | — | the additive half of the puffs: flashes, sparks, fire, blasts |
+| `assets/shaders/effect_soft.gdshader` | hand-written | — | the blending half: smoke, powder, the spatter a kill throws |
+| `assets/shaders/effect_body.gdshaderinc` | hand-written | — | everything the two share — the billboard rebuild, the spin, the shape lookup |
+| `assets/shaders/ground_stain.gdshader` | hand-written | — | what a fight leaves on the floor, laid to the ground's own normal rather than billboarded |
 | `assets/shaders/ground_marker.gdshader` | hand-written | — | burning ground and the extraction ring |
 | `assets/textures/ground.png` | `art-src/textures/ground_raw.png`, via `make_ground.py` | 1024×1024, tileable | 4.5 m tile |
 | `assets/textures/skin_infected.png` | `art-src/textures/skin_infected_raw.png`, via `make_body_skin.py` | 1024×1024, tileable | walker, runner, spitter, stalker |
@@ -2014,7 +2099,7 @@ person**, not things that need code.
   health, reaches 158 s on the Service Rifle and walks out. What is still unmeasured is whether a
   *person* can hold that ground longer, which is the same question as before and now has a floor
   under it.
-- **The proof video is three phases stale.** `test/Presentation.cs` films a game without elites, a
+- **The proof video is four phases stale.** `test/Presentation.cs` films a game without elites, a
   boss, biomes, or music.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
   it. Behaviour is correct today, but moving to 30 Hz means re-checking every damping constant.

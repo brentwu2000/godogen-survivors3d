@@ -1,5 +1,20 @@
 using Godot;
 
+/// The three things a puff can be drawn as, which is the axis the pool never had.
+///
+/// One texture drew everything, so a muzzle flash, a blood burst and a plume of
+/// smoke differed only in size and colour — and a soft radial ball at any size
+/// and any colour reads as a soft radial ball. `Flash` has a hot core and four
+/// spikes, which is the shape that says "a gun went off" before the player has
+/// read anything; `Smoke` is lumpy and edge-soft with no core, which is the shape
+/// that says "this is not light".
+public enum EffectShape : byte
+{
+    Ball = 0,
+    Flash = 1,
+    Smoke = 2,
+}
+
 /// Short-lived visual puffs, stored the way everything else in this project is.
 ///
 /// Fixed capacity, structure-of-arrays, swap-remove, nothing allocated after
@@ -30,6 +45,25 @@ public sealed class EffectPool
     /// been thrown by something; debris that sits reads as a decal.
     public readonly Vector2[] Drift;
 
+    /// Which of the three drawn shapes this is — see `EffectShape`. Size, colour
+    /// and lifetime were the only things separating a muzzle flash from a lump of
+    /// smoke, and they are all magnitudes: the same soft ball at every size is
+    /// still the same soft ball, which is why a busy frame read as lens dirt
+    /// rather than as gunfire.
+    public readonly byte[] Shape;
+
+    /// True to draw on the blending channel instead of the additive one.
+    ///
+    /// Additive cannot make anything darker than what is behind it, so smoke over
+    /// a daylit field lightened it. Two MultiMeshes rather than two pools: which
+    /// channel a puff belongs on is a property of the puff, and splitting it at
+    /// upload keeps one lifetime, one capacity and one spawn path.
+    public readonly bool[] Soft;
+
+    /// In-plane rotation, radians. A four-pointed flash drawn at the same angle
+    /// every shot reads as a decal stuck to the muzzle.
+    public readonly float[] Spin;
+
     public int Count { get; private set; }
 
     public EffectPool(int capacity)
@@ -42,6 +76,9 @@ public sealed class EffectPool
         Life = new float[capacity];
         MaxLife = new float[capacity];
         Drift = new Vector2[capacity];
+        Shape = new byte[capacity];
+        Soft = new bool[capacity];
+        Spin = new float[capacity];
     }
 
     /// How many puffs have ever been spawned, and how big they were.
@@ -61,7 +98,12 @@ public sealed class EffectPool
         TotalStartSize = 0.0f;
     }
 
-    public void Spawn(Vector3 position, float startSize, float endSize, Color tint, float seconds, Vector2 drift)
+    /// `shape`, `soft` and `spin` default to the soft additive ball drawn
+    /// upright, which is what every puff in the game looked like before there was
+    /// a choice — so a caller that does not care keeps exactly what it had.
+    public void Spawn(Vector3 position, float startSize, float endSize, Color tint, float seconds,
+                      Vector2 drift, EffectShape shape = EffectShape.Ball, bool soft = false,
+                      float spin = 0.0f)
     {
         TotalSpawned++;
         TotalStartSize += startSize;
@@ -101,6 +143,9 @@ public sealed class EffectPool
         Life[i] = seconds;
         MaxLife[i] = seconds;
         Drift[i] = drift;
+        Shape[i] = (byte)shape;
+        Soft[i] = soft;
+        Spin[i] = spin;
     }
 
     public void Step(float delta)
@@ -140,6 +185,9 @@ public sealed class EffectPool
         Life[index] = Life[last];
         MaxLife[index] = MaxLife[last];
         Drift[index] = Drift[last];
+        Shape[index] = Shape[last];
+        Soft[index] = Soft[last];
+        Spin[index] = Spin[last];
     }
 
     public void Clear() => Count = 0;

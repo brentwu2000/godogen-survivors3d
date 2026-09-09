@@ -410,7 +410,7 @@ public partial class SoundDirector : Node
     /// impact at the same level, which threw away the only per-hit feedback the
     /// audio had. Chain jumps do a fraction of the damage and now sound like it,
     /// which is what stops a chained volley from turning into a wall of noise.
-    private void OnHit(Vector3 where, WeaponCategory category, float damage)
+    private void OnHit(Vector3 where, WeaponCategory category, float damage, bool crit)
     {
         float weight = Mathf.Clamp(damage / 30.0f, 0.0f, 1.0f);
         Play(Sfx.Impact, Mathf.Lerp(-9.0f, -2.0f, weight), Mathf.Lerp(1.18f, 0.82f, weight));

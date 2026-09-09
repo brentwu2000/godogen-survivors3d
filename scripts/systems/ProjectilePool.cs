@@ -43,6 +43,19 @@ public sealed class ProjectilePool
 
     public readonly float[] Scale;
 
+    /// Whether the attack that launched this shot rolled a crit.
+    ///
+    /// Carried on the projectile rather than on the weapon for the same reason
+    /// the tint is: a shot outlives the pull that fired it. Crit is decided once
+    /// per attack and spent by the first body the shot reaches, so this is
+    /// cleared at the impact that announces it — a bolt that pierces three does
+    /// not crit three times.
+    ///
+    /// Without it the card was invisible for every projectile weapon in the game.
+    /// The multiplier was applied at spawn and folded into `Damage`, so by the
+    /// time the arrow landed there was nothing left that knew.
+    public readonly bool[] Crit;
+
     public int Count { get; private set; }
 
     public ProjectilePool(int capacity)
@@ -58,6 +71,7 @@ public sealed class ProjectilePool
         Blast = new float[capacity];
         Tint = new Color[capacity];
         Scale = new float[capacity];
+        Crit = new bool[capacity];
     }
 
     /// `tint` defaults to white and `scale` to one, which is what every shot
@@ -65,12 +79,13 @@ public sealed class ProjectilePool
     /// keeps exactly the appearance it had.
     public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life,
                          int pierce, int bounces = 0, float blast = 0.0f,
-                         Color tint = default, float scale = 1.0f)
+                         Color tint = default, float scale = 1.0f, bool crit = false)
     {
         if (Count >= Capacity)
             return false;
 
         int i = Count++;
+        Crit[i] = crit;
         Tint[i] = tint.A <= 0.0f ? Colors.White : tint;
         Scale[i] = scale;
         Bounces[i] = bounces;
@@ -99,6 +114,7 @@ public sealed class ProjectilePool
         Bounces[index] = Bounces[last];
         Tint[index] = Tint[last];
         Scale[index] = Scale[last];
+        Crit[index] = Crit[last];
         Blast[index] = Blast[last];
     }
 

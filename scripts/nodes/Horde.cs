@@ -187,11 +187,19 @@ public partial class Horde : Node3D
     /// player has to read off the screen in the moment it happens.
     public event System.Action<Vector3>? Exploded;
 
-    /// The same kill `EnemyKilled` reports, with the variant and the elite mark
-    /// attached. A second event rather than a wider first one: six things listen
-    /// for a death and exactly one needs to know that an armoured walker is worth
-    /// four times a plain one.
-    public event System.Action<int, byte, Vector3>? KillDetail;
+    /// The same kill `EnemyKilled` reports, with the variant, the elite mark and
+    /// the shove that finished it attached. A second event rather than a wider
+    /// first one: six things listen for a death and exactly two need more than
+    /// where it happened — the growth curve, because an armoured walker is worth
+    /// four times a plain one, and the effect director, because a body has to come
+    /// apart in the direction it was hit rather than uniformly.
+    ///
+    /// The impulse is the knockback vector as it arrived, unscaled by the
+    /// variant's resistance: what it is being asked for is the *bearing* of the
+    /// shot, and a brute taking knockback at 0.2x is still being shot at from
+    /// somewhere. It is zero for anything that kills without a direction — burning
+    /// ground, bleed, a blast the victim was merely standing inside.
+    public event System.Action<int, byte, Vector3, Vector2>? KillDetail;
 
     public EnemyPool Pool { get; private set; } = null!;
     public EnemyTypeResource[] Types { get; private set; } = System.Array.Empty<EnemyTypeResource>();
@@ -1147,7 +1155,7 @@ public partial class Horde : Node3D
             Blast(deathPosition, eliteRadius, eliteDamage);
 
         ApplyKillRules(deathPosition);
-        KillDetail?.Invoke(type.SpriteLayer, eliteMark, deathPosition);
+        KillDetail?.Invoke(type.SpriteLayer, eliteMark, deathPosition, knockback);
         EnemyKilled?.Invoke(type.SpriteLayer, deathPosition);
         return true;
     }
