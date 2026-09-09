@@ -391,6 +391,13 @@ public partial class Screenshot : SceneTree
                 handler.HoldFire = false;
                 handler.ForceFire(CameraRig.Forward(rig.Yaw));
             }
+
+            // And a hit taken from behind and to the left, so the compass has
+            // something to point at. It is the one part of the readout that
+            // cannot be photographed by driving the *player's* side of a fight:
+            // the arc only exists while something is hurting them.
+            if (_scene.GetNodeOrNull<Player>("Player") is { } hurt)
+                hurt.TakeDamage(14.0f, new Vector2(-0.7f, -0.7f).Normalized());
         }
 
         if (++_frame < _warmup)

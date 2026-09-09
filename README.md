@@ -127,8 +127,8 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/GaitShot.cs` | no | A strip of frames while a movement key is held, under the game's own camera, printing travel against the facing and against the view's right (`-- hold:move_right`). It is the print that matters: strafing must read 90° off the facing and 0° off the right |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
-| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills, a detonation and a shot just before the shutter) |
-| `test/EffectShot.cs` | no | The effect vocabulary as a row on the ground — flash, spark, smoke, gore, crit, splat, scorch — held still and spaced out. `-- bare` photographs the same seeded frame with nothing staged, and the difference is the measurement: this floor draws brown and grey patches of its own, and twice a stain that was rendering perfectly was read off a single picture as absent |
+| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills, a detonation, a shot and a hit *taken* just before the shutter — the last of those because the threat compass only exists while something is hurting the player, so it cannot be photographed by driving their side of a fight) |
+| `test/EffectShot.cs` | no | The effect vocabulary as a row on the ground — flash, spark, smoke, gore, crit, splat, scorch — held still and spaced out, with three bodies lying behind it. `-- bare` photographs the same seeded frame with nothing staged, and the difference is the measurement: this floor draws brown and grey patches of its own, and twice a stain that was rendering perfectly was read off a single picture as absent |
 | `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
 

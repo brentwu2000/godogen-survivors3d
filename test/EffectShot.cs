@@ -149,5 +149,23 @@ public partial class EffectShot : SceneTree
         marks.Clear();
         marks.Spawn(Spot(5), 2.4f, new Color(0.020f, 0.028f, 0.010f, 0.72f), 8.0f, MarkShape.Splat, 0.7f);
         marks.Spawn(Spot(6), 3.0f, new Color(0.006f, 0.006f, 0.006f, 0.88f), 8.0f, MarkShape.Scorch, 0.0f);
+
+        // A second row, four metres further out: what a kill leaves standing —
+        // or rather not standing. Staged at the same instant as the puffs, so by
+        // the shutter they are through the fall and lying flat, which is the state
+        // they spend most of their five seconds in and the only one worth a
+        // photograph. One of each of the first three variants, so a walker, a
+        // runner and whatever is third can be compared lying down the way
+        // `BodyShot` compares them upright.
+        var horde = _scene?.GetNodeOrNull<Horde>("Horde");
+        if (horde == null)
+            return;
+
+        horde.Corpses.Clear();
+        for (int i = 0; i < 3 && i < horde.Types.Length; i++)
+        {
+            Vector3 at = Spot(i * 2) + new Vector3(0.0f, 0.0f, -4.5f);
+            horde.Corpses.Spawn(i, 0, at, 0.0f, Mathf.Pi * 0.5f * i, 1.0f, 0.5f);
+        }
     }
 }

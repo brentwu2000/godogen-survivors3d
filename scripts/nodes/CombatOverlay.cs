@@ -227,8 +227,17 @@ public partial class CombatOverlay : Control
         if (camera == null)
             return;
 
-        Vector2 middle = Size * 0.5f;
-        float radius = Mathf.Min(Size.X, Size.Y) * 0.36f;
+        // The viewport's rectangle, not this control's own.
+        //
+        // `Size` was (0, 0) and the arcs were being drawn at a radius of nothing
+        // — invisible, with no error, while the damage numbers in the same
+        // `_Draw` came out correctly because they project from the camera and
+        // never ask this node how big it is. A Control parented to a CanvasLayer
+        // has no parent Control to anchor against, so its rect is whatever the
+        // layout pass last decided, which here is nothing at all.
+        Vector2 screen = GetViewportRect().Size;
+        Vector2 middle = screen * 0.5f;
+        float radius = Mathf.Min(screen.X, screen.Y) * 0.34f;
         Basis frame = camera.GlobalTransform.Basis;
 
         for (int i = 0; i < Sectors; i++)
@@ -249,9 +258,9 @@ public partial class CombatOverlay : Control
             float centre = onScreen - Mathf.Pi * 0.5f;
             float half = Mathf.Pi / Sectors * 0.85f;
 
-            DrawArc(middle, radius, centre - half, centre + half, 12,
-                    new Color(Threat.R, Threat.G, Threat.B, 0.10f + 0.55f * weight),
-                    6.0f + 10.0f * weight, antialiased: true);
+            DrawArc(middle, radius, centre - half, centre + half, 16,
+                    new Color(Threat.R, Threat.G, Threat.B, 0.18f + 0.62f * weight),
+                    8.0f + 14.0f * weight, antialiased: true);
         }
     }
 
