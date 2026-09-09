@@ -668,12 +668,46 @@ public partial class ImpactProbe : SceneTree
         if (tick < 120)
             return null;
 
-        if (_overlay.ThreatAt(lit) > 0.0f)
+        if (tick == 120)
         {
-            GD.PushError($"  the compass still reads {_overlay.ThreatAt(lit):F2} two seconds after the last hit");
+            if (_overlay.ThreatAt(lit) > 0.0f)
+            {
+                GD.PushError($"  the compass still reads {_overlay.ThreatAt(lit):F2} two seconds after the last hit");
+                return false;
+            }
+
+            // And the path a player actually meets, which is not `TakeDamage`.
+            //
+            // Contact is the only source of damage in this game that arrives as a
+            // *rate* and from a crowd rather than from one thing, so its bearing
+            // is a weighted sum across everything touching the player — and a sum
+            // that came out zero, or that was never wired at all, would look
+            // exactly like a compass that works: the staged hit above would still
+            // light it.
+            Vector2 side = CameraRig.Forward(_rig!.Yaw).Rotated(Mathf.Pi * 0.5f);
+            _horde!.Pool.Clear();
+            for (int i = 0; i < 4; i++)
+            {
+                _horde.Spawn(_player!.GlobalPosition
+                             + new Vector3(side.X, 0.0f, side.Y) * (0.5f + i * 0.1f), 0);
+            }
+
+            return null;
+        }
+
+        if (tick < 150)
+            return null;
+
+        int pressed = CombatOverlay.SectorOf(
+            CameraRig.Forward(_rig!.Yaw).Rotated(Mathf.Pi * 0.5f));
+
+        if (_overlay.ThreatAt(pressed) <= 0.0f)
+        {
+            GD.PushError("  four bodies standing on the player lit nothing — contact carries no bearing");
             return false;
         }
 
+        _horde!.Pool.Clear();
         return true;
     }
 
