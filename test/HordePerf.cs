@@ -278,20 +278,28 @@ public partial class HordePerf : SceneTree
     /// be a frame time for a horde that is smaller than the one it claims.
     private void Fight()
     {
-        _weapons!.HoldFire = false;
-        _weapons.ForceFire(CameraRig.Forward(_rig!.Yaw));
+        // Every one of these was checked in `_Process` before fight mode was
+        // allowed to start, and asserting it once here is what keeps the rest of
+        // the method free of `!` on every line — three of which the compiler was
+        // right about, because `_horde` is the one field this method uses that
+        // was not part of that check.
+        if (_horde == null || _player == null || _weapons == null || _rig == null || _effects == null)
+            return;
+
+        _weapons.HoldFire = false;
+        _weapons.ForceFire(CameraRig.Forward(_rig.Yaw));
 
         // Twice a second, which is far more often than a run ever explodes and is
         // the point: this is a ceiling, not a typical frame.
         if (_frame % 30 == 0)
         {
-            Vector3 at = _player!.GlobalPosition
+            Vector3 at = _player.GlobalPosition
                        + new Vector3(CameraRig.Forward(_rig.Yaw).X, 0.0f, CameraRig.Forward(_rig.Yaw).Y) * 6.0f;
             _horde.Detonate(at, 4.5f, 55.0f);
         }
 
         if (_frame % 120 == 0)
-            _horde.Hazards.Add(_player!.GlobalPosition + new Vector3(3.0f, 0.0f, 3.0f), 3.5f, 22.0f, 7.0f);
+            _horde.Hazards.Add(_player.GlobalPosition + new Vector3(3.0f, 0.0f, 3.0f), 3.5f, 22.0f, 7.0f);
 
         // A slice alight, so the burning-body pass has something to draw. Spread
         // by index rather than all at once, because forty at once and then none
@@ -316,9 +324,9 @@ public partial class HordePerf : SceneTree
         // corpse count of seventeen. A number that disagrees with the line above
         // it is worse than no number.
         if (_killBase == 0)
-            _killBase = _horde!.Corpses.TotalSpawned;
-        _kills = _horde!.Corpses.TotalSpawned - _killBase;
-        _peakPuffs = Mathf.Max(_peakPuffs, _effects!.Effects.Count);
+            _killBase = _horde.Corpses.TotalSpawned;
+        _kills = _horde.Corpses.TotalSpawned - _killBase;
+        _peakPuffs = Mathf.Max(_peakPuffs, _effects.Effects.Count);
         _peakMarks = Mathf.Max(_peakMarks, _effects.Marks.Count);
         _peakCorpses = Mathf.Max(_peakCorpses, _horde.Corpses.Count);
     }
