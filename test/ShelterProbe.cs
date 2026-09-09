@@ -73,7 +73,7 @@ public partial class ShelterProbe : SceneTree
             case 0: return RunStage(StageBindings, "no verb shares a key with movement");
             case 1: return RunStage(StageRetired, "the screen's eight verb keys are gone");
             case 2: return RunStage(StageEveryFittingHasItsKeys, "every fitting's verbs have a key to press");
-            case 3: return RunStage(StageStations, "six fittings, inside the room, out of each other's reach");
+            case 3: return RunStage(StageStations, "every fitting is inside the room and out of the others' reach");
             case 4: return RunStage(StageStandingSelects, "standing at one selects it, and walking off deselects");
             case 5: return RunStage(StageWalls, "the room is closed");
             default:
@@ -258,9 +258,18 @@ public partial class ShelterProbe : SceneTree
 
         // And the middle of nowhere is nothing. A room where every square selects
         // something has no walking in it.
+        //
+        // **The spot is searched for rather than named, and the reason is that
+        // naming one broke.** This used to stand at the right wall four metres
+        // from the north end, which was empty until the Console fitting took the
+        // right wall at z −3.5 — and the probe then failed with "an empty corner
+        // selects Console", which is a true sentence about a corner that is no
+        // longer empty rather than about anything wrong with the room. Adding a
+        // fitting should not require editing a coordinate in a test, so this
+        // walks a grid and takes the point furthest from every station.
         if (tick == order.Count * 3 + 1)
         {
-            _player!.GlobalPosition = new Vector3(_shelter.HalfWidth - 1.0f, 0.0f, -_shelter.HalfDepth + 4.0f);
+            _player!.GlobalPosition = Emptiest();
             return null;
         }
 
@@ -275,6 +284,39 @@ public partial class ShelterProbe : SceneTree
             GD.PushError($"  an empty corner selects {_shelter.Focus}");
 
         return clear && !_failed;
+    }
+
+    /// The point in the room furthest from anything selectable.
+    ///
+    /// A coarse grid is enough: the question is only whether *some* square in the
+    /// room selects nothing, and a metre of resolution over a 23x16 room is 368
+    /// candidates for a test that runs in one tick.
+    private Vector3 Emptiest()
+    {
+        Vector3 best = Vector3.Zero;
+        float bestDistance = -1.0f;
+
+        for (float x = -_shelter!.HalfWidth + 1.0f; x <= _shelter.HalfWidth - 1.0f; x += 1.0f)
+        {
+            for (float z = -_shelter.HalfDepth + 1.0f; z <= _shelter.HalfDepth - 1.0f; z += 1.0f)
+            {
+                var at = new Vector3(x, 0.0f, z);
+                float nearest = float.MaxValue;
+
+                foreach (Vector3 station in _shelter.Stations.Values)
+                    nearest = Mathf.Min(nearest, at.DistanceTo(station));
+
+                if (nearest > bestDistance)
+                {
+                    bestDistance = nearest;
+                    best = at;
+                }
+            }
+        }
+
+        GD.Print($"  emptiest square is ({best.X:F0}, {best.Z:F0}), "
+               + $"{bestDistance:F1} m from the nearest fitting");
+        return best;
     }
 
     /// Four walls with colliders, so the player cannot leave.

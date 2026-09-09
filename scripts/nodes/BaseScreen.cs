@@ -51,6 +51,17 @@ public partial class BaseScreen : Control
         BuildPortrait();
 
         _profile = SaveSystem.Load();
+
+        // The language, before anything is drawn.
+        //
+        // `Resolve` answers the bootstrap case — a save that has never chosen
+        // gets the operating system's language rather than a question, because a
+        // player who cannot read English cannot find the room where the setting
+        // lives. It also holds English headless whatever the save says, which is
+        // what keeps the four probes that read rendered strings measuring the
+        // game rather than the translation.
+        Strings.Use(Strings.Resolve(_profile.Language));
+
         _catalogue = new ShopCatalogue();
         _shelter = GetParent()?.GetNodeOrNull<Shelter>("Shelter");
 
@@ -139,6 +150,7 @@ public partial class BaseScreen : Control
             case Fitting.Board: TakeContract(_contractCursor); break;
             case Fitting.Map: CycleBiome(); break;
             case Fitting.Gate: Launch(); break;
+            case Fitting.Console: CycleLanguage(); break;
 
             // Records has nothing to press. Saying so is better than a key that
             // silently does nothing, which the player reads as a bug in the key.
@@ -879,6 +891,7 @@ public partial class BaseScreen : Control
         Fitting.Board => BoardPage(),
         Fitting.Map => MapPage(),
         Fitting.Gate => GatePage(),
+        Fitting.Console => ConsolePage(),
         _ => WalkingPage(),
     };
 
@@ -895,6 +908,51 @@ public partial class BaseScreen : Control
         text.AppendLine();
         text.AppendLine("  walk to a fitting");
         return text.ToString();
+    }
+
+    /// The settings fitting, which today has one row.
+    ///
+    /// Named for what it is rather than for its one current setting, because the
+    /// second one always arrives — and a fitting called "LANGUAGE" would have to
+    /// be renamed or joined by another the first time anything else is settable.
+    ///
+    /// Each language is written **in itself**. A player who cannot read the
+    /// language the game is currently in cannot find theirs in a list that names
+    /// it in that language, which is the same bootstrap problem the OS default
+    /// answers one step earlier.
+    private string ConsolePage()
+    {
+        var text = new System.Text.StringBuilder();
+
+        text.AppendLine(Strings.Get("ui.console.title"));
+        text.AppendLine();
+
+        string[] locales = Strings.AllLocales;
+        for (int i = 0; i < locales.Length; i++)
+        {
+            string mark = locales[i] == Strings.Locale ? ">" : " ";
+            text.AppendLine($" {mark} " + Strings.Pad(Strings.NameOf(locales[i]), 16) + locales[i]);
+        }
+
+        text.AppendLine();
+        text.AppendLine("   " + Strings.Get("ui.console.next"));
+        text.AppendLine("   " + Strings.Get("ui.console.hint"));
+
+        return text.ToString();
+    }
+
+    /// Steps to the next language and remembers it.
+    ///
+    /// Persisted immediately rather than on launch: this is a setting rather than
+    /// a loadout choice, and a player who changes it and closes the game has
+    /// changed it.
+    private void CycleLanguage()
+    {
+        string next = Strings.Next(Strings.Locale);
+        Strings.Use(next);
+        _profile.Language = Strings.Locale;
+        _message = Strings.Get("ui.console.switched", Strings.NameOf(Strings.Locale));
+        Persist();
     }
 
     private string LockerPage()

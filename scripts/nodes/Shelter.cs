@@ -13,6 +13,7 @@ public enum Fitting
     Board,
     Map,
     Gate,
+    Console,
 }
 
 /// The room between runs, walked rather than scrolled.
@@ -54,6 +55,22 @@ public partial class Shelter : Node3D
     [Signal] public delegate void FocusChangedEventHandler(int fitting);
 
     public Fitting Focus { get; private set; } = Fitting.None;
+
+    /// Puts the player at a fitting, for a capture script.
+    ///
+    /// The room decides the focus from where the player is standing, so a
+    /// screenshot of the settings page would otherwise have to walk there — which
+    /// is a capture script testing the shelter rather than photographing a page.
+    /// Same reasoning as `BaseScreen.ShowRoster` being public, and it moves the
+    /// player rather than only the focus so the next frame agrees with this one.
+    public void StandAt(Fitting fitting)
+    {
+        if (_player != null && _stations.TryGetValue(fitting, out Vector3 at))
+            _player.GlobalPosition = new Vector3(at.X, _player.GlobalPosition.Y, at.Z);
+
+        Focus = fitting;
+        EmitSignal(SignalName.FocusChanged, (int)Focus);
+    }
 
     /// Where each fitting stands, in room space. Public so a probe can walk to
     /// them without knowing how the room was laid out.
@@ -141,6 +158,14 @@ public partial class Shelter : Node3D
         _stations[Fitting.Board] = new Vector3(-HalfWidth + wallGap, 0.0f, -3.5f);
         _stations[Fitting.Map] = new Vector3(0.0f, 0.0f, 0.0f);
         _stations[Fitting.Gate] = new Vector3(0.0f, 0.0f, -HalfDepth + wallGap);
+
+        // The right wall at z −3.5, mirroring the Board.
+        //
+        // `UI.md` reserved this spot for a Quarters fitting and put the Console
+        // beside the Gate. Quarters is superseded — the roster opens at the Gate
+        // on purpose — so the Console takes the empty wall instead of crowding
+        // the one station the player uses every run.
+        _stations[Fitting.Console] = new Vector3(HalfWidth - wallGap, 0.0f, -3.5f);
     }
 
     /// Floor, four walls, and a piece of furniture per fitting.
@@ -244,13 +269,16 @@ public partial class Shelter : Node3D
             }
         }
 
+        // Console: a desk against the right wall with a screen angled off it.
+        pieces.Box(new Vector3(HalfWidth - 0.6f, 0.5f, -3.5f), new Vector3(0.8f, 1.0f, 1.8f), metal);
+        pieces.Box(new Vector3(HalfWidth - 0.75f, 1.35f, -3.5f), new Vector3(0.1f, 0.7f, 1.4f), light);
+
         // Gate: a frame in the north wall. The lit panel inside it is built
         // separately, below — it is the one surface in the room that has to give
         // off light rather than receive it, and the shared prop material has no
         // emission. Drawn with everything else it was a dark slab: the correct
         // colour, unlit, facing away from the only lamp in the room.
         pieces.Box(new Vector3(0.0f, 1.5f, -HalfDepth + 0.35f), new Vector3(3.0f, 3.0f, 0.2f), metal);
-        _ = light;
 
         return new MeshInstance3D
         {
@@ -337,6 +365,8 @@ public partial class Shelter : Node3D
         Fitting.Board => ("CONTRACTS", "take the one selected", "reroll the board"),
         Fitting.Map => ("MAP TABLE", "change terrain", "play today's run"),
         Fitting.Gate => ("GATE", "launch", ""),
+        Fitting.Console => (Strings.Get("ui.console.title"),
+                            Strings.Get("fitting.console.first"), ""),
         _ => ("", "", ""),
     };
 }

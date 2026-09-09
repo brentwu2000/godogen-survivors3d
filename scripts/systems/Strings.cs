@@ -19,6 +19,11 @@ public static class Strings
     /// The locale everything is drawn in. Nothing outside `Use` writes it.
     public static string Locale { get; private set; } = "en";
 
+    /// True once a command line has named a locale, after which nothing else may
+    /// change it. A capture asked for a language and then got the profile's is a
+    /// screenshot of the wrong thing.
+    private static bool _forced;
+
     private static StringTableResource? _table;
     private static System.Collections.Generic.Dictionary<string, int>? _index;
     private static int _column;
@@ -54,22 +59,15 @@ public static class Strings
         for (int i = 0; i < table.Keys.Length; i++)
             _index[table.Keys[i]] = i;
 
-        // `-- locale:zh_TW` on any script or capture, and nothing else decides it
-        // yet.
-        //
-        // **English is the default even on a Chinese machine, deliberately, and
-        // only until UI.md step 5.** Four probes read rendered strings —
-        // `HudProbe`, `DebriefProbe`, `ShopProbe`, `BaseLoopProbe` — and a probe
-        // that passes in one locale and fails in another is testing the
-        // translation rather than the game. Defaulting to `OS.GetLocale()` today
-        // would turn the whole sweep red on this machine and green on a
-        // reviewer's, which is the worst of both. `FromSystem` exists and is
-        // wired to nothing on purpose: the profile is where it belongs, and the
-        // profile does not have the field yet.
+        // `-- locale:zh_TW` on any script or capture, ahead of anything the
+        // profile says.
         foreach (string argument in OS.GetCmdlineUserArgs())
         {
             if (argument.StartsWith("locale:", System.StringComparison.Ordinal))
+            {
                 Locale = argument["locale:".Length..];
+                _forced = true;
+            }
         }
 
         SelectColumn(Locale);
@@ -81,6 +79,9 @@ public static class Strings
     /// player ends up reading the wrong one.
     public static bool Use(string locale)
     {
+        if (_forced)
+            return true;
+
         Locale = locale;
 
         if (!Ready())
@@ -88,6 +89,50 @@ public static class Strings
 
         return SelectColumn(locale);
     }
+
+    /// The locale a save should be drawn in, given what it remembers.
+    ///
+    /// **Headless is English whatever the save says, and that is the rule that
+    /// keeps the sweep honest.** Four probes read rendered strings — `HudProbe`,
+    /// `DebriefProbe`, `ShopProbe` and `BaseLoopProbe` — and a probe that passes
+    /// in one locale and fails in another is testing the translation rather than
+    /// the game. Without this, the sweep would be red on a Chinese machine and
+    /// green on a reviewer's, which is the worst of both. It is the same argument
+    /// as `EffectDirector`'s hitstop: nobody is watching a headless run.
+    ///
+    /// A capture or a probe that wants the other language passes `locale:`, which
+    /// wins over everything including this.
+    public static string Resolve(string saved)
+    {
+        if (_forced)
+            return Locale;
+
+        if (DisplayServer.GetName() == "headless")
+            return "en";
+
+        // An empty string is a save that has never chosen — a file written before
+        // the setting existed, or a fresh profile. That is the bootstrap case,
+        // and it is answered from the system rather than by asking.
+        return saved.Length > 0 ? saved : FromSystem();
+    }
+
+    /// Whatever comes after `locale` in the table's own column order, wrapping.
+    ///
+    /// The Console cycles rather than lists, because there are two and the list
+    /// would be a menu for its own sake — the same call `CycleBiome` makes about
+    /// five places, and the same note about where cycling stops being right.
+    public static string Next(string locale)
+    {
+        if (!Ready() || _table == null || _table.Locales.Length == 0)
+            return locale;
+
+        int at = System.Array.IndexOf(_table.Locales, locale);
+        return _table.Locales[(at + 1 + _table.Locales.Length) % _table.Locales.Length];
+    }
+
+    /// The language's own name, in its own language, which is the only way a
+    /// player who cannot read the current one can find theirs.
+    public static string NameOf(string locale) => Get($"locale.{locale}.name");
 
     private static bool SelectColumn(string locale)
     {
@@ -246,6 +291,8 @@ public static class Strings
         _table = null;
         _index = null;
         _column = 0;
+        _forced = false;
+        Locale = "en";
     }
 
     /// The keys the table holds, for a probe. The game never asks.

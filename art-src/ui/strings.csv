@@ -29,3 +29,11 @@ ability.reach,reach +{0} m,搜刮範圍 +{0} 米
 ability.dodge,dodge {0},閃避 {0}
 ability.thorns,thorns {0},荊棘 {0}
 ability.regen,regen {0}/s,回復 {0}/秒
+ui.console.title,SETTINGS,設定
+ui.console.language,language,語言
+ui.console.next,[E] next language,[E] 切換語言
+ui.console.hint,the game picked this from your system the first time it ran,第一次啟動時，遊戲是照你系統的語言選的
+ui.console.switched,language is {0},語言已切換為 {0}
+locale.en.name,English,English
+locale.zh_TW.name,繁體中文,繁體中文
+fitting.console.first,next language,切換語言

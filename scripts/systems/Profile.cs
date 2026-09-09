@@ -15,6 +15,17 @@ public sealed class Profile
     /// guessing "nothing" would take away gear they paid for.
     private const int Version = 2;
 
+    /// The language the UI is drawn in, or empty for a save that has never said.
+    ///
+    /// **An optional key rather than a Version 3 bump, and `UI.md` asked for the
+    /// bump.** The rule at the top of this file is the one that decides it: a
+    /// version is for a field that cannot be defaulted into an older file, and
+    /// this one can — empty means "never chosen", which is exactly what a v2 file
+    /// means, and `Strings.Resolve` answers that case from the operating system.
+    /// A bump would have bought a migration branch that does nothing a default
+    /// does not already do.
+    public string Language { get; set; } = "";
+
     public int Credits { get; set; }
 
     /// Item name to count. Names rather than resource paths, so moving a .tres
@@ -436,6 +447,7 @@ public sealed class Profile
         {
             { "version", Version },
             { "credits", Credits },
+            { "language", Language },
             { "stash", Stash },
             { "proficiency", proficiency },
             { "loadout", LoadoutWeapon },
@@ -500,6 +512,9 @@ public sealed class Profile
 
         if (root.TryGetValue("credits", out Variant credits))
             profile.Credits = credits.AsInt32();
+
+        if (root.TryGetValue("language", out Variant language))
+            profile.Language = language.AsString();
 
         if (root.TryGetValue("stash", out Variant stash) && stash.VariantType == Variant.Type.Dictionary)
         {

@@ -7,6 +7,7 @@ using Godot;
 ///   godot --script test/BaseShot.cs -- rich   (credits to see the shop working)
 ///   godot --script test/BaseShot.cs -- roster[:2]   (the survivor select)
 ///   godot --script test/BaseShot.cs -- roster:2 locale:zh_TW
+///   godot --script test/BaseShot.cs -- at:Console            (a fitting's page)
 ///
 /// Not headless — the null rendering driver has nothing to capture. The profile
 /// on disk is backed up and restored: a screenshot does not spend a save.
@@ -18,6 +19,13 @@ public partial class BaseShot : SceneTree
     private string? _backup;
     private int _frame;
     private bool _roster;
+
+    /// Which fitting to stand at, for the pages that are not the shop.
+    ///
+    /// The shelter decides the focus from where the player *is*, so a capture of
+    /// the settings page would otherwise have to walk there — which is a capture
+    /// script testing the shelter. Same reasoning as `ShowRoster` being public.
+    private string _at = "";
     private int _pick;
     private Node? _scene;
 
@@ -34,6 +42,12 @@ public partial class BaseShot : SceneTree
             : null;
 
         string[] args = OS.GetCmdlineUserArgs();
+
+        foreach (string argument in args)
+        {
+            if (argument.StartsWith("at:", System.StringComparison.Ordinal))
+                _at = argument["at:".Length..];
+        }
 
         // Ten extractions, so three survivors are open and two are not. A
         // roster shot with everything unlocked does not show the locked state,
@@ -102,6 +116,12 @@ public partial class BaseShot : SceneTree
         // while the screenshot came out looking almost right.
         if (_frame == 1 && _roster)
             _scene?.GetNode<BaseScreen>("Panel").ShowRoster(_pick);
+
+        if (_frame == 1 && _at.Length > 0
+            && System.Enum.TryParse(_at, ignoreCase: true, out Fitting fitting))
+        {
+            _scene?.GetNodeOrNull<Shelter>("Shelter")?.StandAt(fitting);
+        }
 
         if (++_frame < 20)
             return false;
