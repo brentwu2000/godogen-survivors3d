@@ -5,6 +5,7 @@ using Godot;
 ///
 ///   godot --script test/HordePerf.cs -- 200
 ///   godot --script test/HordePerf.cs -- 500 mixed
+///   godot --script test/HordePerf.cs -- 500 mixed fight
 ///
 /// Not headless, and this is checked rather than said. **The comment below is
 /// the comment this file always carried, and for one phase it was the only thing
@@ -27,9 +28,37 @@ using Godot;
 /// "mixed" fills the field from the late-run roster instead of walkers only. The
 /// draw call count is the number that matters there: variants are layers of one
 /// array, so a mixed horde has to cost the same one call a uniform one does.
+///
+/// **"fight" is the mode this file existed for eleven phases without having.**
+/// Without it the instrument spawns five hundred bodies and measures a horde
+/// standing still: nothing fires, nothing dies, nothing explodes and nothing
+/// burns, so the puff pools are empty, the ground has no marks on it, the corpse
+/// field is empty and the blast lights are off. Every effect system in the game
+/// is therefore absent from the one measurement anybody quotes about the game's
+/// cost — and each of them is bounded by a fixed pool, so the ceiling was
+/// arithmetic rather than a number.
+///
+/// It fires the weapon every frame, detonates twice a second, sets a slice of the
+/// field alight, and re-spawns whatever it killed so the body count under
+/// measurement does not drain away. Hitstop is switched off: it does not change
+/// how long a frame takes to draw, but an instrument that quietly runs the game
+/// at a seventh speed is one more thing to have to explain about a number.
 public partial class HordePerf : SceneTree
 {
-    private const int WarmupFrames = 60;
+    /// Frames discarded before sampling starts.
+    ///
+    /// **One second was not enough and the symptom was a bimodal table.** Six
+    /// runs alternating idle and fight came back at either ~1.35 ms or ~3.1 ms
+    /// with no relation to which mode was running — a spread of 2.3x between two
+    /// runs of the *same* command, which is far larger than anything either mode
+    /// costs. That is a GPU that has not finished clocking up, and a number taken
+    /// during it is a number about power management.
+    ///
+    /// `warmup:N` overrides it. The default stays at 60 so every row this file has
+    /// already printed keeps meaning what it meant, and the longer figure is what
+    /// a row worth quoting is taken at.
+    private int _warmupFrames = 60;
+
     private const int SampleFrames = 240;
 
     private Horde? _horde;
@@ -46,6 +75,18 @@ public partial class HordePerf : SceneTree
 
     private int _targetCount = 200;
     private bool _mixed;
+    private bool _fight;
+
+    private Player? _player;
+    private WeaponHandler? _weapons;
+    private EffectDirector? _effects;
+    private CameraRig? _rig;
+
+    /// Peak occupancy of each pool across the sample, so the row can say what was
+    /// actually on screen rather than only how long it took. A busy-frame number
+    /// taken with an empty effect pool would be the same defect as a rendering
+    /// number taken headless, one layer up.
+    private int _peakPuffs, _peakMarks, _peakCorpses, _kills, _killBase;
 
     public override void _Initialize()
     {
@@ -59,6 +100,10 @@ public partial class HordePerf : SceneTree
         foreach (string arg in args)
         {
             _mixed |= arg == "mixed";
+            _fight |= arg == "fight";
+
+            if (arg.StartsWith("warmup:") && int.TryParse(arg[7..], out int warmup))
+                _warmupFrames = Mathf.Max(0, warmup);
 
             // The densest biome is where the cover budget is actually spent, and
             // it is not the default — so the frame time recorded without this
@@ -130,6 +175,31 @@ public partial class HordePerf : SceneTree
                     byType[_horde.Pool.Type[i]]++;
                 GD.Print($"composition: {string.Join('/', byType)}");
             }
+            if (_fight)
+            {
+                _player = scene.GetNodeOrNull<Player>("Player");
+                _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
+                _effects = scene.GetNodeOrNull<EffectDirector>("Effects");
+                _rig = scene.GetNodeOrNull<CameraRig>("CameraRig");
+
+                if (_weapons == null || _effects == null || _rig == null)
+                {
+                    GD.PushError("PERF FAILED — fight mode needs the weapon, the effects and the rig");
+                    Quit(1);
+                    return true;
+                }
+
+                // Off in an instrument. It does not change how long a frame takes
+                // to draw, but a measurement taken with the game quietly running
+                // at a seventh speed is one more thing to have to explain about a
+                // number somebody is going to quote.
+                _effects.Hitstop = false;
+
+                // The player cannot die mid-sample: a dead player stops the
+                // weapon, and half a sample of a corpse is not a busy frame.
+                _player!.Heal(100000.0f);
+            }
+
             Input.ActionPress("move_right");
             _gc0 = System.GC.CollectionCount(0);
             _gc1 = System.GC.CollectionCount(1);
@@ -146,8 +216,11 @@ public partial class HordePerf : SceneTree
             Input.ActionPress((_frame / 45) % 2 == 0 ? "move_right" : "move_left");
         }
 
+        if (_fight)
+            Fight();
+
         ulong now = Time.GetTicksUsec();
-        if (_frame > WarmupFrames && _samples < SampleFrames)
+        if (_frame > _warmupFrames && _samples < SampleFrames)
         {
             _frameMs[_samples++] = (now - _lastTick) / 1000.0;
             _drawCallSum += RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame);
@@ -182,10 +255,72 @@ public partial class HordePerf : SceneTree
         GD.Print($"frame p95       {p95:F2} ms");
         GD.Print($"frame worst     {worst:F2} ms");
         GD.Print($"avg draw calls  {_drawCallSum / _samples:F0}");
+
+        if (_fight)
+        {
+            GD.Print($"peak puffs      {_peakPuffs} of {_effects!.Effects.Capacity}");
+            GD.Print($"peak marks      {_peakMarks} of {_effects.Marks.Capacity}");
+            GD.Print($"peak corpses    {_peakCorpses} of {_horde!.Corpses.Capacity}");
+            GD.Print($"kills sampled   {_kills}");
+        }
+
         GD.Print("PERF DONE");
 
         Quit(0);
         return true;
+    }
+
+    /// Everything the idle measurement leaves out, driven every frame.
+    ///
+    /// The field is topped back up as it is killed. Without that the body count
+    /// falls through the sample — a weapon that clears three a second takes a
+    /// tenth of five hundred off the number under measurement — and the row would
+    /// be a frame time for a horde that is smaller than the one it claims.
+    private void Fight()
+    {
+        _weapons!.HoldFire = false;
+        _weapons.ForceFire(CameraRig.Forward(_rig!.Yaw));
+
+        // Twice a second, which is far more often than a run ever explodes and is
+        // the point: this is a ceiling, not a typical frame.
+        if (_frame % 30 == 0)
+        {
+            Vector3 at = _player!.GlobalPosition
+                       + new Vector3(CameraRig.Forward(_rig.Yaw).X, 0.0f, CameraRig.Forward(_rig.Yaw).Y) * 6.0f;
+            _horde.Detonate(at, 4.5f, 55.0f);
+        }
+
+        if (_frame % 120 == 0)
+            _horde.Hazards.Add(_player!.GlobalPosition + new Vector3(3.0f, 0.0f, 3.0f), 3.5f, 22.0f, 7.0f);
+
+        // A slice alight, so the burning-body pass has something to draw. Spread
+        // by index rather than all at once, because forty at once and then none
+        // is not what a molotov looks like.
+        for (int i = _frame % 8; i < _horde.Pool.Count; i += 8)
+            _horde.ApplyBurn(i, 1.0f, 1.5f);
+
+        while (_horde.Pool.Count < _targetCount &&
+               (_mixed ? _horde.SpawnByIntensity(RingPosition(_frame + _horde.Pool.Count))
+                       : _horde.Spawn(RingPosition(_frame + _horde.Pool.Count))))
+        {
+        }
+
+        if (_frame <= _warmupFrames || _samples >= SampleFrames)
+            return;
+
+        // Counted off the corpse field's running total, not off the pool.
+        //
+        // The first version differenced `Pool.Count` across the frame — and this
+        // method tops the field back up in the same frame, so the difference was
+        // always zero or negative and the row printed `kills sampled 0` under a
+        // corpse count of seventeen. A number that disagrees with the line above
+        // it is worse than no number.
+        if (_killBase == 0)
+            _killBase = _horde!.Corpses.TotalSpawned;
+        _kills = _horde!.Corpses.TotalSpawned - _killBase;
+        _peakPuffs = Mathf.Max(_peakPuffs, _effects!.Effects.Count);
+        _peakMarks = Mathf.Max(_peakMarks, _effects.Marks.Count);
+        _peakCorpses = Mathf.Max(_peakCorpses, _horde.Corpses.Count);
     }
 
     /// Spread the extra spawns over a ring rather than stacking them, so

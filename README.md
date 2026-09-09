@@ -1735,7 +1735,8 @@ which body is on the shelf:
 | authored, Polyart | 1,650 | 330,000 | 1.44 ms | 1.28 ms | 2.45 ms | 68 |
 | authored, tactical | 23,822 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
 | 500 mixed, procedural | ~460–570 | ~250,000 | 1.23 ms | 1.01 ms | 2.13 ms | 91 |
-| 500 mixed, after the impact phase | ~460–570 | ~250,000 | 1.31 ms | 1.04 ms | 2.20 ms | 86 |
+| 500 mixed, idle, 10 s warm-up | ~460–570 | ~250,000 | 1.13 ms | 1.00 ms | 2.08 ms | 89 |
+| 500 mixed, **fighting**, 10 s warm-up | ~460–570 | ~250,000 | 1.51 ms | 1.25 ms | 2.77 ms | 131 |
 
 And the player, which is one body and therefore the cheap half of every one of those rows:
 
@@ -1753,19 +1754,31 @@ frame time and still held 293 fps**, which is a body forty times over the budget
 `ART.md` used to publish, at 200 instances. The tier table there has been
 rewritten around these numbers.
 
-**What the impact phase cost is 0.08 ms of mean frame time and it did not cost a draw call.** Two
-extra puff passes and the ground-mark pass are three where there was one; corpses are extra instances
-in buffers the horde already uploads, so they are free of calls entirely; and the blast lights are
-four omnis with shadows off. The count came back *lower* than the baseline row, which is the honest
-reading of a number that varies by a handful across seeds — a different arena has a different set of
-empty MultiMeshes hidden, and `PropRenderer` alone moves it more than this whole phase did.
+**A saturated combat frame costs 0.38 ms of mean and 44 draw calls, and holds 662 fps.** The fight row
+is `HordePerf -- 500 mixed fight warmup:600`: it fires the weapon every frame, detonates twice a
+second, sets an eighth of the field alight, and re-spawns whatever it killed so the body count under
+measurement does not drain away. By the time it samples, every pool is at or near its ceiling — **224
+puffs of 224**, 59 marks of 96, 38 corpses of 40 — which is what makes it a ceiling rather than a
+typical frame. A run never explodes twice a second.
 
-**Read that row for what it is: a horde standing still.** `HordePerf` spawns five hundred bodies and
-measures the frame; nothing in it fires, kills, explodes or burns, so the marks field is empty, the
-lights are off and the corpse field has nothing in it. What the row proves is that the *idle* cost of
-the new systems is inside the noise. What a busy frame costs is unmeasured, and the pools are what
-bound it: 224 puffs, 96 marks, 40 bodies and 4 lights are all fixed ceilings, chosen before this was
-measured rather than after.
+The draw calls are where the cost actually is: 89 idle against 131 fighting. Two extra puff passes and
+the ground-mark pass account for three of those; the rest is the blast lights, which are cheap per
+light and are not free. Corpses cost nothing in calls at all — they are extra instances in buffers the
+horde already uploads, which is the whole reason they are written into the horde's own MultiMeshes
+rather than their own.
+
+**Both rows are taken at ten seconds of warm-up, and that number is not decoration.** At the old one
+second, six runs alternating idle and fight came back at either ~1.35 ms or ~3.1 ms *with no relation
+to which mode was running* — a 2.3x spread between two runs of the same command, which is far larger
+than anything either mode costs. Two runs of `fight` differed by more than `fight` differs from `idle`.
+That is a GPU that has not finished clocking up, and a number taken during it is a number about power
+management. `warmup:N` exists now; the default is still 60 frames so every row above keeps meaning what
+it meant, and every row worth quoting from here is taken at 600.
+
+**This is also the row that says the pools were the right shape.** The puff pool saturates and the
+frame time does not care, because a saturated pool is exactly what "fixed ceiling" buys: the cost of
+the effect system is bounded by a constant chosen before it was measured, and a worse fight cannot
+spend more than this.
 
 **The number this table used to give was 6.90 ms and it measured no rendering at
 all.** `HordePerf` was documented and run as `godot --headless --script
@@ -1800,7 +1813,77 @@ reproducible in the current environment, so it was environmental, not something 
 
 ## Balance
 
-**Twelve of twelve layouts now extract on the starting kit, and two of them never used to arrive at
+**Re-taken on 2026-09-09, under the control scheme the game actually has.** Every table below the
+divider was measured by a driver that could not strafe and could not reach two of the twelve layouts,
+and the README said so three times without anyone doing it. What follows the divider is the old set,
+kept because the *comparisons* in it are still the right comparisons; what follows immediately is what
+the same instrument says today.
+
+### The four tiers, twelve layouts, starting kit
+
+`godot --headless --script test/BalanceSweep.cs`, 48 runs, Rail Yard.
+
+| Loiter | Walked out | Banked, per attempt | Banked, if you get out | Median death | Worst peak | Median lowest HP |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 s | 12/12 | 507 | 507 | — | 160 | 96 |
+| 60 s | 12/12 | 1337 | 1337 | — | 160 | 58 |
+| 120 s | 10/12 | **1713** | 1754 | 107 s | 160 | 56 |
+| 180 s | 2/12 | **380** | 2306 | 150 s | 160 | 0 |
+
+**Two columns because one of them lies, and it is the one this instrument has printed for four
+phases.** `median banked` was computed over survivors only. At 180 s that is the median of the two
+runs out of twelve that walked out — 2306, which reads as the best payout in the table and is in fact
+a statement about the two that made it. Counting every attempt at what it actually banked (a dead run
+keeps whatever was secured into the safe box, and nothing else), the same tier is **380**: the worst
+row here by a factor of four. A player takes attempts, not survivors. Both columns are printed now.
+
+**The peak moved from 60 s to 120 s, and the supply caches are why.** The old reading of this curve —
+payout peaks at 60 s and collapses after — is no longer what the game does: 507 → 1337 → **1713** →
+380 per attempt. Staying to two minutes is now the best decision on the board, and it is the second
+cache landing at 58% of the clock that pays for it. The third minute is where it falls off, and it
+falls off through *death* rather than through a spent bag: ten of twelve die, at a median of 150 s.
+
+**Nothing about the survival wall is gentle.** 12/12, 12/12, 10/12, 2/12. The median lowest health
+goes 96 → 58 → 56 → 0. There is no tier where the player is merely uncomfortable; the run is either
+comfortably survivable or it is a coin toss you lose.
+
+### Given the choice, the bot leaves before the second half
+
+`lingers:auto`, twelve layouts, and the answer depends on what it is holding.
+
+| Weapon | Walked out | Banked, per attempt | Median run | Longest | Median lowest HP |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| starting kit | 23/24 | 944 | 60 s | 135 s | 59 |
+| Service Rifle | 11/12 | 1521 | 117 s | **180 s** | 54 |
+
+**On the starting kit the 180 s target is not met, and the entry claiming it was is about a different
+weapon.** The bot given the choice leaves at around a minute with the kit and at around two with the
+Service Rifle, and only the Service Rifle arm produced a run that reached three minutes and walked out.
+That is not a contradiction of the older reading — it recorded 158 s *on the Service Rifle* — but the
+sentence had lost the weapon by the time it reached the roadmap.
+
+It also means an `auto`-only sweep exits 1 on the starting kit, every time, because the verdict asks
+whether anything reached 180 s and `auto` treats itself as capable of it. The failure is real and it is
+about the kit rather than about the sweep.
+
+### A pair is 133% of one weapon, and the budget says 115%
+
+`lingers:auto slots:both`, twelve layouts, 24 runs.
+
+| Firing | Walked out | Banked, per attempt | Median run | Median lowest HP |
+| :--- | ---: | ---: | ---: | ---: |
+| one weapon | 11/12 | 927 | 59 s | 59 |
+| two weapons | 12/12 | 1233 | 60 s | 59 |
+
+**133%.** The rule is "a pair inside about 115% of one weapon"; it measured 110% when the sidearm slot
+was reworked and 138% four phases later. It is 133% now, on numbers nobody moved on purpose since —
+so the drift did not continue, and it did not come back inside the budget either. The second slot is
+still worth a third of a run rather than a seventh, and that is the number to move the next time a
+weapon changes.
+
+---
+
+**Twelve of twelve layouts extract on the starting kit, and two of them never used to arrive at
 all.** Both failures belonged to the driver rather than to the game — a turning circle it could not
 close inside, and an escape rule that undid its own progress; both are in Decisions. Between them they
 had been contributing two zeroes to the survival column of every balance table this project has
@@ -1816,9 +1899,10 @@ printed, for reasons that had nothing to do with what was being measured.
 Median 1276 banked at 69 s, 12/12 out. The two bold rows were `Stuck, 120 at 70 s` and
 `Stuck, 440 at 71 s`; the other ten moved too, because a routing change moves every route.
 
-The tables further down are **not** re-taken here, because a driver change is not a design change and
-each is a quarter of an hour. They are still the right shape and the right comparisons; read them as a
-floor. **Re-take the one that is about to settle something before it settles it.**
+The tables further down that section are still the older set. The three above the divider replace what
+they were about; the ones this instrument does not produce — the terrain comparison, the weapon rows,
+the survivor rows — are still the right shape and the right comparisons, and are still owed a re-take.
+**Re-take the one that is about to settle something before it settles it.**
 
 `test/AutoPlay.cs` found that the first version gave the player **no reason to stay**: loitering 180 s
 banked exactly what leaving immediately banked (266 either way), because all value sat in crates and
@@ -2122,25 +2206,20 @@ would have spent a day fixing what was not broken and would have found out only 
 exactly the failure mode this file exists to prevent everywhere else. **Re-read this section against
 the code before starting anything from it.** It is half an hour and it has now paid for itself once.
 
-- **Every balance table was taken under a control scheme the game no longer has.** `[A]`/`[D]`
-  strafe now instead of turning the view, which changes how fast a player crosses ground, how much
-  of a horde can be walked out of, and the reachability of everything the old turning circle put out
-  of range. The tables are still the right *shape* — the comparisons between weapons are between
-  weapons — and every absolute second in them was measured by a driver that could not strafe. The
-  first table to settle anything is the first one to re-take, and this is now the larger of the two
-  reasons why.
-- **Every balance table below the first one was also taken with a driver that could not reach two of
-  the twelve layouts.** Both defects are fixed and neither was in the game — see Decisions — but the
-  tables were not re-taken, because a driver change is not a design change and each is a quarter of an
-  hour. They are still the right shape and the right comparisons. **Re-take the one that matters
-  before it settles anything.**
-- **The pair budget's denominator drifts, and nothing watches it.** The rule is "a pair inside about
-  115% of one weapon"; the starting kit measured 110% at the step-1 rework and **138%** four phases
-  later, on numbers nobody moved on purpose. It is caught only when someone re-takes the solo arm by
-  hand (`lingers:auto slots:both`, twenty-four runs), which happened this time because a new Sidearm
-  forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
-  thing to re-take whenever a weapon changes, and it is written here because that is the only place
-  that will say so. See `WEAPONS.md`.
+- **Three of the balance tables are re-taken; the rest are not.** The four-tier sweep, the auto arm
+  and the pair budget were re-measured on 2026-09-09 under the control scheme the game actually has
+  and with the driver that can reach all twelve layouts — see Balance, above the divider. What is
+  still owed is everything `BalanceSweep` does not produce on its own: the three-terrain comparison,
+  the per-weapon rows, and the survivor rows. Those are still the right *shape* — the comparisons
+  between weapons are between weapons — and every absolute second in them was measured by a driver
+  that could not strafe. **Re-take the one that is about to settle something before it settles it.**
+- **The pair budget is 133% against a rule of 115%, and it is a design decision nobody has taken.**
+  Re-measured 2026-09-09: 927 banked per attempt on one weapon against 1233 on two. The rule is "a
+  pair inside about 115% of one weapon"; it was 110% at the step-1 rework, 138% four phases later, and
+  133% now — so the drift stopped and the excess did not go away. A probe cannot own this: it is a
+  twenty-minute play-test, not an assertion, and it is caught only when somebody runs
+  `lingers:auto slots:both` by hand. What is left is not the measurement, it is deciding whether to
+  move the second slot down or to move the rule. See `WEAPONS.md`.
 - **The horde is the only half of the cast still procedural, and holding it there is a decision.**
   Eight authored bodies were deleted before the first one that worked: seven horde
   variants cut in three.js, and the Drifter's predecessor cut from the blend below. Stood in a row by
@@ -2233,12 +2312,14 @@ the code before starting anything from it.** It is half an hour and it has now p
   a run has turned — but it still does not use cover and does not kite. Range is therefore worth
   nothing to it, which is most of what the Marksman Rifle and the Pump Shotgun are sold on, and their
   rows in the weapon table should be read as measurements of the driver. See Balance.
-- **Under a fixed linger, half the seeds died in the second half; under `linger:auto` the 180 s target
-  is met.** A bot told to stand in the worst part of the run until a stopwatch says otherwise is not
-  doing what a player does, and the difference is the whole gap: given the choice it leaves at 0.6
-  health, reaches 158 s on the Service Rifle and walks out. What is still unmeasured is whether a
-  *person* can hold that ground longer, which is the same question as before and now has a floor
-  under it.
+- **The bot given the choice will not play the second half on the starting kit, and that is the
+  clearest thing the re-take found.** Under `lingers:auto` it leaves at a median of 60 s with the kit
+  and 117 s with the Service Rifle, and only the Service Rifle arm produced a run that reached 180 s
+  and walked out. Told to stand there instead, ten of twelve die at 180 s. So the second half of the
+  clock is reachable, by a better weapon, and it is not somewhere the game currently gives a player a
+  reason to be. Whether a *person* can hold that ground longer than the bot is the same question as
+  before — the bot still does not use cover and does not kite — and it now has a floor under it and a
+  weapon attached to it.
 - **The proof video films one biome, and that is the only true quarter of what this entry used to
   say.** It claimed a game without elites, a boss, biomes or music. `Presentation.cs` cues three
   elites — swift, armoured and volatile — at eight seconds, and cues the boss by dropping `BossAt` to
@@ -2246,12 +2327,12 @@ the code before starting anything from it.** It is half an hour and it has now p
   carries what it plays. What is actually missing is the *place*: nothing sets `GameSession.Biome`, so
   every take is biome 0, the Rail Yard, and the four others have never been filmed. One line in
   `_Initialize` fixes it, or two takes cut together do it better.
-- **What a *busy* frame costs is unmeasured.** The Performance table's new row is a horde standing
-  still: `HordePerf` spawns five hundred bodies and nothing in it fires, kills, explodes or burns, so
-  the marks field is empty, the blast lights are off and the corpse field has nothing in it. Every one
-  of those systems is a fixed pool — 224 puffs, 96 marks, 40 bodies, 4 lights — so the ceiling is
-  known and small, but the ceiling is arithmetic rather than a measurement. The instrument that would
-  answer it is a `HordePerf` that drives the weapon, and it does not exist.
+- ~~**What a *busy* frame costs is unmeasured.**~~ `HordePerf -- 500 mixed fight warmup:600` measures
+  it: 1.51 ms mean and 131 draw calls with every pool at or near its ceiling, against 1.13 ms and 89
+  idle. See Performance. What that run also found is that the *old* warm-up of one second was too
+  short to measure anything — two runs of the same command differed by more than the two modes differ
+  from each other — so any row in that table taken before this one should be read as ±2x until
+  re-taken at `warmup:600`.
 - **Hitstop has never been felt by a person.** Its safety is argued from arithmetic — the whole clock
   scales together, so damage per game second is unchanged — and `ImpactProbe` asserts the clock comes
   back. What no probe can say is whether 0.14 for seven and a half hundredths of a second reads as

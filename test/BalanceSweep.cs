@@ -465,7 +465,22 @@ public partial class BalanceSweep : SceneTree
     private void Report(System.Collections.Generic.List<Row> rows, float[] lingers)
     {
         GD.Print("");
-        GD.Print("linger   survived   median banked   median death   worst peak   median lowest HP");
+        // Two banked columns, and the second one is the answer.
+        //
+        // **`median banked` is over survivors only, and at the tier that matters
+        // most it inverts the result.** At a 180 s linger across twelve layouts,
+        // ten runs died and two walked out with a median of 2306 — a column that
+        // reads as the best payout in the table and is in fact the median of the
+        // two that made it. Per attempt, counting the deaths at what they actually
+        // banked, the same tier is 380: the worst row in the table by a factor of
+        // four.
+        //
+        // A player takes attempts, not survivors. The survivor column is still
+        // worth printing — it is "what it pays if you get out", which is the
+        // number a build is tuned against — but the per-attempt column is the one
+        // that says whether staying is correct, and for four phases nothing
+        // printed it.
+        GD.Print("linger   survived   per attempt   if you get out   median death   worst peak   median lowest HP");
 
         bool reachesTarget = false;
 
@@ -483,6 +498,7 @@ public partial class BalanceSweep : SceneTree
 
             int survived = 0;
             var banked = new System.Collections.Generic.List<float>();
+            var everyone = new System.Collections.Generic.List<float>();
             var deaths = new System.Collections.Generic.List<float>();
             var lowest = new System.Collections.Generic.List<float>();
             int worstPeak = 0;
@@ -491,6 +507,11 @@ public partial class BalanceSweep : SceneTree
             {
                 worstPeak = Mathf.Max(worstPeak, row.Peak);
                 lowest.Add(row.LowestHp);
+
+                // Dying is an outcome, not a missing sample. A dead run banks
+                // whatever was secured into the safe box, which is usually little
+                // and is occasionally the whole reason to secure anything.
+                everyone.Add(row.Banked);
 
                 if (row.Survived)
                 {
@@ -509,7 +530,8 @@ public partial class BalanceSweep : SceneTree
             }
 
             GD.Print($"{(linger < 0.0f ? "auto" : $"{linger:F0}s"),5}   {survived}/{tier.Count,-8}   " +
-                     $"{Median(banked),13}   {Median(deaths),12}   {worstPeak,10}   {Median(lowest),16}");
+                     $"{Median(everyone),11}   {Median(banked),14}   {Median(deaths),12}   " +
+                     $"{worstPeak,10}   {Median(lowest),16}");
         }
 
         ReportArms(rows);

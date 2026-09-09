@@ -210,6 +210,21 @@ public partial class Presentation : SceneTree
         if (level != null)
             level.Seed = 0xC17E4A9BUL;
 
+        // The place, and it had never been set at all.
+        //
+        // `GameSession.Biome` defaults to zero, so every take this script has ever
+        // produced was the Rail Yard — and "the video films no biomes" sat in the
+        // roadmap for phases as though the biome system were missing from the
+        // film, when what was missing was one line choosing which one. Four of the
+        // five places in this game have never been on camera. Same rule as the
+        // seed above and the same reason: read before the scene enters the tree,
+        // because the generator runs in `_Ready`.
+        foreach (string argument in OS.GetCmdlineUserArgs())
+        {
+            if (argument.StartsWith("biome:") && int.TryParse(argument[6..], out int biome))
+                GameSession.Biome = biome;
+        }
+
         GetRoot().AddChild(scene);
     }
 
