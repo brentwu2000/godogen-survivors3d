@@ -252,7 +252,21 @@ public sealed class BodyRenderer
         }
     }
 
-    public void Sync(EnemyPool pool, EnemyTypeResource[] types)
+    public void Sync(EnemyPool pool, EnemyTypeResource[] types) => Sync(pool, types, null);
+
+    /// The living, then whatever is still lying where it died.
+    ///
+    /// Corpses go into the *same* per-variant buffers, after the live ones. Two
+    /// reasons, and the second is the one that decided it: a separate set of
+    /// MultiMeshes would double this renderer's draw calls to carry at most forty
+    /// instances, and appending puts the living first, so the one thing that
+    /// happens when the field is genuinely full is that a corpse is dropped rather
+    /// than an enemy. That is the right order — an enemy nobody can see is a
+    /// bug, and a corpse nobody can see is a corpse that sank early.
+    ///
+    /// The buffer has room. `Horde.Capacity` is 512 per variant against a field
+    /// that caps at 160 alive across all of them.
+    public void Sync(EnemyPool pool, EnemyTypeResource[] types, CorpseField? corpses)
     {
         System.Array.Clear(_counts);
 
@@ -303,6 +317,9 @@ public sealed class BodyRenderer
                   Pack(pool.Velocity[i].Length(), pool.Stride[i]),
                   HueShift(elite), pool.HitFlash[i], Jitter(pool.Phase[i]));
         }
+
+        if (corpses != null)
+            WriteCorpses(corpses);
 
         for (int variant = 0; variant < _multiMeshes.Length; variant++)
         {
@@ -386,6 +403,76 @@ public sealed class BodyRenderer
     /// column, not a trailing triple. Getting that wrong puts every body at the
     /// origin with a sheared basis, which reads as the mesh being broken rather
     /// than the packing.
+    /// A body on its way down, or already there.
+    ///
+    /// The only place in this renderer that builds a basis rather than writing one
+    /// by hand. `Write` composes a Y rotation from two trig calls because it runs
+    /// a hundred and sixty times a frame; this runs at most forty, and what it has
+    /// to express — a yaw, then a tip about a horizontal axis chosen by the shove
+    /// that caused it — is three lines with `Basis` and a page without it.
+    ///
+    /// It pivots about the origin, which is the sole of the foot: `MeshFor` builds
+    /// every body standing on its own zero and `Terrain.Plant` is what puts it on
+    /// the ground. So the tip falls like a plank rather than sinking through the
+    /// floor halfway over, without anything having to compensate.
+    private void WriteCorpses(CorpseField corpses)
+    {
+        for (int i = 0; i < corpses.Count; i++)
+        {
+            int variant = corpses.Variant[i];
+            if (variant >= _buffers.Length)
+                continue;
+
+            int slot = _counts[variant];
+            if (slot * FloatsPerInstance + FloatsPerInstance > _buffers[variant].Length)
+                continue;
+
+            _counts[variant] = slot + 1;
+
+            float scale = corpses.Scale[i];
+            Vector3 at = Terrain.Plant(corpses.Position[i]);
+
+            // Down through the floor over the last stretch, by rather more than
+            // the body is tall — a corpse lying flat is still a metre wide across
+            // the shoulders, and sinking by its own height leaves the top of it
+            // skimming the ground for the last frames.
+            at.Y -= corpses.Sunk(i) * 2.6f * scale;
+
+            // Yaw first, then tip about the axis across the fall. Multiplying the
+            // other way round would tip in the body's own frame, so which way a
+            // corpse fell would depend on which way it happened to be facing.
+            Basis basis = new Basis(Vector3.Up, corpses.FallYaw[i])
+                        * new Basis(Vector3.Right, corpses.Tilt(i))
+                        * new Basis(Vector3.Up, corpses.Yaw[i] - corpses.FallYaw[i]);
+
+            basis = basis.Scaled(Vector3.One * scale);
+
+            int b = slot * FloatsPerInstance;
+            _buffers[variant][b + 0] = basis.X.X;
+            _buffers[variant][b + 1] = basis.Y.X;
+            _buffers[variant][b + 2] = basis.Z.X;
+            _buffers[variant][b + 3] = at.X;
+            _buffers[variant][b + 4] = basis.X.Y;
+            _buffers[variant][b + 5] = basis.Y.Y;
+            _buffers[variant][b + 6] = basis.Z.Y;
+            _buffers[variant][b + 7] = at.Y;
+            _buffers[variant][b + 8] = basis.X.Z;
+            _buffers[variant][b + 9] = basis.Y.Z;
+            _buffers[variant][b + 10] = basis.Z.Z;
+            _buffers[variant][b + 11] = at.Z;
+
+            // Pace zero, which is what stops a corpse walking: the shader scales
+            // both the leg swing and the footfall bob by pace, so a body with none
+            // is a body holding still. No hit flash either — a corpse cannot be
+            // shot, and one that lit up would be the clearest possible signal that
+            // the player is wasting ammunition on it.
+            _buffers[variant][b + 12] = 0.0f;
+            _buffers[variant][b + 13] = HueShift(corpses.Elite[i]);
+            _buffers[variant][b + 14] = 0.0f;
+            _buffers[variant][b + 15] = Jitter(corpses.Phase[i]);
+        }
+    }
+
     private static void Write(float[] buffer, int slot, Vector3 position, float yaw, float scale,
                               float pacePhase, float hue, float flash, float jitter)
     {

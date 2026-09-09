@@ -59,6 +59,11 @@ public partial class Hud : CanvasLayer
     private readonly ColorRect[] _cards = new ColorRect[3];
     private readonly Label[] _cardText = new Label[3];
 
+    private CombatOverlay? _overlay;
+
+    /// What the fight is drawing over the top, for a probe.
+    public CombatOverlay? Combat => _overlay;
+
     private RunDirector? _director;
     private Player? _player;
     private Horde? _horde;
@@ -149,6 +154,18 @@ public partial class Hud : CanvasLayer
         _meta = root?.GetNodeOrNull<MetaManager>("MetaManager");
         _growth = root?.GetNodeOrNull<RunGrowth>("RunGrowth");
         _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
+
+        // Built here rather than by the scene builder. It is part of the readout,
+        // it needs exactly the two things the readout has just looked up, and a
+        // node in `Main.tscn` is a node somebody has to remember to regenerate.
+        //
+        // Behind everything else in the layer, so a damage number can never sit
+        // over the level-up cards — the cards are a decision and the numbers are
+        // scenery.
+        _overlay = new CombatOverlay { Name = "Combat" };
+        AddChild(_overlay);
+        MoveChild(_overlay, 0);
+        _overlay.Bind(_player, _weapons);
 
         RefreshContainers();
         FindZones();

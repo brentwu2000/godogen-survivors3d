@@ -214,6 +214,22 @@ public partial class Horde : Node3D
     /// than in the weapon handler's pool, which only ever hurts enemies.
     public ProjectilePool EnemyShots { get; private set; } = null!;
 
+    /// What is left lying where a body died.
+    ///
+    /// Owned here rather than by `EffectDirector` for the same reason the hazards
+    /// are: it is drawn by the horde's own renderer, out of the horde's own
+    /// meshes, and it needs the variant, the elite mark, the facing and the
+    /// per-body jitter — five things the effect director would have to be handed
+    /// one event at a time to reproduce a body it cannot build.
+    public CorpseField Corpses { get; private set; } = null!;
+
+    /// How many bodies stay on the ground at once.
+    ///
+    /// Forty against a field that kills several hundred in a run. The ceiling is
+    /// the whole design: a corpse is evidence that a fight happened here, and
+    /// evidence stops being evidence when it is the floor.
+    [Export] public int CorpseCapacity { get; set; } = 40;
+
     /// Burning ground from thrown incendiaries. Owned here because the horde is
     /// what walks into it — the thing that ticks damage should be the thing that
     /// already iterates every enemy once a frame.
@@ -257,6 +273,7 @@ public partial class Horde : Node3D
 
         Pool = new EnemyPool(Capacity);
         EnemyShots = new ProjectilePool(EnemyProjectileCapacity);
+        Corpses = new CorpseField(CorpseCapacity);
         Hazards = new HazardField(HazardCapacity);
         BuildHazardDecals();
         _grid = new SpatialGrid(Vector2.Zero, ArenaExtent, SeparationRadius * 2.0f, Capacity);
@@ -332,7 +349,7 @@ public partial class Horde : Node3D
         _renderer.Muted = SolidBodies;
         _shadows.Muted = SolidBodies;
 
-        Texture2DArray? shotTexture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
+        Texture2DArray? shotTexture = HordeRenderer.LoadArray(Bolts.Paths);
         if (shotTexture != null)
         {
             _shotRenderer = new HordeRenderer(
@@ -752,6 +769,15 @@ public partial class Horde : Node3D
         var playerFlat = new Vector2(playerPosition.X, playerPosition.Z);
         float contactDamage = 0.0f;
 
+        // Where the pressure is, weighted by what each body is worth.
+        //
+        // Summed rather than latched to the nearest, because being surrounded is
+        // the situation the readout exists for: five walkers on one side and a
+        // brute on the other should point at the brute, and a ring should point
+        // at nothing much. The sum is not normalised for that reason — a perfect
+        // ring cancels itself out, which is the honest answer.
+        Vector2 contactBearing = Vector2.Zero;
+
         for (int i = 0; i < Pool.Count; i++)
         {
             EnemyTypeResource type = Types[Pool.Type[i]];
@@ -798,6 +824,7 @@ public partial class Horde : Node3D
             {
                 desired = Vector2.Zero;
                 contactDamage += type.ContactDamagePerSecond;
+                contactBearing += (flat - playerFlat).Normalized() * type.ContactDamagePerSecond;
             }
 
             Vector2 velocity = desired * type.MoveSpeed * SpeedScale * Elites.SpeedScale(Pool.Elite[i]);
@@ -840,7 +867,7 @@ public partial class Horde : Node3D
         // makes being surrounded scale with who actually reached you.
         if (contactDamage > 0.0f && _player is Player player)
         {
-            player.TakeContactDamage(contactDamage, step);
+            player.TakeContactDamage(contactDamage, step, contactBearing.Normalized());
 
             // Thorns pays back whoever is actually touching, not the crowd.
             // Being surrounded is what the card answers, so it has to scale with
@@ -912,7 +939,8 @@ public partial class Horde : Node3D
             // is the only part of a body that is a function of time; syncing
             // twice costs work, advancing twice doubles every gait.
             BodyRenderer.Advance(Pool, step);
-            _bodies.Sync(Pool, Types);
+            Corpses.Step(step);
+            _bodies.Sync(Pool, Types, Corpses);
         }
 
         // A muted renderer is not synced at all.
@@ -973,7 +1001,13 @@ public partial class Horde : Node3D
                 type.ProjectileDamage,
                 0.0f,
                 type.StandoffDistance * 1.5f / type.ProjectileSpeed,
-                1);
+                1,
+                tint: new Color(0.72f, 0.92f, 0.42f),
+
+                // Everything the player fires is machined and everything the
+                // horde fires is not, which is the whole of what separates "my
+                // shot" from "their shot" in a frame containing both.
+                shape: BoltShape.Spit);
         }
 
         return true;
@@ -1008,7 +1042,10 @@ public partial class Horde : Node3D
             if (flatSqr > EnemyProjectileRadius * EnemyProjectileRadius)
                 continue;
 
-            player.TakeDamage(EnemyShots.Damage[i]);
+            // Backwards along the shot: where it came *from*, not where it was
+            // when it landed, which is a metre in front of the player and points
+            // at nothing.
+            player.TakeDamage(EnemyShots.Damage[i], (-velocity).Normalized());
             EnemyShots.DespawnAt(i);
         }
 
@@ -1151,6 +1188,24 @@ public partial class Horde : Node3D
 
         Vector3 deathPosition = Pool.Position[index];
         byte eliteMark = Pool.Elite[index];
+
+        // Read before the despawn, because a swap-remove moves the last entry into
+        // this slot and every one of these would then describe the wrong body.
+        //
+        // The fall direction is the shove, and its absence is meaningful: a body
+        // that bled out or burned drops where it stood, facing where it was
+        // facing, and only a body that was *hit* goes over backwards.
+        Corpses.Spawn(
+            Pool.Type[index],
+            eliteMark,
+            deathPosition,
+            Pool.Yaw[index],
+            knockback.LengthSquared() > 0.0001f
+                ? Mathf.Atan2(-knockback.X, -knockback.Y)
+                : Pool.Yaw[index],
+            BodyRenderer.InstanceScale(eliteMark, Pool.Emerge[index]),
+            Pool.Phase[index]);
+
         Pool.DespawnAt(index);
 
         if (allowBlast && type.DeathBlastRadius > 0.0f)
@@ -1456,7 +1511,10 @@ public partial class Horde : Node3D
         {
             float toPlayerSqr = FlatDistanceSquared(player.GlobalPosition, center);
             if (toPlayerSqr < radius * radius)
-                player.TakeDamage(damage);
+            {
+                Vector3 span = center - player.GlobalPosition;
+                player.TakeDamage(damage, new Vector2(span.X, span.Z).Normalized());
+            }
         }
 
         // Backwards: a kill swap-removes the last entry into the current slot,

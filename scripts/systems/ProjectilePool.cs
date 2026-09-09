@@ -56,6 +56,13 @@ public sealed class ProjectilePool
     /// time the arrow landed there was nothing left that knew.
     public readonly bool[] Crit;
 
+    /// Which silhouette this shot is drawn as — see `BoltShape`.
+    ///
+    /// On the projectile for the same reason the tint is: a shot outlives the
+    /// pull that fired it, so swapping weapons mid-flight would otherwise reshape
+    /// arrows already in the air.
+    public readonly byte[] Layer;
+
     public int Count { get; private set; }
 
     public ProjectilePool(int capacity)
@@ -72,6 +79,7 @@ public sealed class ProjectilePool
         Tint = new Color[capacity];
         Scale = new float[capacity];
         Crit = new bool[capacity];
+        Layer = new byte[capacity];
     }
 
     /// `tint` defaults to white and `scale` to one, which is what every shot
@@ -79,13 +87,15 @@ public sealed class ProjectilePool
     /// keeps exactly the appearance it had.
     public bool TrySpawn(Vector3 position, Vector2 velocity, float damage, float knockback, float life,
                          int pierce, int bounces = 0, float blast = 0.0f,
-                         Color tint = default, float scale = 1.0f, bool crit = false)
+                         Color tint = default, float scale = 1.0f, bool crit = false,
+                         BoltShape shape = BoltShape.Slug)
     {
         if (Count >= Capacity)
             return false;
 
         int i = Count++;
         Crit[i] = crit;
+        Layer[i] = (byte)shape;
         Tint[i] = tint.A <= 0.0f ? Colors.White : tint;
         Scale[i] = scale;
         Bounces[i] = bounces;
@@ -115,6 +125,7 @@ public sealed class ProjectilePool
         Tint[index] = Tint[last];
         Scale[index] = Scale[last];
         Crit[index] = Crit[last];
+        Layer[index] = Layer[last];
         Blast[index] = Blast[last];
     }
 

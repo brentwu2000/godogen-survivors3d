@@ -311,9 +311,10 @@ public partial class WeaponHandler : Node3D
         _horde = GetParent().GetNodeOrNull<Horde>("Horde") ?? GetParent().GetParent()?.GetNodeOrNull<Horde>("Horde");
         _player = GetParent() as Player ?? GetParent().GetNodeOrNull<Player>("Player");
 
-        // One layer, because the shader samples an array either way — a single
-        // sprite is the degenerate case, not a separate code path.
-        Texture2DArray? texture = HordeRenderer.LoadArray(new[] { "res://assets/sprites/bolt.png" });
+        // Six layers, one per silhouette. The same list the horde loads, because
+        // the two renderers have to agree on what layer four is — and while they
+        // both loaded one file, that agreement was free and invisible.
+        Texture2DArray? texture = HordeRenderer.LoadArray(Bolts.Paths);
         var shader = GD.Load<Shader>("res://assets/shaders/horde_billboard.gdshader");
         if (texture != null && shader != null)
         {
@@ -737,7 +738,8 @@ public partial class WeaponHandler : Node3D
                 weapon.Trait == WeaponTrait.Blast ? weapon.TraitAmount : 0.0f,
                 Look(weapon).Tint,
                 Look(weapon).Scale,
-                crit);
+                crit,
+                Look(weapon).Shape);
             return;
         }
 
@@ -806,7 +808,7 @@ public partial class WeaponHandler : Node3D
     private void SpawnTracer(Vector3 origin, Vector2 direction, float range, WeaponResource weapon)
     {
         const float tracerSpeed = 70.0f;
-        (Color tint, float scale) = Look(weapon);
+        (Color tint, float scale, BoltShape shape) = Look(weapon);
 
         Projectiles.TrySpawn(
             new Vector3(origin.X, 0.0f, origin.Z),
@@ -816,7 +818,8 @@ public partial class WeaponHandler : Node3D
             range / tracerSpeed,
             0,
             tint: tint,
-            scale: scale);
+            scale: scale,
+            shape: shape);
     }
 
     /// What this weapon's shot looks like crossing the arena.
@@ -829,7 +832,16 @@ public partial class WeaponHandler : Node3D
     /// A shotgun throws eight small grey pellets and a marksman rifle sends one
     /// long pale round, and at the distance most shooting happens the difference
     /// in count and size is legible before the colour is.
-    private static (Color Tint, float Scale) Look(WeaponResource weapon)
+    /// What a shot looks like crossing the screen: its colour, its size, and —
+    /// since this phase — its outline.
+    ///
+    /// **Tint and scale fixed half of "every projectile is the same white
+    /// streak" and the shape is the other half.** Colour is the channel that
+    /// loses to fog, to a pale horde and to a bright floor; silhouette is the one
+    /// that survives all three. A pellet and a marksman round at 0.55 and 1.35 of
+    /// the same lozenge are one object at two sizes, which is what the player was
+    /// actually being asked to tell apart at twenty metres.
+    private static (Color Tint, float Scale, BoltShape Shape) Look(WeaponResource weapon)
     {
         float bite = Mathf.Clamp(weapon.BaseDamage / 34.0f, 0.3f, 1.0f);
 
@@ -837,29 +849,30 @@ public partial class WeaponHandler : Node3D
         {
             // Wood and fletching. The only shot in the game that should look
             // hand-made.
-            WeaponTrait.Ricochet => (new Color(0.78f, 0.62f, 0.36f), 0.9f),
+            WeaponTrait.Ricochet => (new Color(0.78f, 0.62f, 0.36f), 0.9f, BoltShape.Arrow),
 
             // A charge with something in it, and big enough to watch travel.
-            WeaponTrait.Blast => (new Color(1.0f, 0.58f, 0.24f), 1.5f),
+            WeaponTrait.Blast => (new Color(1.0f, 0.58f, 0.24f), 1.5f, BoltShape.Charge),
 
             // Pellets. Small and dull: a shotgun's shot is the *spread*, and
             // eight bright streaks would read as a beam weapon.
-            WeaponTrait.Spread => (new Color(0.72f, 0.70f, 0.64f), 0.55f),
+            WeaponTrait.Spread => (new Color(0.72f, 0.70f, 0.64f), 0.55f, BoltShape.Pellet),
 
-            // One long pale round. Length is the tell at thirty metres.
-            WeaponTrait.Charge => (new Color(0.94f, 0.96f, 1.0f), 1.35f),
+            // One long pale round. Length is the tell at thirty metres, and now it
+            // is length rather than a bigger version of everyone else's round.
+            WeaponTrait.Charge => (new Color(0.94f, 0.96f, 1.0f), 1.35f, BoltShape.Lance),
 
             // Cold, and the same cold the chilled body turns — the tracer is what
             // connects the shot the player fired to the enemy that went blue, and
             // two unrelated colours would leave them looking like two effects.
-            WeaponTrait.Chill => (new Color(0.55f, 0.84f, 1.0f), 0.8f),
+            WeaponTrait.Chill => (new Color(0.55f, 0.84f, 1.0f), 0.8f, BoltShape.Slug),
 
             // Thin and amber. Small on purpose: a mark does no damage, and a
             // round that looked heavier than the rifle's would be selling the
             // wrong thing about the weapon.
-            WeaponTrait.Mark => (new Color(1.0f, 0.74f, 0.30f), 0.5f),
+            WeaponTrait.Mark => (new Color(1.0f, 0.74f, 0.30f), 0.5f, BoltShape.Lance),
 
-            _ => (new Color(1.0f, 0.90f, 0.62f), 0.7f + 0.5f * bite),
+            _ => (new Color(1.0f, 0.90f, 0.62f), 0.7f + 0.5f * bite, BoltShape.Slug),
         };
     }
 

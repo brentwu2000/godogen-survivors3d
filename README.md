@@ -17,7 +17,8 @@ version of another. Threat is a *place* — danger zones you choose to enter —
 and a map leans toward one kind of them rather than holding one of each. The growth deck has five
 lines and both the shop and the run tilt it. Finite ammo, items you can use or throw, synthesised
 audio and music that follows the run's shape, a HUD of bars rather than labels, a minimap that records
-where you have been rather than revealing the map, and a fight that leaves evidence on the floor.
+where you have been rather than revealing the map, and a fight that leaves bodies and evidence on
+the floor.
 
 **The look is cel-shaded stylised**, and `ART.md` is the brief anyone sourcing a model works to. Most
 of that file is a list of things this renderer cannot do — a `MultiMesh` has no skeleton, so animations,
@@ -112,7 +113,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
-| `test/ImpactProbe.cs` | yes | The feedback that is not a muzzle flash: a kill stains the floor downrange of the shove and on the ground, the floor clears itself and never overflows, both blend channels carry puffs, a crit emits more than the same shot without one, and a burning body is on fire while an identical cold one is not |
+| `test/ImpactProbe.cs` | yes | Twelve stages of the feedback that is not a muzzle flash: a kill stains the floor downrange of the shove and on the ground, the floor clears itself and never overflows, both blend channels carry puffs, a crit emits more than the same shot without one, a burning body is on fire while an identical cold one is not, a ranged enemy charges before it fires and not before that, an explosion is a light source and stops being one, a hit puts a number over it that goes away, damage from a bearing lights that bearing and no other, a body falls away from the shot that killed it and the ground takes it back, the corpse field has a ceiling the living are never dropped for — and the clock is untouched headless and comes back when it is not |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet, burst, chill and mark each do what only they do — the last two also that the status is *spent* rather than permanent |
 | `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
 | `test/FirstRunProbe.cs` | yes | A fresh profile has not seen the base, an older save has, and opening the game on a new profile lands in a run without a keypress |
@@ -914,6 +915,104 @@ things in this game that cannot be bought, opened by killing sixty in a run, and
 fell over. It gets fire over the body rather than a hit flash, for the reason immediately below, and
 the scan is a rotating window over the pool because a molotov can leave forty things alight.
 
+**The game stops for a fraction of a second on the biggest hits, and it is safe for a reason that is
+arithmetic rather than care.** Hitstop is the only thing in this project that touches
+`Engine.TimeScale`, and slowing the clock slows the *whole* clock — the run timer, the spawn rate, the
+damage per second and the player's own speed all scale together, so damage per game second is unchanged
+and every balance table in this file still measures what it says. What it changes is real time, which
+is the entire point: the player gets four extra hundredths of a second of looking at the thing they
+just killed, and no advantage they can spend. It fires on three events and not on kills, because an
+ordinary kill happens three times a second at the top of the ramp and a game that stops three times a
+second stutters rather than lands: a **marked** enemy dying, a blast, and a crit. It never stacks and
+never shortens, so two blasts a frame apart are one longer stop and a crit inside a blast's stop cannot
+cut it short.
+
+`EffectDirector._Ready` clears the flag headless rather than a second condition guarding every call
+site, and that choice is what makes it testable: a probe counting ticks would be counting a different
+length of tick, so nothing in the sweep may ever see it — but `ImpactProbe` can switch it back on,
+drive a blast and assert the clock both moves and comes back. That last assertion is the one worth
+having. A clock left slow is not a visible defect; it is every other probe in the sweep quietly
+measuring a different second.
+
+**An explosion lit nothing.** Twenty bodies standing inside a blast were lit by the sun exactly as they
+had been a frame earlier, so the one moment in a run with a real light source in it read as a decal
+played over the top — and the horde, which is where an explosion's meaning is, was the part that did
+not react. Four pooled omni lights, warm, three tenths of a second, energy falling off a square.
+Shadows off, and not as an optimisation: a light that casts shadows renders a cube map on the frame it
+appears, and the frame it appears is the frame that already has a screen shake and a dozen puffs on it.
+The stutter would land on the one event the whole effect system exists to sell.
+
+**Damage numbers are against this project's own HUD rule and they are here anyway.** The rule is that a
+number the player has to read is a number they will not read while a brute is on them, which is why
+everything else in the readout is a bar. It is a good rule and it is about the *readout* — a figure in a
+fixed corner that has to be found, focused on and compared with what it was a second ago. A number over
+the thing you just shot is a different object: not consulted, glanced at, and it answers the one
+question a build cannot otherwise answer. Fifteen weapons and eighteen growth options multiply into a
+damage figure that appears nowhere, so a player takes "+12% crit" and finds out whether it mattered by
+how the run ends forty seconds later. The restraint is the rate limit rather than the feature — ten a
+second, with crits never suppressed, because a crit is the thing the number exists to show.
+
+It is drawn in immediate mode by a `Control` rather than by nodes. A damage number is a `Label` that
+lives for half a second and a crowd makes a dozen a second, which is a hundred nodes a minute created,
+laid out and freed on exactly the frames the game is busiest.
+
+**Being hurt had no direction.** The vignette says *that* you are being hurt, which the health bar
+already said, and the player's decision is which way to walk. So the same overlay carries a compass:
+eight sectors around the player, each holding a weight that damage adds to and time takes away.
+Sectors rather than one arrow, because being surrounded is the situation it exists for and a single
+arrow can only point at one of five things eating you — and the contact sum is deliberately not
+normalised, so a perfect ring cancels itself out, which is the honest answer. `Player.Hurt` is a second
+damage signal and had to be: `ConsumeDamageTaken` is read-and-clear with exactly one owner, and a
+second consumer would take turns with the first and see about half of what happened. An event that
+fires per application is the right shape for a rate; a second accumulator is not.
+
+**A spitter had no wind-up.** It stood at eight metres and a projectile existed. The only warning was
+the projectile, which is already the damage — so the variant that exists to punish kiting could not be
+answered by moving, because there was nothing to move *before*. A charge that brightens over the last
+fifth of a second is the whole fix, and it costs one read of the cooldown the ranged step already
+keeps: the cooldown only runs while the thing is inside its standoff, so "nearly zero" already means
+"in range and about to fire" without anything having to re-derive either. A fifth of a second is about
+a metre and a quarter of movement at a survivor's 6 m/s, and it is a small fraction of the spitter's own
+interval rather than a state it is usually in.
+
+**Every projectile was one sprite, and shape is the channel that survives the frame.** Per-shot tint and
+scale arrived a phase ago and fixed half of it, but the pump shotgun's pellet and the marksman rifle's
+round were 0.55 and 1.35 of the same 160×40 lozenge — one object at two sizes, which is what the player
+was being asked to tell apart at twenty metres through fog. There are six silhouettes now, generated by
+`BuildProjectileSprites.cs` because they are outlines a few dozen pixels across and an outline is easier
+to re-tune as arithmetic than to redraw: a slug with a stub of a tail, a fletched arrow, a long thin
+lance, a speck of a pellet, a finned charge, and the horde's ragged glob. Every pixel is in or out, with
+no antialiasing, because `horde_billboard.gdshader` discards below an alpha of 0.5 rather than blending
+and a soft fringe comes out ragged at exactly the size these are seen at. `WeaponFeelProbe`'s
+fingerprint carries the shape now, so "no two weapons emit the same signature" covers it.
+
+**The horde's shot is the ugly one on purpose.** Everything the player fires is machined — capsules, a
+lance, a finned charge — and the thing coming back at them wobbles and dribbles. That is the whole of
+what separates "my shot" from "their shot" in a frame containing both, and it is why the two renderers
+load one shared list: they have to agree on what layer four is, and while they both loaded a single
+file that agreement was free and invisible.
+
+**A kill was a body ceasing to exist.** Everything else about it was answered — a spray, a dark cloud, a
+stain on the floor, a sound — and the one object the player was actually looking at vanished between two
+frames. That is the loudest artificial thing left in a fight: fifty of them a minute, each a hole in the
+picture at the exact moment the player's attention is on it.
+
+What is there now is not a ragdoll and deliberately not one. The horde is a MultiMesh — one mesh, N
+transforms, no skeleton — so what a body can do after it dies is exactly what a transform can express.
+It falls over: pivoting about the sole of the foot, accelerating on a square like something that has
+stopped holding itself up, going over *away from the shove that killed it*. A body that always fell
+north would be scenery; a body that falls the way it was pushed is the last frame of the thing that just
+happened. A death with no direction in it — a bleed, burning ground, a blast the victim was merely
+standing inside — drops where it stood, which is the same distinction the gore spray makes.
+
+It ends by sinking rather than fading, because an opaque instance has no alpha to fade: the body is
+translated down through the floor over the last four fifths of a second and the ground closes over it.
+Forty at a time against a run that kills several hundred, and the ceiling is the design — a corpse is
+evidence that a fight happened here, and evidence stops being evidence when it is the floor. They are
+written into the horde's own per-variant buffers *after* the living, so the one thing that happens when
+a buffer is genuinely full is that a corpse is dropped rather than an enemy. An enemy nobody can see is
+a bug; a corpse nobody can see is a corpse that sank early.
+
 **Everything a weapon does was drawn at ankle height, and nothing said so.** `WeaponHandler.MuzzleHeight`
 has existed since the weapon was written and was read by nothing. The projectile renderer flew shots at
 half of `ProjectileHeight` — which is the bolt *sprite's size*, 0.25 m — so every arrow, bolt and tracer
@@ -1636,6 +1735,7 @@ which body is on the shelf:
 | authored, Polyart | 1,650 | 330,000 | 1.44 ms | 1.28 ms | 2.45 ms | 68 |
 | authored, tactical | 23,822 | 4,764,400 | 3.41 ms | 3.12 ms | 5.19 ms | 76 |
 | 500 mixed, procedural | ~460–570 | ~250,000 | 1.23 ms | 1.01 ms | 2.13 ms | 91 |
+| 500 mixed, after the impact phase | ~460–570 | ~250,000 | 1.31 ms | 1.04 ms | 2.20 ms | 86 |
 
 And the player, which is one body and therefore the cheap half of every one of those rows:
 
@@ -1652,6 +1752,20 @@ tier at ~120,000 rather than at whatever the GPU would take.
 frame time and still held 293 fps**, which is a body forty times over the budget
 `ART.md` used to publish, at 200 instances. The tier table there has been
 rewritten around these numbers.
+
+**What the impact phase cost is 0.08 ms of mean frame time and it did not cost a draw call.** Two
+extra puff passes and the ground-mark pass are three where there was one; corpses are extra instances
+in buffers the horde already uploads, so they are free of calls entirely; and the blast lights are
+four omnis with shadows off. The count came back *lower* than the baseline row, which is the honest
+reading of a number that varies by a handful across seeds — a different arena has a different set of
+empty MultiMeshes hidden, and `PropRenderer` alone moves it more than this whole phase did.
+
+**Read that row for what it is: a horde standing still.** `HordePerf` spawns five hundred bodies and
+measures the frame; nothing in it fires, kills, explodes or burns, so the marks field is empty, the
+lights are off and the corpse field has nothing in it. What the row proves is that the *idle* cost of
+the new systems is inside the noise. What a busy frame costs is unmeasured, and the pools are what
+bound it: 224 puffs, 96 marks, 40 bodies and 4 lights are all fixed ceilings, chosen before this was
+measured rather than after.
 
 **The number this table used to give was 6.90 ms and it measured no rendering at
 all.** `HordePerf` was documented and run as `godot --headless --script
@@ -1938,7 +2052,7 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/sprites/enemies/brute.png` | `art-src/brute.png` | 176×256 | 3.0 m tall |
 | `assets/sprites/enemies/bloater.png` | `art-src/bloater.png` | 176×256 | 2.4 m tall |
 | `assets/sprites/enemies/spitter.png` | `art-src/spitter.png` | 176×256 | 2.0 m tall |
-| `assets/sprites/bolt.png` | generated | 160×40 | projectile quad |
+| `assets/sprites/bolts/*.png` | `BuildProjectileSprites.cs` | 6 × 160×40 | slug, arrow, lance, pellet, charge, spit |
 | `assets/sprites/blob_shadow.png` | generated | 128×128 | ground decal |
 | `assets/shaders/horde_billboard.gdshader` | hand-written | — | horde + projectiles |
 | `assets/shaders/vignette.gdshader` | hand-written | — | full-screen damage tint |
@@ -2109,8 +2223,18 @@ person**, not things that need code.
   health, reaches 158 s on the Service Rifle and walks out. What is still unmeasured is whether a
   *person* can hold that ground longer, which is the same question as before and now has a floor
   under it.
-- **The proof video is four phases stale.** `test/Presentation.cs` films a game without elites, a
+- **The proof video is five phases stale.** `test/Presentation.cs` films a game without elites, a
   boss, biomes, or music.
+- **What a *busy* frame costs is unmeasured.** The Performance table's new row is a horde standing
+  still: `HordePerf` spawns five hundred bodies and nothing in it fires, kills, explodes or burns, so
+  the marks field is empty, the blast lights are off and the corpse field has nothing in it. Every one
+  of those systems is a fixed pool — 224 puffs, 96 marks, 40 bodies, 4 lights — so the ceiling is
+  known and small, but the ceiling is arithmetic rather than a measurement. The instrument that would
+  answer it is a `HordePerf` that drives the weapon, and it does not exist.
+- **Hitstop has never been felt by a person.** Its safety is argued from arithmetic — the whole clock
+  scales together, so damage per game second is unchanged — and `ImpactProbe` asserts the clock comes
+  back. What no probe can say is whether 0.14 for seven and a half hundredths of a second reads as
+  weight or as a dropped frame, and it is the one number in this phase that only a player can settle.
 - **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
   it. Behaviour is correct today, but moving to 30 Hz means re-checking every damping constant.
 - **The audio bus has no limiter.** The mix keeps its headroom by the master volume alone, set

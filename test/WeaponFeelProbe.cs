@@ -46,7 +46,8 @@ public partial class WeaponFeelProbe : SceneTree
     /// `ShotScale` of zero means nothing crossed the screen at all — every melee
     /// weapon, and itself a signature.
     private readonly record struct Print(string Name, int Puffs, float Size, float Kick,
-                                         Color ShotTint, float ShotScale, int Shots)
+                                         Color ShotTint, float ShotScale, int Shots,
+                                         int ShotShape)
     {
         /// Emissions per round, which is what "a shotgun fans" is a claim about.
         ///
@@ -193,6 +194,7 @@ public partial class WeaponFeelProbe : SceneTree
             _peakShake = 0.0f;
             _shotTint = default;
             _shotScale = 0.0f;
+            _shotShape = -1;
             return null;
         }
 
@@ -212,7 +214,7 @@ public partial class WeaponFeelProbe : SceneTree
         float kick = _peakShake;
 
         _prints.Add(new Print(weaponName, pool.TotalSpawned, pool.TotalStartSize, kick,
-                              _shotTint, _shotScale, _shotsFired));
+                              _shotTint, _shotScale, _shotsFired, _shotShape));
 
         string shot = _shotScale <= 0.0f
             ? "nothing in flight"
@@ -236,6 +238,15 @@ public partial class WeaponFeelProbe : SceneTree
     private Color _shotTint;
     private float _shotScale;
 
+    /// Which of the six silhouettes crossed the screen.
+    ///
+    /// Added to the fingerprint because it is now a channel: tint and scale
+    /// separated the shots by colour and size, and a pellet at 0.55 and a
+    /// marksman round at 1.35 of the *same lozenge* were still one object at two
+    /// sizes. Minus one means nothing crossed at all, which is every melee weapon
+    /// and is itself a signature.
+    private int _shotShape = -1;
+
     /// The peak is sampled at frame rate, not on the physics tick.
     ///
     /// Recoil fades at nine per second, so an automatic's small per-shot kick is
@@ -255,6 +266,7 @@ public partial class WeaponFeelProbe : SceneTree
         {
             _shotTint = shots.Tint[0];
             _shotScale = shots.Scale[0];
+            _shotShape = shots.Layer[0];
         }
 
         return false;
@@ -280,14 +292,19 @@ public partial class WeaponFeelProbe : SceneTree
                 bool samePuffs = a.Puffs == b.Puffs;
                 bool sameSize = Mathf.Abs(a.Size - b.Size) < 0.02f;
                 bool sameKick = Mathf.Abs(a.Kick - b.Kick) < 0.002f;
+                // Shape is part of the shot now, and it is the part that
+                // survives fog and a crowded frame. A pellet and a marksman round
+                // were 0.55 and 1.35 of the same lozenge, which is one object at
+                // two sizes.
                 bool sameShot = Mathf.Abs(a.ShotScale - b.ShotScale) < 0.02f
-                             && Apart(a.ShotTint, b.ShotTint) < 0.05f;
+                             && Apart(a.ShotTint, b.ShotTint) < 0.05f
+                             && a.ShotShape == b.ShotShape;
 
                 if (samePuffs && sameSize && sameKick && sameShot)
                 {
                     GD.PushError($"  {a.Name} and {b.Name} emit the same thing: "
                                + $"{a.Puffs} puffs, {a.Size:F2} size, {a.Kick:F3} kick, "
-                               + $"a {a.ShotScale:F2}x shot of the same colour");
+                               + $"a {a.ShotScale:F2}x shot of shape {a.ShotShape} in the same colour");
                     ok = false;
                 }
             }

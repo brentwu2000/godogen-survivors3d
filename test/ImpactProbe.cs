@@ -21,6 +21,7 @@ public partial class ImpactProbe : SceneTree
     private WeaponHandler? _weapons;
     private EffectDirector? _effects;
     private CameraRig? _rig;
+    private CombatOverlay? _overlay;
 
     private int _stage;
     private int _stageTick;
@@ -54,6 +55,7 @@ public partial class ImpactProbe : SceneTree
             _weapons = _player?.GetNodeOrNull<WeaponHandler>("WeaponHandler");
             _effects = scene.GetNodeOrNull<EffectDirector>("Effects");
             _rig = scene.GetNodeOrNull<CameraRig>("CameraRig");
+            _overlay = scene.GetNodeOrNull<Hud>("Hud")?.Combat;
 
             if (_horde == null || _player == null || _weapons == null || _effects == null || _rig == null)
             {
@@ -78,6 +80,13 @@ public partial class ImpactProbe : SceneTree
             case 2: return RunStage(StageBothChannelsCarry, "a fight puts puffs on both the additive and the blending pass");
             case 3: return RunStage(StageACritSaysSo, "a crit emits more than the same shot without one");
             case 4: return RunStage(StageBurningIsDrawn, "a burning body is on fire and an unburnt one is not");
+            case 5: return RunStage(StageTheShotIsAnnounced, "a ranged enemy charges before it fires and not before that");
+            case 6: return RunStage(StageABlastLightsTheField, "an explosion is a light source, and stops being one");
+            case 7: return RunStage(StageTheHitHasANumber, "a hit puts a number over it and the number goes away");
+            case 8: return RunStage(StageTheCompassPoints, "damage from a bearing lights that bearing and no other");
+            case 9: return RunStage(StageTheBodyStays, "a kill leaves a body, it goes over away from the shot, and the ground takes it back");
+            case 10: return RunStage(StageTheFieldHoldsTheDead, "the corpse field has a ceiling and the living are never dropped for it");
+            case 11: return RunStage(StageTheClockComesBack, "the clock is untouched headless, and returns when it is not");
             default:
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
                 Quit(_failed ? 1 : 0);
@@ -105,6 +114,13 @@ public partial class ImpactProbe : SceneTree
         Vector2 forward = CameraRig.Forward(_rig!.Yaw);
         _horde!.Pool.Clear();
         _horde.Hazards.Clear();
+
+        // Shots in flight outlive the stage that fired them, and they draw a
+        // wake: a spitter that got one away before its cooldown was pinned put
+        // thirty-six trail puffs into a window that was supposed to be empty.
+        _horde.EnemyShots.Clear();
+        _weapons!.Projectiles.Clear();
+
         _horde.Spawn(_player!.GlobalPosition + new Vector3(forward.X, 0.0f, forward.Y) * away, 0);
         _effects!.Effects.ForgetTotals();
         _effects.Effects.Clear();
@@ -406,4 +422,511 @@ public partial class ImpactProbe : SceneTree
     }
 
     private int _cold;
+
+    /// **A spitter had no wind-up.** It stood at eight metres and a projectile
+    /// existed; the only warning was the damage. The variant that exists to punish
+    /// kiting could not be answered by moving, because there was nothing to move
+    /// *before*.
+    ///
+    /// Asserted in both directions, because "there are some orange puffs near the
+    /// spitter" is not the claim. A charge that is always on is a light show and
+    /// tells the player nothing about when to move.
+    private bool? StageTheShotIsAnnounced(int tick)
+    {
+        int spitter = RangedVariant();
+        if (spitter < 0)
+        {
+            GD.PushError("  no ranged variant in the roster to test");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            Vector2 forward = CameraRig.Forward(_rig!.Yaw);
+            _horde!.Pool.Clear();
+            _horde.Hazards.Clear();
+
+            // Just inside its own standoff, so `StepRanged` runs its cooldown.
+            float away = _horde.Types[spitter].StandoffDistance * 0.7f;
+            _horde.Spawn(_player!.GlobalPosition + new Vector3(forward.X, 0.0f, forward.Y) * away, spitter);
+            return null;
+        }
+
+        // The same slack the burning stage needs, and for the same reason: the
+        // frames between two stages belong to whatever the last one was doing.
+        if (tick <= 6)
+        {
+            _effects!.Effects.ForgetTotals();
+            return null;
+        }
+
+        if (tick == 7)
+        {
+            if (_horde!.Pool.Count == 0)
+            {
+                GD.PushError("  the spitter did not spawn");
+                return false;
+            }
+
+            // A long way from firing, and nothing of its already in the air: a
+            // spitter spawns with its cooldown at zero and fires on the first tick
+            // it is in range, so the quiet window starts with a bolt in flight.
+            _horde.Pool.AttackCooldown[0] = 2.0f;
+            _horde.EnemyShots.Clear();
+            _effects!.Effects.ForgetTotals();
+            return null;
+        }
+
+        if (tick <= 26)
+            return null;
+
+        if (tick == 27)
+        {
+            _quiet = _effects!.Effects.TotalSpawned;
+
+            // Now on the edge of it. Set every tick below, because the ranged step
+            // is counting it down and would fire — and a spitter that has fired is
+            // one whose cooldown is two seconds again.
+            _effects.Effects.ForgetTotals();
+            return null;
+        }
+
+        if (tick <= 47)
+        {
+            if (_horde!.Pool.Count > 0)
+                _horde.Pool.AttackCooldown[0] = 0.1f;
+            return null;
+        }
+
+        int charging = _effects!.Effects.TotalSpawned;
+
+        if (_quiet != 0)
+        {
+            GD.PushError($"  {_quiet} puffs from a spitter two seconds from firing");
+            return false;
+        }
+
+        if (charging == 0)
+        {
+            GD.PushError("  a spitter a tenth of a second from firing drew nothing");
+            return false;
+        }
+
+        return true;
+    }
+
+    private int _quiet;
+
+    private int RangedVariant()
+    {
+        for (int i = 0; i < _horde!.Types.Length; i++)
+        {
+            if (_horde.Types[i].Behavior is EnemyBehavior.Ranged or EnemyBehavior.Siege)
+                return i;
+        }
+
+        return -1;
+    }
+
+    /// A blast is the only real light source in the game, and a light is the one
+    /// effect with no pool behind it to count — so without this, "the explosion
+    /// lit the field" is a claim nothing can check.
+    private bool? StageABlastLightsTheField(int tick)
+    {
+        if (tick == 1)
+        {
+            Reset(3.0f);
+            return null;
+        }
+
+        if (tick == 2)
+        {
+            _horde!.Detonate(_player!.GlobalPosition + new Vector3(4.0f, 0.0f, 0.0f), 4.0f, 30.0f);
+            return null;
+        }
+
+        if (tick == 4)
+        {
+            if (_effects!.BrightestLight <= 0.0f)
+            {
+                GD.PushError("  an explosion emitted no light");
+                return false;
+            }
+
+            return null;
+        }
+
+        // The fade is 0.30 s — thirty ticks is well past it. A light that never
+        // goes out is a lamp left on the field, and it is the kind of thing that
+        // looks fine for one blast and wrong for the boss fight.
+        if (tick < 40)
+            return null;
+
+        if (_effects!.BrightestLight > 0.0f)
+        {
+            GD.PushError($"  the blast light is still at {_effects.BrightestLight:F2} half a second later");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// The number over the thing you just shot.
+    ///
+    /// It is the one piece of feedback in this game that is text, and it is
+    /// against the HUD's own rule — see `CombatOverlay`. The rate limit is what
+    /// makes it survivable, and a pool that fills and never drains is what would
+    /// make it not.
+    private bool? StageTheHitHasANumber(int tick)
+    {
+        if (_overlay == null)
+        {
+            GD.PushError("  no CombatOverlay under the Hud");
+            return false;
+        }
+
+        if (tick == 1)
+        {
+            Reset(3.0f);
+            _weapons!.HoldFire = false;
+            return null;
+        }
+
+        if (tick == 2)
+        {
+            _weapons!.ForceFire(CameraRig.Forward(_rig!.Yaw));
+            return null;
+        }
+
+        if (tick == 4)
+        {
+            _weapons!.HoldFire = true;
+
+            if (_overlay.NumberCount == 0)
+            {
+                GD.PushError("  a landed shot put no number on the screen");
+                return false;
+            }
+
+            return null;
+        }
+
+        // The longest a number lives is 0.85 s for a crit; ninety ticks is past
+        // every one of them.
+        if (tick < 96)
+            return null;
+
+        if (_overlay.NumberCount != 0)
+        {
+            GD.PushError($"  {_overlay.NumberCount} numbers still on screen a second and a half later");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// **The compass is the only thing that answers "which way do I walk".**
+    /// Being surrounded is the situation it exists for, so what it must not do is
+    /// point everywhere: damage from one bearing has to light that bearing and
+    /// leave the opposite one dark, or it is a decoration that says "you are being
+    /// hurt", which the health bar already says.
+    private bool? StageTheCompassPoints(int tick)
+    {
+        if (_overlay == null)
+            return false;
+
+        var from = new Vector2(1.0f, 0.0f);
+        int lit = CombatOverlay.SectorOf(from);
+        int opposite = (lit + _overlay.SectorCount / 2) % _overlay.SectorCount;
+
+        if (tick == 1)
+        {
+            _horde!.Pool.Clear();
+            _horde.Hazards.Clear();
+            _player!.TakeDamage(12.0f, from);
+            return null;
+        }
+
+        if (tick == 2)
+        {
+            if (_overlay.ThreatAt(lit) <= 0.0f)
+            {
+                GD.PushError("  damage from +X lit nothing");
+                return false;
+            }
+
+            if (_overlay.ThreatAt(opposite) > 0.0f)
+            {
+                GD.PushError("  damage from +X lit the sector behind the player as well");
+                return false;
+            }
+
+            return null;
+        }
+
+        // ThreatFade is 1.6 s, and nothing is renewing it.
+        if (tick < 120)
+            return null;
+
+        if (_overlay.ThreatAt(lit) > 0.0f)
+        {
+            GD.PushError($"  the compass still reads {_overlay.ThreatAt(lit):F2} two seconds after the last hit");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// The one stage that can break every other probe in the sweep.
+    ///
+    /// Hitstop is the only thing in this project that touches `Engine.TimeScale`,
+    /// and a clock left slow is not a visible defect — it is a probe that measures
+    /// a different length of second than the one it was written against. So this
+    /// asserts both halves: that a headless run never moves it at all, and that
+    /// when it is deliberately switched on the clock moves *and comes back*.
+    ///
+    /// Last on purpose. Everything above runs at a clock this stage has not
+    /// touched yet.
+    private bool? StageTheClockComesBack(int tick)
+    {
+        if (tick == 1)
+        {
+            if (!Mathf.IsEqualApprox((float)Engine.TimeScale, 1.0f))
+            {
+                GD.PushError($"  the clock was already at {Engine.TimeScale:F2} before this stage");
+                return false;
+            }
+
+            if (_effects!.Hitstop)
+            {
+                GD.PushError("  hitstop is on in a headless run — every timing probe in the sweep is measuring a different second");
+                return false;
+            }
+
+            Reset(3.0f);
+            _horde!.Detonate(_player!.GlobalPosition + new Vector3(4.0f, 0.0f, 0.0f), 4.0f, 30.0f);
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            if (!Mathf.IsEqualApprox((float)Engine.TimeScale, 1.0f))
+            {
+                GD.PushError($"  a blast moved the clock to {Engine.TimeScale:F2} with hitstop off");
+                return false;
+            }
+
+            // Now with it on, which is the state a person plays in.
+            _effects!.Hitstop = true;
+            _horde!.Detonate(_player!.GlobalPosition + new Vector3(4.0f, 0.0f, 0.0f), 4.0f, 30.0f);
+            return null;
+        }
+
+        if (tick == 4)
+        {
+            _held = _effects!.Freezing;
+            return null;
+        }
+
+        // The freeze is 0.075 s of unscaled time. Under a scale of 0.14 that is
+        // about half a second of scaled ticks — two hundred is far past it, and
+        // deliberately generous: a stage that fails by being impatient would be
+        // read as a stuck clock, which is the thing it exists to rule out.
+        if (tick < 200)
+            return null;
+
+        bool restored = Mathf.IsEqualApprox((float)Engine.TimeScale, 1.0f);
+
+        // Whatever the verdict, the clock goes back and the flag goes back. A
+        // probe that fails and leaves the engine at a seventh speed takes the rest
+        // of its own run down with it.
+        Engine.TimeScale = 1.0;
+        _effects!.Hitstop = false;
+
+        if (!_held)
+        {
+            GD.PushError("  hitstop was on and a blast did not hold the clock");
+            return false;
+        }
+
+        if (!restored)
+        {
+            GD.PushError("  the clock never came back");
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool _held;
+
+    /// **A kill used to be a body ceasing to exist.** Everything else about it was
+    /// answered — a spray, a dark cloud, a stain, a sound — and the one object the
+    /// player was looking at vanished between two frames.
+    ///
+    /// Three claims, and the middle one is the one worth a probe: the body goes
+    /// over *away from the shot*. A corpse that always fell north would be
+    /// scenery; a corpse that falls the way it was pushed is the last frame of the
+    /// thing that just happened, and nothing on screen can tell the two apart at a
+    /// glance.
+    private bool? StageTheBodyStays(int tick)
+    {
+        CorpseField dead = _horde!.Corpses;
+
+        if (tick == 1)
+        {
+            Reset(3.0f);
+            dead.Clear();
+            return null;
+        }
+
+        if (tick == 2)
+        {
+            if (_horde.Pool.Count == 0)
+            {
+                GD.PushError("  nothing spawned to kill");
+                return false;
+            }
+
+            // Shoved along +X, so the body must go over toward +X.
+            _horde.Damage(0, 999.0f, new Vector2(1.0f, 0.0f) * 0.6f);
+            return null;
+        }
+
+        if (tick == 3)
+        {
+            if (dead.Count != 1)
+            {
+                GD.PushError($"  {dead.Count} bodies from one kill, wanted 1");
+                return false;
+            }
+
+            if (dead.Tilt(0) > 0.35f)
+            {
+                GD.PushError($"  the body was already {Mathf.RadToDeg(dead.Tilt(0)):F0}° over on the frame it died");
+                return false;
+            }
+
+            // The fall bearing is an angle in the ground plane. A shove along +X
+            // means the body goes over toward +X, which is a quarter turn from the
+            // zero bearing.
+            float wanted = Mathf.Atan2(-1.0f, 0.0f);
+            float apart = Mathf.Abs(Mathf.AngleDifference(dead.FallYaw[0], wanted));
+            if (apart > 0.2f)
+            {
+                GD.PushError($"  the body fell {Mathf.RadToDeg(apart):F0}° away from the shove that killed it");
+                return false;
+            }
+
+            return null;
+        }
+
+        // FallSeconds is 0.38 — thirty ticks is half a second, well past it.
+        if (tick == 33)
+        {
+            if (dead.Count != 1)
+            {
+                GD.PushError("  the body left before it had finished falling");
+                return false;
+            }
+
+            if (dead.Tilt(0) < Mathf.Pi * 0.45f)
+            {
+                GD.PushError($"  half a second later the body is only {Mathf.RadToDeg(dead.Tilt(0)):F0}° over");
+                return false;
+            }
+
+            return null;
+        }
+
+        // The whole life is 0.38 + 4.2 + 0.8 = 5.38 s. Three hundred and fifty
+        // ticks is nearly six seconds.
+        if (tick < 350)
+            return null;
+
+        if (dead.Count != 0)
+        {
+            GD.PushError($"  {dead.Count} bodies still on the ground six seconds later");
+            return false;
+        }
+
+        return true;
+    }
+
+    /// The ceiling, and who loses when it is reached.
+    ///
+    /// Corpses share the horde's own per-variant buffers and are written *after*
+    /// the living, so the one thing that happens when a buffer is genuinely full
+    /// is that a corpse is dropped rather than an enemy. An enemy nobody can see
+    /// is a bug; a corpse nobody can see is a corpse that sank early — and the
+    /// order is invisible from outside, which is why it is stated here.
+    private bool? StageTheFieldHoldsTheDead(int tick)
+    {
+        CorpseField dead = _horde!.Corpses;
+
+        if (tick == 1)
+        {
+            Reset(3.0f);
+            dead.Clear();
+            return null;
+        }
+
+        // Well past the pool, so the oldest-out rule is exercised rather than
+        // merely fitted inside.
+        const int Bodies = 120;
+
+        if (tick <= Bodies + 1)
+        {
+            dead.Spawn(0, 0, _player!.GlobalPosition + new Vector3(tick * 0.15f, 0.0f, 0.0f),
+                       0.0f, 0.0f, 1.0f, 0.5f);
+
+            if (dead.Count > dead.Capacity)
+            {
+                GD.PushError($"  {dead.Count} bodies in a field of {dead.Capacity}");
+                return false;
+            }
+
+            return null;
+        }
+
+        if (tick != Bodies + 2)
+        {
+            if (tick < Bodies + 400)
+                return null;
+
+            if (dead.Count != 0)
+            {
+                GD.PushError($"  {dead.Count} bodies never sank");
+                return false;
+            }
+
+            return true;
+        }
+
+        // Every living body is still drawn with a full field of dead ones on top
+        // of it. Counted through the renderer rather than through the pool,
+        // because the pool is not where they could be lost.
+        BodyRenderer? bodies = _horde.Bodies;
+        if (bodies == null)
+        {
+            GD.PushError("  no BodyRenderer — the solid path is not running");
+            return false;
+        }
+
+        int walkers = 0;
+        for (int i = 0; i < _horde.Pool.Count; i++)
+        {
+            if (_horde.Pool.Type[i] == 0)
+                walkers++;
+        }
+
+        int drawn = bodies.VisibleCount(0);
+        if (drawn < walkers + dead.Count)
+        {
+            GD.PushError($"  {drawn} drawn for {walkers} alive and {dead.Count} dead");
+            return false;
+        }
+
+        return null;
+    }
 }

@@ -614,9 +614,30 @@ public partial class Player : CharacterBody3D
     public void AddMoveSpeedFraction(float fraction) => MoveSpeed *= 1.0f + fraction;
     public void AddSearchSpeedFraction(float fraction) => SearchSpeed += fraction;
 
+    /// Something hurt the player, and roughly from where.
+    ///
+    /// **A second damage signal, and the first one is why it has to be.**
+    /// `ConsumeDamageTaken` is read-and-clear with exactly one owner, because two
+    /// consumers would each see about half of what happened — a bug that presents
+    /// as feedback that sometimes works. So this is an event rather than a second
+    /// accumulator: it fires per application, which for contact damage is sixty
+    /// times a second, and the one thing listening sums it into a decaying
+    /// compass. That is the right consumer for a rate; a read-and-clear is not.
+    ///
+    /// The bearing is a unit vector in the ground plane, from the player toward
+    /// whatever did it, in *world* space. Rotating it into the view is the
+    /// listener's job, because the listener is the only thing that knows where
+    /// the camera is pointing.
+    ///
+    /// Zero when nothing sensible can be said — burning ground the player walked
+    /// into, a bleed, anything whose bearing would be a lie.
+    public event System.Action<Vector2, float>? Hurt;
+
     /// Damage is ignored once dead, so a horde landing several hits in the same
     /// tick cannot emit Died more than once.
-    public void TakeDamage(float amount) => ApplyDamage(Mitigate(amount));
+    public void TakeDamage(float amount) => TakeDamage(amount, Vector2.Zero);
+
+    public void TakeDamage(float amount, Vector2 from) => ApplyDamage(Mitigate(amount), from);
 
     /// Contact arrives as a rate, so armour is subtracted from the rate rather
     /// than from each tick's slice — otherwise mitigation would depend on the
@@ -626,12 +647,15 @@ public partial class Player : CharacterBody3D
     /// are no hits, only a rate. A tenth of dodge therefore removes a tenth of
     /// the damage over any window long enough to matter, which is what the card
     /// promises and what a per-hit roll would only approximate.
-    public void TakeContactDamage(float damagePerSecond, float delta)
+    public void TakeContactDamage(float damagePerSecond, float delta) =>
+        TakeContactDamage(damagePerSecond, delta, Vector2.Zero);
+
+    public void TakeContactDamage(float damagePerSecond, float delta, Vector2 from)
     {
         if (Mods.Dodge > 0.0f && NextFloat() < Mods.Dodge)
             return;
 
-        ApplyDamage(Mitigate(damagePerSecond) * delta);
+        ApplyDamage(Mitigate(damagePerSecond) * delta, from);
     }
 
     private ulong _rng = 0x9E3779B97F4A7C15UL;
@@ -671,13 +695,16 @@ public partial class Player : CharacterBody3D
         return taken;
     }
 
-    private void ApplyDamage(float amount)
+    private void ApplyDamage(float amount) => ApplyDamage(amount, Vector2.Zero);
+
+    private void ApplyDamage(float amount, Vector2 from)
     {
         if (!IsAlive || amount <= 0.0f)
             return;
 
         Health = Mathf.Max(0.0f, Health - amount);
         _damageSincePoll += amount;
+        Hurt?.Invoke(from, amount);
 
         // Six times the fraction of maximum health this took, which is what
         // makes a hit look like a hit and a rate look like a rate. See HurtFlash.

@@ -42,6 +42,45 @@ public partial class EffectDirector : Node3D
     /// than six deaths.
     [Export] public float MarkInterval { get; set; } = 0.12f;
 
+    /// Whether the game stops for a fraction of a second on the biggest hits.
+    ///
+    /// **This is the only thing in the project that touches `Engine.TimeScale`,
+    /// and what makes it safe is arithmetic rather than care.** Slowing the clock
+    /// slows the *whole* clock: the run timer, the spawn rate, the damage per
+    /// second and the player's own speed all scale together, so damage per game
+    /// second is unchanged and every balance table still measures what it says.
+    /// What it changes is real time, which is exactly the point — the player gets
+    /// four extra hundredths of a second of looking at the thing they just
+    /// killed, and no advantage they can spend.
+    ///
+    /// **`_Ready` turns this off headless, rather than a second condition
+    /// checking for it at every call site.** A probe counts ticks and a tick under
+    /// a time scale is a different length of tick; `AutoPlay` and `BalanceSweep`
+    /// measure seconds. Nobody is watching a headless run, so there is nothing for
+    /// it to be for.
+    ///
+    /// Clearing the flag rather than guarding on the driver is what makes the
+    /// mechanism testable: `ImpactProbe` sets it back on after `_Ready`, drives a
+    /// blast, and asserts the clock both moves and comes back — which is the one
+    /// property that, if it broke, would break every other probe in the sweep
+    /// rather than this one.
+    [Export] public bool Hitstop { get; set; } = true;
+
+    /// How far down the clock goes. Not to zero: a true freeze reads as a dropped
+    /// frame, and what makes a hit land is seeing the moment happen slowly rather
+    /// than seeing it not happen.
+    [Export] public float HitstopScale { get; set; } = 0.14f;
+
+    /// Lights that fire with an explosion, and the only dynamic lights in the
+    /// game.
+    ///
+    /// A blast lit nothing. Twenty bodies standing inside an explosion were lit
+    /// by the sun exactly as they had been a frame earlier, so the one moment in
+    /// a run with a real light source in it read as a decal played over the top —
+    /// and the horde, which is where an explosion's meaning is, was the part that
+    /// did not react. Four is enough for the rate blasts actually arrive at.
+    [Export] public int BlastLights { get; set; } = 4;
+
     // Both size and alpha were found by overshooting in each direction and
     // measuring. Additive blending saturates, so the first pass — six-metre puffs
     // near full alpha — was not a bright explosion but a flat orange disc over a
@@ -156,6 +195,19 @@ public partial class EffectDirector : Node3D
     /// crowd, which is the rule the rest of this file is built on.
     private int _burnCursor;
 
+    /// Seconds of *unscaled* time left in the current freeze.
+    ///
+    /// Counted against `delta / Engine.TimeScale` rather than against `delta`,
+    /// because `delta` is already scaled — counting a twentieth of a second down
+    /// with it would take a seventh of a second of real time. Dividing recovers
+    /// the unscaled step, and it is also what makes this behave under
+    /// `--fixed-fps`: the movie writer's frames are a fixed length and the
+    /// division takes the scale back out of them the same way.
+    private float _stopRemaining;
+
+    private OmniLight3D[] _lights = System.Array.Empty<OmniLight3D>();
+    private float[] _lightLife = System.Array.Empty<float>();
+
     /// Metres above the ground a held weapon's muzzle sits.
     ///
     /// **Every muzzle effect in this file used to be drawn at the ankles.** The
@@ -222,6 +274,32 @@ public partial class EffectDirector : Node3D
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             CustomAabb = new Aabb(new Vector3(-70.0f, -4.0f, -70.0f), new Vector3(140.0f, 12.0f, 140.0f)),
         });
+
+        if (DisplayServer.GetName() == "headless")
+            Hitstop = false;
+
+        _lights = new OmniLight3D[Mathf.Max(0, BlastLights)];
+        _lightLife = new float[_lights.Length];
+        for (int i = 0; i < _lights.Length; i++)
+        {
+            _lights[i] = new OmniLight3D
+            {
+                Name = $"Blast_{i}",
+                LightColor = new Color(1.0f, 0.72f, 0.38f),
+                LightEnergy = 0.0f,
+                OmniRange = 11.0f,
+
+                // Off, and not as an optimisation. A light that casts shadows has
+                // to render a cube map on the frame it appears, and the frame it
+                // appears is the frame a blast has already put a screen shake and
+                // a dozen puffs on. The stutter would land on the one event this
+                // whole file exists to sell.
+                ShadowEnabled = false,
+                Visible = false,
+            };
+
+            AddChild(_lights[i]);
+        }
 
         Node? root = GetParent();
         _horde = root?.GetNodeOrNull<Horde>("Horde");
@@ -320,15 +398,126 @@ public partial class EffectDirector : Node3D
 
         if (_kit != null)
             _kit.Pulsed -= OnPulsed;
+
+        // The clock is global and this node is not. A scene torn down mid-freeze
+        // — a death during a blast is exactly when that happens — would otherwise
+        // hand the debrief screen a game running at a seventh speed, and nothing
+        // on that screen would ever put it back.
+        if (_stopRemaining > 0.0f)
+        {
+            _stopRemaining = 0.0f;
+            Engine.TimeScale = 1.0;
+        }
     }
+
+    /// A fraction of a second on the biggest hits, and only the biggest.
+    ///
+    /// **What it fires on is the whole design.** An ordinary kill happens three
+    /// times a second at the top of the ramp, and a game that stops three times a
+    /// second does not have weight — it stutters. So this is spent on the three
+    /// things a run does not do often: a marked enemy dying, a blast, and a crit.
+    /// Each is already the loudest thing on screen when it happens, and the stop
+    /// is what makes the player notice they were the one who caused it.
+    ///
+    /// Never stacks and never shortens. Two blasts a frame apart are one longer
+    /// stop rather than two, and a crit landing inside a blast's stop must not cut
+    /// it short — which is what taking the maximum rather than the latest buys.
+    private void Freeze(float seconds)
+    {
+        if (!Hitstop || seconds <= _stopRemaining)
+            return;
+
+        _stopRemaining = seconds;
+        Engine.TimeScale = HitstopScale;
+    }
+
+    private void StepFreeze(float step)
+    {
+        if (_stopRemaining <= 0.0f)
+            return;
+
+        _stopRemaining -= step / Mathf.Max(0.01f, (float)Engine.TimeScale);
+        if (_stopRemaining > 0.0f)
+            return;
+
+        _stopRemaining = 0.0f;
+        Engine.TimeScale = 1.0;
+    }
+
+    /// Fades whichever lights are alive. Energy falls off a square, like the
+    /// puffs: a linear fade leaves a lamp sitting on the field for a tenth of a
+    /// second after the fire has gone, which reads as a light rather than as a
+    /// blast.
+    private void StepLights(float step)
+    {
+        for (int i = 0; i < _lights.Length; i++)
+        {
+            if (_lightLife[i] <= 0.0f)
+                continue;
+
+            _lightLife[i] = Mathf.Max(0.0f, _lightLife[i] - step);
+            float t = _lightLife[i] / BlastLightSeconds;
+
+            _lights[i].LightEnergy = BlastLightEnergy * t * t;
+            _lights[i].Visible = _lightLife[i] > 0.0f;
+        }
+    }
+
+    private const float BlastLightSeconds = 0.30f;
+    private const float BlastLightEnergy = 7.0f;
+
+    /// The brightest blast light alive, for a probe. A light is the one effect
+    /// here with no pool behind it to count, and "the explosion lit the field" is
+    /// otherwise a claim nothing can check.
+    public float BrightestLight
+    {
+        get
+        {
+            float most = 0.0f;
+            for (int i = 0; i < _lights.Length; i++)
+                most = Mathf.Max(most, _lights[i].LightEnergy);
+            return most;
+        }
+    }
+
+    /// Whether the clock is currently held. Only a probe asks.
+    public bool Freezing => _stopRemaining > 0.0f;
+
+    /// Oldest-out, like everything else here. Four lights and a boss fight is a
+    /// situation where the fifth blast matters more than the first.
+    private void LightBlast(Vector3 at)
+    {
+        if (_lights.Length == 0)
+            return;
+
+        int slot = 0;
+        for (int i = 1; i < _lights.Length; i++)
+        {
+            if (_lightLife[i] < _lightLife[slot])
+                slot = i;
+        }
+
+        _lights[slot].Position = new Vector3(at.X, Terrain.Height(at.X, at.Z) + 1.4f, at.Z);
+        _lightLife[slot] = BlastLightSeconds;
+        _lights[slot].LightEnergy = BlastLightEnergy;
+        _lights[slot].Visible = true;
+    }
+
+    /// How long the game stops for, per event. Small numbers, and the differences
+    /// between them are what stops three kinds of hit from feeling like one.
+    private const float CritStop = 0.035f;
+    private const float EliteStop = 0.055f;
+    private const float BlastStop = 0.075f;
 
     public override void _Process(double delta)
     {
         float step = (float)delta;
         _clock += step;
 
+        StepFreeze(step);
+        StepLights(step);
         StepHazards();
-        StepBurning();
+        StepBodies();
         StepTrails();
         _pool.Step(step);
         _marks.Step(step);
@@ -592,6 +781,7 @@ public partial class EffectDirector : Node3D
             _pool.Spawn(where + new Vector3(0.0f, 1.0f, 0.0f), 2.1f, 1.2f, CritTint, 0.10f,
                         Vector2.Zero, EffectShape.Flash, spin: NextFloat() * Mathf.Tau);
             Kick(0.10f);
+            Freeze(CritStop);
         }
         else if (_clock - _lastImpact < ImpactInterval)
         {
@@ -690,6 +880,11 @@ public partial class EffectDirector : Node3D
         // fifty bodies — the mark colours deliberately do not vary.
         float weight = elite == 0 ? 1.0f : 1.45f;
 
+        // Marked enemies only. An ordinary kill is three a second at the top of
+        // the ramp; an elite is one every several seconds and is a *fight*.
+        if (elite != 0)
+            Freeze(EliteStop);
+
         Vector2 throwOut = impulse.LengthSquared() > 0.0001f
             ? impulse.Normalized()
             : Scatter(1.0f).Normalized();
@@ -739,6 +934,9 @@ public partial class EffectDirector : Node3D
         // player's own doing, and the scorch is how they find out afterwards how
         // wide it actually was — which is a number no HUD reports.
         _marks.Spawn(position, 3.4f, Scorch, 11.0f, MarkShape.Scorch, NextFloat() * Mathf.Tau);
+
+        LightBlast(position);
+        Freeze(BlastStop);
     }
 
     /// Burning ground has no event of its own — it is a patch that exists rather
@@ -783,7 +981,34 @@ public partial class EffectDirector : Node3D
     /// A rotating window over the pool rather than a pass across it. A molotov can
     /// leave forty things alight and the rest of this file is built on the cost of
     /// an effect not scaling with the crowd.
-    private void StepBurning()
+    /// **The two things a body can be doing that the body itself does not show.**
+    ///
+    /// Ignite is an unlockable card and it had no picture. It is one of the eight
+    /// things in this game that cannot be bought — it opens by killing sixty in a
+    /// run — and what it bought was a damage-over-time the horde carries in
+    /// `Pool.Burn` and nothing drew. A burning enemy walked at you looking exactly
+    /// like one that was not, right up until it fell over.
+    ///
+    /// Deliberately *not* the hit flash: burn applies damage sixty times a second
+    /// and `Horde.Damage` takes a `flash` flag precisely so the damage-over-time
+    /// path can pass false — a crowd standing in a molotov rendered as a row of
+    /// solid white cut-outs when it did not. Fire drawn over the body is what says
+    /// burning, which is the same answer the burning ground already gives.
+    ///
+    /// The other is the shot you are about to take. **A spitter's attack had no
+    /// wind-up at all**: it stood at eight metres, and a projectile existed. The
+    /// only warning was the projectile, which is already the damage — so the
+    /// variant that exists to punish kiting could not be answered by moving,
+    /// because there was nothing to move *before*. A charge that brightens over
+    /// the last fifth of a second is the whole of the fix, and it costs one read
+    /// of a cooldown the ranged step is already keeping.
+    ///
+    /// One rotating window over the pool for both, rather than two passes across
+    /// it. A molotov can leave forty things alight and the rest of this file is
+    /// built on the cost of an effect not scaling with the crowd; twenty-four a
+    /// frame cycles a full field in a ninth of a second, which is inside the
+    /// telegraph's own window.
+    private void StepBodies()
     {
         if (_horde == null)
             return;
@@ -797,19 +1022,56 @@ public partial class EffectDirector : Node3D
         for (int n = 0; n < Window && n < count; n++)
         {
             int i = (_burnCursor + n) % count;
-            if (_horde.Pool.Burn[i] <= 0.0f || NextFloat() > 0.5f)
+            Vector3 body = _horde.Pool.Position[i];
+
+            if (_horde.Pool.Burn[i] > 0.0f && NextFloat() < 0.5f)
+            {
+                _pool.Spawn(
+                    new Vector3(body.X + (NextFloat() - 0.5f) * 0.7f,
+                                0.35f + NextFloat() * 0.9f,
+                                body.Z + (NextFloat() - 0.5f) * 0.7f),
+                    0.42f, 0.10f, new Color(1.0f, 0.55f, 0.20f, 0.42f), 0.26f, Vector2.Zero);
+            }
+
+            int variant = _horde.Pool.Type[i];
+            if (variant < 0 || variant >= _horde.Types.Length)
                 continue;
 
-            Vector3 body = _horde.Pool.Position[i];
-            _pool.Spawn(
-                new Vector3(body.X + (NextFloat() - 0.5f) * 0.7f,
-                            0.35f + NextFloat() * 0.9f,
-                            body.Z + (NextFloat() - 0.5f) * 0.7f),
-                0.42f, 0.10f, new Color(1.0f, 0.55f, 0.20f, 0.42f), 0.26f, Vector2.Zero);
+            EnemyTypeResource type = _horde.Types[variant];
+            if (type.Behavior is not (EnemyBehavior.Ranged or EnemyBehavior.Siege))
+                continue;
+
+            // The cooldown only runs down while the thing is inside its standoff,
+            // so "nearly zero" already means "in range and about to fire" without
+            // this having to re-derive either.
+            float left = _horde.Pool.AttackCooldown[i];
+            if (left <= 0.0f || left > TelegraphSeconds)
+                continue;
+
+            // Grows and brightens as it closes on zero. The size is the clock:
+            // what the player has to read is not "that one shoots" — the roster
+            // already says so — but "that one shoots *now*".
+            float charge = 1.0f - left / TelegraphSeconds;
+            float lift = type.DesignHeightMeters * 0.72f;
+
+            _pool.Spawn(new Vector3(body.X, lift, body.Z),
+                        0.18f + 0.55f * charge, 0.10f,
+                        new Color(1.0f, 0.42f, 0.30f, 0.30f + 0.55f * charge),
+                        0.09f, Vector2.Zero, EffectShape.Flash,
+                        spin: NextFloat() * Mathf.Tau);
         }
 
         _burnCursor = (_burnCursor + Window) % count;
     }
+
+    /// How long before a ranged shot the charge starts showing.
+    ///
+    /// A fifth of a second. Long enough to be a decision at a survivor's 6 m/s —
+    /// about a metre and a quarter of movement — and short enough that a field of
+    /// spitters is not a permanent light show. The spitter's own interval is well
+    /// over a second, so this is a small fraction of its cycle rather than a state
+    /// it is usually in.
+    private const float TelegraphSeconds = 0.2f;
 
     /// The wake behind a shot that takes time to arrive.
     ///
@@ -835,18 +1097,29 @@ public partial class EffectDirector : Node3D
         if (_weapons == null)
             return;
 
-        ProjectilePool shots = _weapons.Projectiles;
+        Trail(_weapons.Projectiles, MuzzleHeight, 0.55f);
 
+        // The horde's shots get one too, and they are the half that matters more:
+        // a spitter's bolt is the only thing in the game that damages the player
+        // from off-screen, and a single quad arriving out of the fog is a hit that
+        // came from nowhere. The player's own shots are read as feedback; these
+        // are read as a threat, and a threat has to be trackable.
+        if (_horde != null)
+            Trail(_horde.EnemyShots, 0.95f, 0.75f);
+    }
+
+    private void Trail(ProjectilePool shots, float height, float rate)
+    {
         for (int i = 0; i < shots.Count; i++)
         {
-            if (shots.Damage[i] <= 0.0f || NextFloat() > 0.55f)
+            if (shots.Damage[i] <= 0.0f || NextFloat() > rate)
                 continue;
 
             Vector3 at = shots.Position[i];
             Color tint = shots.Tint[i];
 
-            _pool.Spawn(new Vector3(at.X, at.Y + MuzzleHeight, at.Z),
-                        0.20f * shots.Scale[i], 0.03f,
+            _pool.Spawn(new Vector3(at.X, at.Y + height, at.Z),
+                        0.20f * Mathf.Max(0.5f, shots.Scale[i]), 0.03f,
                         new Color(tint.R, tint.G, tint.B, 0.28f), 0.15f, Vector2.Zero);
         }
     }

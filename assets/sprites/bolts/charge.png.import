@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://5muuqswlahm2"
-path="res://.godot/imported/bolt.png-e47a3e06d635fa9f15e68c6ea68933e5.ctex"
+uid="uid://bvaahnfygp1gc"
+path="res://.godot/imported/charge.png-925a6904e4137c99a96c90755200402f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/sprites/bolt.png"
-dest_files=["res://.godot/imported/bolt.png-e47a3e06d635fa9f15e68c6ea68933e5.ctex"]
+source_file="res://assets/sprites/bolts/charge.png"
+dest_files=["res://.godot/imported/charge.png-925a6904e4137c99a96c90755200402f.ctex"]
 
 [params]
 
