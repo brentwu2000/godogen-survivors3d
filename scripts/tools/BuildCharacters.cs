@@ -48,8 +48,8 @@ public partial class BuildCharacters : SceneTree
             new()
             {
                 CharacterName = "RIN",
-                Role = "ASSAULT",
-                Blurb = "no edges, no gaps; everything the shop sells is priced for this one",
+                Role = "character.rin.role",
+                Blurb = "character.rin.blurb",
                 MaxHealth = 100.0f,
                 MoveSpeed = 6.0f,
                 CarryCapacity = 20,
@@ -82,8 +82,8 @@ public partial class BuildCharacters : SceneTree
             new()
             {
                 CharacterName = "MIKA",
-                Role = "RECON / TECH",
-                Blurb = "carries half again as much and cannot take a hit",
+                Role = "character.mika.role",
+                Blurb = "character.mika.blurb",
                 MaxHealth = 80.0f,
                 MoveSpeed = 6.6f,
                 CarryCapacity = 28,
@@ -131,8 +131,8 @@ public partial class BuildCharacters : SceneTree
             new()
             {
                 CharacterName = "AKIRA",
-                Role = "MELEE / BERSERKER",
-                Blurb = "holds ground; a blade already turning, and the floor is cold",
+                Role = "character.akira.role",
+                Blurb = "character.akira.blurb",
                 MaxHealth = 140.0f,
                 MoveSpeed = 5.3f,
                 CarryCapacity = 14,
@@ -171,8 +171,8 @@ public partial class BuildCharacters : SceneTree
             new()
             {
                 CharacterName = "SORA",
-                Role = "PSIONIC / BLADE",
-                Blurb = "the fastest thing on the map, and the easiest to kill",
+                Role = "character.sora.role",
+                Blurb = "character.sora.blurb",
                 MaxHealth = 70.0f,
                 MoveSpeed = 7.1f,
                 CarryCapacity = 17,
@@ -212,8 +212,8 @@ public partial class BuildCharacters : SceneTree
             new()
             {
                 CharacterName = "YUNA",
-                Role = "SUPPORT / MEDIC",
-                Blurb = "closes its own wounds, and the crowd bleeds for touching it",
+                Role = "character.yuna.role",
+                Blurb = "character.yuna.blurb",
                 MaxHealth = 125.0f,
                 MoveSpeed = 5.6f,
                 CarryCapacity = 16,

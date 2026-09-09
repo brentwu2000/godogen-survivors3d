@@ -39,7 +39,7 @@ The billboard sprite path is still there and still works, behind `Horde.SolidBod
 fallback for hardware that cannot afford a hundred and fifty meshes, and `ShadowProbe` builds the
 scene with it so it cannot quietly rot.
 
-Sweep clean at 48 probes; the table below lists 34 of them and is the older set. Two of those 48
+Sweep clean at 49 probes; the table below lists 34 of them and is the older set. Two of those 49
 had been failing on their own bookkeeping rather than on anything they measure — `PaletteProbe`
 printed "palette ok" where `sweep.ps1` looks for "PROBE OK", and `RouteMemory` is a helper class
 the sweep was trying to run as a probe. Build gate re-verified 2026-09-08.
@@ -113,6 +113,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
+| `test/StringProbe.cs` | yes | The translation table: it loads, every locale takes the same placeholders as English — a dropped `{0}` reads perfectly and has lost the number — every key formats in every locale, and a Han glyph measures two cells so `Strings.Pad` keeps a column straight |
 | `test/ImpactProbe.cs` | yes | Twelve stages of the feedback that is not a muzzle flash: a kill stains the floor downrange of the shove and on the ground, the floor clears itself and never overflows, both blend channels carry puffs, a crit emits more than the same shot without one, a burning body is on fire while an identical cold one is not, a ranged enemy charges before it fires and not before that, an explosion is a light source and stops being one, a hit puts a number over it that goes away, damage from a bearing lights that bearing and no other and four bodies standing on the player light the side they are on, a body falls away from the shot that killed it and the ground takes it back, the corpse field has a ceiling the living are never dropped for — and the clock is untouched headless and comes back when it is not |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet, burst, chill and mark each do what only they do — the last two also that the status is *spent* rather than permanent |
 | `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
@@ -2155,6 +2156,8 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
 | `assets/ui/portraits/*.png` | the roster design sheet, via `art-src/ui/cut_portraits.py` | 5 x 292x619 | the survivor select cards |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
+| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 56 KB, 279 glyphs | the UI, in both languages |
+| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 30 keys x 2 locales | every string the roster draws |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
 barriers, rubble heaps, walls, dumpsters, and two landmarks — and `PropRenderer` draws each kind as

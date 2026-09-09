@@ -1,0 +1,16 @@
+[remap]
+
+; Not imported.
+;
+; Godot's CSV importer picks up any `.csv` under `res://` and cuts it into one
+; `.translation` per column — which is a second, engine-owned copy of this table
+; whose contents depend on import settings nothing in this repository writes, and
+; which is exactly the state `BuildStrings` exists to avoid. `importer="keep"`
+; leaves the file alone.
+;
+; This is not the same as ignoring the directory. `godot.md` is explicit that a
+; `.gdignore` makes the importer skip a folder *silently*, and only
+; `screenshots/` should have one — the rest of `art-src/` is imported and its
+; `.import` files are tracked like every other one here.
+
+importer="keep"

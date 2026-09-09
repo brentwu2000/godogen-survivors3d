@@ -128,6 +128,29 @@ public partial class FontProbe : SceneTree
         Quit(fallbackCovers ? 1 : 0);
     }
 
+    /// Every character in every locale column of the string table.
+    ///
+    /// Read from the shipped resource rather than from `art-src/ui/strings.csv`,
+    /// because the question is not "is the character in the source" — it was —
+    /// but "did it reach the thing somebody is handed". Same reason `export.ps1`
+    /// looks for the font licence inside the pack rather than in the repository.
+    private static string TableCharacters()
+    {
+        if (!Strings.Ready())
+            return "";
+
+        var text = new System.Text.StringBuilder();
+        int locales = Strings.AllLocales.Length;
+
+        for (int k = 0; k < Strings.AllKeys.Length; k++)
+        {
+            for (int l = 0; l < locales; l++)
+                text.Append(Strings.Raw(k, l));
+        }
+
+        return text.ToString();
+    }
+
     /// How much of the wanted set a font can actually draw.
     private static bool Report(string what, Font? font)
     {
@@ -137,7 +160,17 @@ public partial class FontProbe : SceneTree
             return false;
         }
 
-        char[] distinct = Distinct(Wanted);
+        // The wanted set plus every character the translation table can put on a
+        // screen.
+        //
+        // **`wanted.txt` and `Wanted` above stopped being the authority the day
+        // the table arrived.** They are a floor — the handful of characters the
+        // UI can produce without a table row behind them — and the table is the
+        // ceiling, because every string the game draws now comes out of it. A
+        // gate that checked only the hand-kept list would pass a font that cannot
+        // draw a sentence somebody translated this morning, which is the exact
+        // failure `build_font.py` refuses at the other end.
+        char[] distinct = Distinct(Wanted + TableCharacters());
         var missing = new System.Text.StringBuilder();
         int have = 0;
 

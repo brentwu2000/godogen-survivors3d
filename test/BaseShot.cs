@@ -6,6 +6,7 @@ using Godot;
 ///   godot --script test/BaseShot.cs
 ///   godot --script test/BaseShot.cs -- rich   (credits to see the shop working)
 ///   godot --script test/BaseShot.cs -- roster[:2]   (the survivor select)
+///   godot --script test/BaseShot.cs -- roster:2 locale:zh_TW
 ///
 /// Not headless — the null rendering driver has nothing to capture. The profile
 /// on disk is backed up and restored: a screenshot does not spend a save.

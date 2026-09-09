@@ -550,13 +550,13 @@ public partial class BaseScreen : Control
         if (!CharacterBook.Allows(_profile, _pick))
         {
             CharacterResource locked = CharacterBook.Load(_pick);
-            _message = $"{locked.CharacterName} opens after {locked.OpensAfter} extractions";
+            _message = Strings.Get("ui.roster.refused", locked.CharacterName, locked.OpensAfter);
             return;
         }
 
         _profile.Character = _pick;
         _choosing = false;
-        _message = $"playing as {CharacterBook.Load(_pick).CharacterName}";
+        _message = Strings.Get("ui.roster.taken", CharacterBook.Load(_pick).CharacterName);
         Persist();
     }
 
@@ -605,7 +605,10 @@ public partial class BaseScreen : Control
     {
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine("ROSTER     [W]/[S] look     [E] take     [C] back");
+        text.AppendLine($"{Strings.Get("ui.roster.header")}     "
+                      + $"{Strings.Get("ui.roster.keys.look")}     "
+                      + $"{Strings.Get("ui.roster.keys.take")}     "
+                      + $"{Strings.Get("ui.roster.keys.back")}");
         text.AppendLine();
 
         CharacterResource[] all = CharacterBook.All;
@@ -622,19 +625,29 @@ public partial class BaseScreen : Control
             string mark = here ? ">" : " ";
             string tick = i == _profile.Character ? "*" : " ";
 
-            text.AppendLine($"{mark}{tick} {i + 1:00}  {one.CharacterName,-6} {one.Role,-18} "
+            // `Strings.Pad` rather than `{one.Role,-18}`, and the difference is
+            // the whole of constraint 2 in `UI.md`. C#'s alignment specifier
+            // counts *characters*; a Han glyph occupies two monospace cells, so
+            // every column after a translated one shifts by however many hanzi
+            // are in it. "近戰／狂戰" is five characters and ten cells.
+            text.AppendLine($"{mark}{tick} {i + 1:00}  "
+                          + Strings.Pad(one.CharacterName, 6) + " "
+                          + Strings.Pad(Strings.Get(one.Role), 18) + " "
                           + (open
-                              ? $"{one.MaxHealth,3:F0} hp  {one.MoveSpeed:F1} m/s  {one.CarryCapacity,2} bulk"
-                              : $"locked — {one.OpensAfter} extractions"));
+                              ? Strings.Get("ui.roster.stats",
+                                            $"{one.MaxHealth,3:F0}",
+                                            $"{one.MoveSpeed:F1}",
+                                            $"{one.CarryCapacity,2}")
+                              : Strings.Get("ui.roster.locked", one.OpensAfter)));
         }
 
         CharacterResource shown = CharacterBook.Load(_pick);
 
         text.AppendLine();
-        text.AppendLine($"   {shown.CharacterName} — {shown.Blurb}");
+        text.AppendLine($"   {shown.CharacterName} — {Strings.Get(shown.Blurb)}");
         text.AppendLine(shown.AbilityLine.Length > 0
-            ? $"   starts with {shown.AbilityLine}"
-            : "   starts with nothing, and every price in the shop is set for that");
+            ? "   " + Strings.Get("ui.roster.starts", shown.AbilityLine)
+            : "   " + Strings.Get("ui.roster.starts.nothing"));
 
         // The one thing on this screen that is not about choosing.
         //
@@ -652,8 +665,8 @@ public partial class BaseScreen : Control
         }
 
         text.AppendLine();
-        text.AppendLine("   characters from PROJECT LAST DAWN, based on \"Game Ready Low Poly");
-        text.AppendLine("   Tactical Character\" by DanlyVostok, CC BY 4.0 — modified");
+        text.AppendLine("   " + Strings.Get("ui.roster.credit.1"));
+        text.AppendLine("   " + Strings.Get("ui.roster.credit.2"));
 
         return text.ToString();
     }

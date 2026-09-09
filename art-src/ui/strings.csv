@@ -1,0 +1,31 @@
+key,en,zh_TW
+ui.roster.header,ROSTER,選擇角色
+ui.roster.keys.look,[W]/[S] look,[W]/[S] 瀏覽
+ui.roster.keys.take,[E] take,[E] 選定
+ui.roster.keys.back,[C] back,[C] 返回
+ui.roster.locked,locked — {0} extractions,未開放 — 需撤離 {0} 次
+ui.roster.stats,{0} hp  {1} m/s  {2} bulk,{0} 生命  {1} 米/秒  {2} 負重
+ui.roster.starts,starts with {0},起始配備 {0}
+ui.roster.starts.nothing,"starts with nothing, and every price in the shop is set for that",無起始配備，商店的每個定價都是照這個算的
+ui.roster.taken,playing as {0},本次出擊 {0}
+ui.roster.refused,{0} opens after {1} extractions,{0} 需撤離 {1} 次才會開放
+ui.roster.credit.1,"characters from PROJECT LAST DAWN, based on ""Game Ready Low Poly",角色出自 PROJECT LAST DAWN，改作自 DanlyVostok 的
+ui.roster.credit.2,"Tactical Character"" by DanlyVostok, CC BY 4.0 — modified","「Game Ready Low Poly Tactical Character」，CC BY 4.0 授權"
+character.rin.role,ASSAULT,突擊
+character.rin.blurb,"no edges, no gaps; everything the shop sells is priced for this one",沒有短板也沒有破綻；商店賣的每一件都是照她定的價
+character.mika.role,RECON / TECH,偵察／技術
+character.mika.blurb,carries half again as much and cannot take a hit,多背一半的東西，也挨不起一下
+character.akira.role,MELEE / BERSERKER,近戰／狂戰
+character.akira.blurb,"holds ground; a blade already turning, and the floor is cold",守得住地；刀已經在轉，腳下的地是冷的
+character.sora.role,PSIONIC / BLADE,靈能／刃
+character.sora.blurb,"the fastest thing on the map, and the easiest to kill",場上跑得最快的，也是最好殺的
+character.yuna.role,SUPPORT / MEDIC,支援／醫療
+character.yuna.blurb,"closes its own wounds, and the crowd bleeds for touching it",自己會癒合，碰到她的人會流血
+ability.blade.one,1 blade,旋刃 1
+ability.blade.many,{0} blades,旋刃 {0}
+ability.chill,chill {0},冰緩 {0}
+ability.loot,loot x{0},戰利品 x{0}
+ability.reach,reach +{0} m,搜刮範圍 +{0} 米
+ability.dodge,dodge {0},閃避 {0}
+ability.thorns,thorns {0},荊棘 {0}
+ability.regen,regen {0}/s,回復 {0}/秒

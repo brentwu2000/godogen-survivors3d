@@ -7,6 +7,13 @@ choose the kit.
 Two of those three already exist in some form, and saying which is the first useful thing this plan
 does — a plan that rebuilds working screens is a plan that costs a phase and changes nothing.
 
+**Read against the code on 2026-09-10, and one of the three had quietly been done.** The section below
+still described choosing a survivor as "a cycle through three, with no page showing what they differ
+by". It is a roster page with five survivors, their numbers, their unlock conditions, a blurb on the
+one under the cursor and the illustration each was designed from — built two phases after this file was
+written, by a phase that did not come back here to say so. The same thing `README`'s *What's left* was
+doing, found the same way. **Re-read this file against the code before starting anything from it.**
+
 ---
 
 ## What the game does today, so the change is a change to something real
@@ -29,9 +36,16 @@ So:
 
 - **Choosing equipment already has a place.** The Armoury buys, equips, carries a weapon as a sidearm,
   and sells back at half. It is the most developed screen in the game.
-- **Choosing a survivor does not.** It is `[C]` at the Gate — a cycle through three, with no page
-  showing what they differ by. It works, it is undiscoverable, and it is the one verb in the room that
-  is not about the fitting it is bound to.
+- ~~**Choosing a survivor does not.**~~ It does. `[C]` at the Gate opens a **roster page** over the
+  shop screen: five survivors, health / speed / bulk, locked entries showing what opens them, a blurb
+  and an ability line on the one under the cursor, and the illustration beside it. `[W]`/`[S]` look,
+  `[E]` takes, `[C]` closes. The cycle this file described was right for three lines of text and wrong
+  for five people with portraits.
+
+  **This also supersedes step 6 below, and the reasoning is in `BaseScreen.cs` rather than here.** The
+  roster deliberately opens *at the gate*, on top of the shop, and closes back onto it — because
+  choosing a survivor and equipping one are one decision made in two rooms, and the Warden's fourteen
+  bulk changes what is worth buying. A Quarters fitting on the far wall would separate them.
 - **Language does not exist at all.** Not a setting, not a string table, not a font. Every label is a
   Godot `Label` at the project default font with a size override.
 
@@ -180,12 +194,24 @@ Neither needs a new key, and the room grows from six stations to eight without t
 
 ### Language
 
-Godot's own `TranslationServer` and a CSV, one row per key, one column per locale — `en` and `zh_TW` to
-begin with. It is the engine's supported path, it is what the `.csv` → `.translation` import is for, and
-it means a third locale is a column rather than a code change.
+A CSV, one row per key, one column per locale — `en` and `zh_TW` to begin with — so a third locale is a
+column rather than a code change. Keys read as what the string is for rather than as the English text,
+so an English rewording is not a retranslation.
 
-Keys read as what the string is for, not as the English text, so an English rewording is not a
-retranslation.
+**Not Godot's `.csv` → `.translation` import, and the reason is the one the audio already learned.**
+`BuildAudio` writes `AudioStreamWav` resources directly instead of shipping `.wav` files, because a
+`.wav` goes through the importer whose loop flag lives in a generated `.import` file the tool does not
+own — and the horde ambience is ruined if that flag comes back off. A translation import has fewer
+settings to lose and the same shape: a build artefact whose contents depend on state nothing in this
+repository writes. There is also a second trap in it — `export_filter="all_resources"` means files
+Godot *imports*, so the `.csv` source may not reach the pack at all, only the `.translation` cut from
+it, which is the same class of thing that shipped an OFL font without its licence.
+
+So the pipeline is the one every other asset here uses. `art-src/ui/strings.csv` is what a translator
+edits, `scripts/tools/BuildStrings.cs` renders it, `resources/strings.tres` is what ships, and
+`art-src/` is excluded from the export so the CSV never reaches a player. `Strings.Get(key, args…)` is
+the call site. Nothing under `resources/` is edited by hand, which is the rule this table now lives
+under too.
 
 ### Font
 
@@ -248,27 +274,50 @@ Each step is playable before the next starts and closes against a probe, per the
    this language — and becomes the coverage gate the moment one is declared. One probe across the
    transition rather than two.
 
-2. **The string table, English only.** Every user-visible literal becomes a key; `tr()` at the call
-   site; the CSV has one locale. Nothing on screen changes, which is the point — a step that changes
-   the words *and* the mechanism cannot be reviewed.
-   *Probe:* no user-visible literal remains outside the table, asserted by scanning the UI sources the
-   way `TraitProbe` scans the weapons directory rather than from a hand-kept list.
-3. **Width-aware alignment.** One helper that counts East Asian Wide as two, used by every page that
-   pads. Still English only.
-   *Probe:* a page built from strings of known width aligns identically in both locales.
-4. **The Traditional Chinese column, and the glyph gate.** Translate; subset; make a missing glyph a
-   build failure.
-   *Probe:* every key has a `zh_TW` value, and every code point in that column has a glyph in the
-   subset font.
+2. **The string table.** **The mechanism is done and one screen is through it.** `StringTableResource`,
+   `BuildStrings`, `Strings.Get` and `resources/strings.tres` exist; the **roster screen** is fully
+   converted, including the five survivors' roles and blurbs — `BuildCharacters` writes keys into the
+   `.tres` now, so there is one source of truth for the words rather than an English copy in the
+   resource and another in the table.
+
+   **What is left is the other ~300 literals**: `BaseScreen`'s shop pages, `Hud`, `DebriefScreen`,
+   `Shelter`, and the names in the weapon, gear, contract and item resources. That is the bulk of the
+   phase and it is mechanical now that the mechanism is proven end to end.
+
+   *Probe:* `StringProbe` — the table loads, every locale takes the same placeholders as English,
+   every key formats in every locale, and no key comes back as `«key»`. What it does not yet have is
+   the scan asserting **no user-visible literal remains outside the table**, which is the assertion
+   that will drive the remaining 300 and should land with them.
+3. ~~**Width-aware alignment.**~~ **Done.** `Strings.Pad` / `PadLeft` / `Cells` count East Asian Wide
+   as two, and the roster uses them where it used C#'s `{x,-18}` — which counts *characters*, so every
+   column after a translated one shifted by however many hanzi were in it. `StringProbe` asserts the
+   measurement and asserts that two strings padded to the same width occupy the same width.
+4. **The Traditional Chinese column, and the glyph gate.** **The gate is live and the column is
+   partial.** `build_font.py` reads every locale column of the CSV instead of `wanted.txt` and fails
+   rather than dropping a character; `FontProbe` asks the *shipped* font whether it can draw every
+   character in the *shipped* table, which is the other end of the same question. It caught its own
+   first regression immediately: eight ability strings were added to the CSV and the font was not
+   re-cut, and the probe named the thirteen missing characters.
+
+   The subset is 56 KB and 279 characters now, up from 31 KB and 172. The column is complete for every
+   key that exists, which is every key the roster needs and nothing else yet.
 5. **The Console fitting.** Language switches at runtime, persists to the profile at Version 3, and
    defaults from `OS.GetLocale()` on a fresh save.
+
+   Today the locale is `en` unless a script passes `-- locale:zh_TW`, and that default is deliberate
+   rather than unfinished: four probes read rendered strings, so defaulting to `OS.GetLocale()` before
+   they force `en` would turn the sweep red on a Chinese machine and green on a reviewer's.
+   `Strings.FromSystem` exists and is wired to nothing on purpose.
+
    *Probe:* switching re-renders the room; a v2 save migrates and lands on the OS locale; a fresh save
    on a Chinese OS starts Chinese.
-6. **The Quarters fitting.** The roster as a page; the Gate loses `[C]`.
-   *Probe:* the survivor taken in Quarters is the survivor the run starts with, and the Gate has one
-   verb.
+6. ~~**The Quarters fitting.**~~ **Superseded.** The roster is a page and it opens at the Gate on
+   purpose — see the correction at the top of this file. The Gate keeps `[C]`.
 
 **Steps 1 and 2 are worth doing even if the rest is deferred.** The font is the risk, and the table is
-the thing every later locale is free against. Steps 5 and 6 are small once 1–4 exist, and 6 is the only
-one of the six that would be worth doing on its own today — the character cycle is the weakest verb in
-the room regardless of what language it is in.
+the thing every later locale is free against.
+
+**What remains is one large mechanical job and one small design one.** The job is the other ~300
+literals; the mechanism they go through is proven, the font gate will catch anything the subset cannot
+draw, and each screen is independently reviewable against a before-and-after screenshot. The design one
+is step 5, which is a fitting, a profile field and a migration.

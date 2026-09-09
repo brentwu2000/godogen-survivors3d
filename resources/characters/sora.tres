@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_i5tsa")
 CharacterName = "SORA"
-Blurb = "the fastest thing on the map, and the easiest to kill"
-Role = "PSIONIC / BLADE"
+Blurb = "character.sora.blurb"
+Role = "character.sora.role"
 PortraitPath = "res://assets/ui/portraits/sora.png"
 MaxHealth = 70.0
 MoveSpeed = 7.1

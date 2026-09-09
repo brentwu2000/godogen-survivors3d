@@ -5,6 +5,6 @@
 [resource]
 script = ExtResource("1_ytwxp")
 CharacterName = "RIN"
-Blurb = "no edges, no gaps; everything the shop sells is priced for this one"
-Role = "ASSAULT"
+Blurb = "character.rin.blurb"
+Role = "character.rin.role"
 PortraitPath = "res://assets/ui/portraits/rin.png"

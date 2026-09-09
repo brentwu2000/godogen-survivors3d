@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_6wvuu")
 CharacterName = "AKIRA"
-Blurb = "holds ground; a blade already turning, and the floor is cold"
-Role = "MELEE / BERSERKER"
+Blurb = "character.akira.blurb"
+Role = "character.akira.role"
 PortraitPath = "res://assets/ui/portraits/akira.png"
 MaxHealth = 140.0
 MoveSpeed = 5.3

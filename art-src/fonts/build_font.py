@@ -14,11 +14,17 @@ to catch is here. Ask for a glyph that is not in the source and this stops the
 build, the same way `BuildEnemySprites` refuses a horde layer that is not exactly
 176x256.
 
-Today the wanted set is `wanted.txt`. At UI.md step 4 it becomes every locale
-column of the translation table, and this tool changes by one function.
+The wanted set is every locale column of `art-src/ui/strings.csv`, plus
+`wanted.txt` for the handful of characters the UI can produce without a table row
+behind them. Two sources rather than one because they answer different questions:
+the CSV is what the game *says*, and `wanted.txt` is a floor under it — a
+character the table happens not to use today but the UI could produce tomorrow,
+kept so that adding one string does not silently need a font rebuild on somebody
+else's machine.
 """
 
 import argparse
+import csv
 import os
 import sys
 
@@ -28,6 +34,7 @@ from fontTools.ttLib import TTFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 WANTED = os.path.join(HERE, "wanted.txt")
+STRINGS = os.path.join(ROOT, "art-src", "ui", "strings.csv")
 OUT = os.path.join(ROOT, "assets", "fonts", "ui.otf")
 
 # Every printable ASCII character, always.
@@ -38,14 +45,43 @@ OUT = os.path.join(ROOT, "assets", "fonts", "ui.otf")
 ASCII = "".join(chr(c) for c in range(0x20, 0x7F))
 
 
-def wanted_characters():
-    """The union of ASCII and whatever `wanted.txt` declares.
+def string_table_characters():
+    """Every character in every locale column of the translation table.
 
-    Newlines and ASCII whitespace in the file are separators, not content — the
-    file is meant to be readable and edited by hand, so it must be possible to
-    wrap a long line of hanzi without adding a glyph nobody asked for.
+    Read with the `csv` module rather than split on commas, because the table is
+    edited in a spreadsheet and a translated sentence containing a comma is a
+    quoted field. Splitting would take half a sentence and — worse — would take
+    it *silently*, so the font would be missing exactly the characters after the
+    first comma of a long line.
+
+    The key column is deliberately included. Keys are ASCII, so it costs nothing,
+    and excluding it would be a rule to remember the day somebody writes a key
+    that is not.
+    """
+    characters = set()
+
+    if not os.path.exists(STRINGS):
+        return characters
+
+    with open(STRINGS, encoding="utf-8", newline="") as handle:
+        for row in csv.reader(handle):
+            for cell in row:
+                for character in cell:
+                    if not character.isspace():
+                        characters.add(character)
+
+    return characters
+
+
+def wanted_characters():
+    """The union of ASCII, the translation table, and `wanted.txt`.
+
+    Newlines and ASCII whitespace in the files are separators, not content — they
+    are meant to be readable and edited by hand, so it must be possible to wrap a
+    long line of hanzi without adding a glyph nobody asked for.
     """
     characters = set(ASCII)
+    characters |= string_table_characters()
 
     with open(WANTED, encoding="utf-8") as handle:
         for line in handle:
@@ -110,7 +146,8 @@ def main():
     font.save(arguments.out)
 
     size = os.path.getsize(arguments.out)
-    print(f"FONT OK — {len(characters)} characters, "
+    print(f"FONT OK — {len(characters)} characters "
+          f"({len(string_table_characters())} of them from the string table), "
           f"{size / 1024:.0f} KB at {os.path.relpath(arguments.out, ROOT)} "
           f"(source {os.path.getsize(arguments.source) / 1048576:.1f} MB)")
     return 0

@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_dsflw")
 CharacterName = "YUNA"
-Blurb = "closes its own wounds, and the crowd bleeds for touching it"
-Role = "SUPPORT / MEDIC"
+Blurb = "character.yuna.blurb"
+Role = "character.yuna.role"
 PortraitPath = "res://assets/ui/portraits/yuna.png"
 MaxHealth = 125.0
 MoveSpeed = 5.6

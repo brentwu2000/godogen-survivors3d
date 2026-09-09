@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_6ctt4")
 CharacterName = "MIKA"
-Blurb = "carries half again as much and cannot take a hit"
-Role = "RECON / TECH"
+Blurb = "character.mika.blurb"
+Role = "character.mika.role"
 PortraitPath = "res://assets/ui/portraits/mika.png"
 MaxHealth = 80.0
 MoveSpeed = 6.6

@@ -141,6 +141,18 @@ public partial class CharacterResource : Resource
     /// The ability in words, for the select screen and for a probe's output.
     ///
     /// Empty when there is none, which is RIN and is correct rather than a gap.
+    ///
+    /// **Assembled from seven keys rather than seven literals**, because each
+    /// part is a label welded to a number and Chinese does not put the number
+    /// where English does — "reach +0.8 m" is "搜刮範圍 +0.8 米", where the unit
+    /// moved to the end and the label to the front. A positional placeholder is
+    /// the only shape that survives that, which is the whole reason the
+    /// extraction could not be a find-and-replace.
+    ///
+    /// The comma is a separator rather than a key. It is the one piece of
+    /// punctuation here that reads correctly in both — a Chinese enumeration
+    /// comma would be 、 and this is a list of *values*, which takes the Latin
+    /// one even in Chinese typesetting.
     public string AbilityLine
     {
         get
@@ -148,25 +160,29 @@ public partial class CharacterResource : Resource
             var parts = new System.Collections.Generic.List<string>();
 
             if (StartingBlades > 0)
-                parts.Add(StartingBlades == 1 ? "1 blade" : $"{StartingBlades} blades");
+            {
+                parts.Add(StartingBlades == 1
+                    ? Strings.Get("ability.blade.one")
+                    : Strings.Get("ability.blade.many", StartingBlades));
+            }
 
             if (StartingChill > 0.0f)
-                parts.Add($"chill {StartingChill:F2}");
+                parts.Add(Strings.Get("ability.chill", $"{StartingChill:F2}"));
 
             if (Mathf.Abs(LootValueScale - 1.0f) > 0.001f)
-                parts.Add($"loot x{LootValueScale:F2}");
+                parts.Add(Strings.Get("ability.loot", $"{LootValueScale:F2}"));
 
             if (SearchRadiusBonus > 0.0f)
-                parts.Add($"reach +{SearchRadiusBonus:F1} m");
+                parts.Add(Strings.Get("ability.reach", $"{SearchRadiusBonus:F1}"));
 
             if (StartingDodge > 0.0f)
-                parts.Add($"dodge {StartingDodge:F2}");
+                parts.Add(Strings.Get("ability.dodge", $"{StartingDodge:F2}"));
 
             if (StartingThorns > 0.0f)
-                parts.Add($"thorns {StartingThorns:F2}");
+                parts.Add(Strings.Get("ability.thorns", $"{StartingThorns:F2}"));
 
             if (StartingRegen > 0.0f)
-                parts.Add($"regen {StartingRegen:F1}/s");
+                parts.Add(Strings.Get("ability.regen", $"{StartingRegen:F1}"));
 
             return string.Join(", ", parts);
         }
