@@ -201,7 +201,15 @@ public sealed class HordeRenderer
 
     /// Projectiles carry an in-plane rotation instead of a mirror flag, so an
     /// arrow points where it is going rather than always drawing upright.
-    public void Sync(ProjectilePool pool, float height)
+    ///
+    /// `flightHeight` is metres above the ground the shot is drawn at, and it is
+    /// **not** the quad's size — the constructor takes that separately. The two
+    /// used to be one number: this was `height * 0.5f`, so a 0.25 m bolt sprite
+    /// flew at twelve and a half centimetres and every firefight in the game
+    /// happened along the floor. A whole exchange — muzzle, tracer, impact — read
+    /// as something going on around the players' shoes, and it was invisible for
+    /// as long as the muzzle flash was also down there.
+    public void Sync(ProjectilePool pool, float flightHeight)
     {
         for (int i = 0; i < pool.Count; i++)
         {
@@ -213,7 +221,7 @@ public sealed class HordeRenderer
             float spin = Mathf.Atan2(-velocity.Y, velocity.X);
 
             Vector3 p = pool.Position[i];
-            Write(i, new Vector3(p.X, Terrain.Height(p.X, p.Z) + p.Y + height * 0.5f, p.Z),
+            Write(i, new Vector3(p.X, Terrain.Height(p.X, p.Z) + p.Y + flightHeight, p.Z),
                   pool.Scale[i], 0.0f, 0.0f, spin, 0, flash: 0.0f, tint: pool.Tint[i]);
         }
 

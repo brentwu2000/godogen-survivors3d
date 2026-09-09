@@ -45,7 +45,13 @@ public partial class Horde : Node3D
     [Export] public float SpawnIntensity { get; set; }
 
     [Export] public int EnemyProjectileCapacity { get; set; } = 128;
+    /// The spitter's bolt sprite, in metres. Its size, not its altitude — see
+    /// `EnemyMuzzleHeight`, which is the other half of what this number used to be.
     [Export] public float EnemyProjectileHeight { get; set; } = 0.3f;
+
+    /// How high a spitter's shot flies. Below a survivor's shoulder and above a
+    /// crouching one's head: what it has to read as is something coming at you.
+    [Export] public float EnemyMuzzleHeight { get; set; } = 0.95f;
 
     /// How close a spitter's shot has to pass to count as a hit.
     [Export] public float EnemyProjectileRadius { get; set; } = 0.6f;
@@ -1006,7 +1012,7 @@ public partial class Horde : Node3D
             EnemyShots.DespawnAt(i);
         }
 
-        _shotRenderer?.Sync(EnemyShots, EnemyProjectileHeight);
+        _shotRenderer?.Sync(EnemyShots, EnemyMuzzleHeight);
     }
 
     // --- Weapon queries -----------------------------------------------------

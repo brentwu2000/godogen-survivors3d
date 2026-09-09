@@ -16,9 +16,18 @@ public partial class WeaponHandler : Node3D
     [Export] public string StartingWeaponPath { get; set; } = "res://resources/weapons/scavenged_rifle.tres";
 
     [Export] public int ProjectileCapacity { get; set; } = 256;
+
+    /// The bolt sprite's height in metres — how big an arrow is drawn, not how
+    /// high it flies. `MuzzleHeight` is the second of those.
     [Export] public float ProjectileHeight { get; set; } = 0.25f;
 
     /// Metres above the ground that shots leave from and projectiles fly at.
+    ///
+    /// **Declared with the weapon and read by nothing for eleven phases.** The
+    /// projectile renderer was drawing shots at half of `ProjectileHeight` — which
+    /// is the bolt sprite's *size* — so everything crossing the screen flew at
+    /// twelve centimetres, and `EffectDirector` put the muzzle flash at fifteen.
+    /// Both were correct in isolation and both were on the floor.
     [Export] public float MuzzleHeight { get; set; } = 1.0f;
 
     /// Stops the weapon starting an attack, without stopping anything else.
@@ -944,7 +953,7 @@ public partial class WeaponHandler : Node3D
                 Projectiles.DespawnAt(i);
         }
 
-        _projectileRenderer?.Sync(Projectiles, ProjectileHeight);
+        _projectileRenderer?.Sync(Projectiles, MuzzleHeight);
     }
 
     /// How far a ricochet will look for its next target. Short: a bounce is a

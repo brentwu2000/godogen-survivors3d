@@ -371,6 +371,28 @@ public partial class Screenshot : SceneTree
             }
         }
 
+        // And the shot itself, two frames out.
+        //
+        // A muzzle flash lives six hundredths of a second — four ticks — so a
+        // still lands on one only if it is aimed at one. Six hundred and forty
+        // frames of a recorded run were searched for a single flash and none of
+        // them had one, which reads exactly like an effect that is not being
+        // drawn and was in fact a bot that had run its magazine dry. The one
+        // piece of feedback every weapon in the game produces was the one piece
+        // no capture could photograph.
+        if (_fx && _frame == _warmup - 2 && _scene != null)
+        {
+            var rig = _scene.GetNodeOrNull<CameraRig>("CameraRig");
+            var handler = _scene.GetNodeOrNull<Player>("Player")?
+                                .GetNodeOrNull<WeaponHandler>("WeaponHandler");
+
+            if (rig != null && handler != null)
+            {
+                handler.HoldFire = false;
+                handler.ForceFire(CameraRig.Forward(rig.Yaw));
+            }
+        }
+
         if (++_frame < _warmup)
             return false;
 

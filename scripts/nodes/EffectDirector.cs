@@ -156,6 +156,22 @@ public partial class EffectDirector : Node3D
     /// crowd, which is the rule the rest of this file is built on.
     private int _burnCursor;
 
+    /// Metres above the ground a held weapon's muzzle sits.
+    ///
+    /// **Every muzzle effect in this file used to be drawn at the ankles.** The
+    /// `Fired` event's origin is the handler's own `GlobalPosition`, which is the
+    /// player planted on the terrain, so flattening it and adding fifteen
+    /// centimetres — which is what the flash did, and correctly, to avoid adding
+    /// the ground height twice — put the shot on the floor. It was invisible while
+    /// the flash was a fifteen-centimetre ball, and the moment the flash became a
+    /// metre-wide star it was obviously a gun being fired at somebody's shoes.
+    ///
+    /// `WeaponHandler.MuzzleHeight` has existed since the weapon was written and
+    /// was never read by anything. It is what this is, and the projectile renderer
+    /// now flies shots at it too, so the flash, the tracer and the impact are all
+    /// on one line at chest height rather than three heights that never agreed.
+    private const float MuzzleHeight = 1.0f;
+
     /// 12 floats of transform, 4 of colour, 4 of custom data.
     ///
     /// The colour block carries the tint and the fade; the custom data carries
@@ -360,7 +376,7 @@ public partial class EffectDirector : Node3D
         // like a rifle made the bow feel like a rifle that happened to be slow.
         if (category == WeaponCategory.BowCrossbow)
         {
-            _pool.Spawn(at + new Vector3(0.0f, 0.30f, 0.0f), 0.22f, 0.06f,
+            _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight + 0.05f, 0.0f), 0.22f, 0.06f,
                         new Color(0.86f, 0.84f, 0.74f, 0.30f), 0.06f, direction * 1.2f);
             Kick(0.16f);
             return;
@@ -390,13 +406,13 @@ public partial class EffectDirector : Node3D
                     float across = fingers == 1 ? 0.0f : (i / (float)(fingers - 1) - 0.5f) * 2.0f;
                     Vector2 fan = direction.Rotated(across * spread);
 
-                    _pool.Spawn(at + new Vector3(0.0f, 0.18f, 0.0f), 0.34f * bite, 0.9f * bite,
+                    _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 0.34f * bite, 0.9f * bite,
                                 new Color(1.0f, 0.62f, 0.22f, 0.55f), 0.10f, fan * 7.0f);
                 }
 
                 // One star over the fan, so the shotgun still reads as a gunshot
                 // and not only as a spray. Wide and brief.
-                _pool.Spawn(at + new Vector3(0.0f, 0.22f, 0.0f), 1.9f, 1.1f,
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 1.9f, 1.1f,
                             new Color(1.0f, 0.72f, 0.34f, 0.85f), 0.055f, Vector2.Zero,
                             EffectShape.Flash, spin: roll);
                 Breath(at, direction, 1.1f);
@@ -414,11 +430,11 @@ public partial class EffectDirector : Node3D
                 {
                     _pool.Spawn(
                         at + new Vector3(direction.X, 0.0f, direction.Y) * (i * 1.6f)
-                           + new Vector3(0.0f, 0.20f, 0.0f),
+                           + new Vector3(0.0f, MuzzleHeight, 0.0f),
                         0.16f, 0.02f, new Color(0.94f, 0.96f, 1.0f, 0.5f), 0.09f, Vector2.Zero);
                 }
 
-                _pool.Spawn(at + new Vector3(0.0f, 0.20f, 0.0f), 1.3f, 0.8f,
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 1.3f, 0.8f,
                             new Color(0.94f, 0.96f, 1.0f, 0.8f), 0.05f, Vector2.Zero,
                             EffectShape.Flash, spin: roll);
                 Breath(at, direction, 0.7f);
@@ -430,12 +446,12 @@ public partial class EffectDirector : Node3D
             // A launched charge. Slow, heavy, and it leaves smoke — the only
             // firearm whose shot is worth watching travel.
             case WeaponTrait.Blast:
-                _pool.Spawn(at + new Vector3(0.0f, 0.20f, 0.0f), 0.7f, 1.5f,
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 0.7f, 1.5f,
                             new Color(1.0f, 0.55f, 0.20f, 0.6f), 0.16f, direction * 2.0f);
-                _pool.Spawn(at + new Vector3(0.0f, 0.20f, 0.0f), 1.7f, 1.0f,
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 1.7f, 1.0f,
                             new Color(1.0f, 0.66f, 0.28f, 0.9f), 0.06f, Vector2.Zero,
                             EffectShape.Flash, spin: roll);
-                _pool.Spawn(at + new Vector3(0.0f, 0.28f, 0.0f), 0.6f, 2.1f,
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight + 0.15f, 0.0f), 0.6f, 2.1f,
                             Smoke, 0.75f, direction * 1.0f, EffectShape.Smoke, soft: true);
                 Kick(0.60f);
                 break;
@@ -450,11 +466,13 @@ public partial class EffectDirector : Node3D
             // enough to see turned it into a floating orange disc, because a soft
             // radial ball has no shape to grow into. A four-pointed flash is
             // mostly transparent, so it can be a metre across and still only put
-            // a small bright core on the screen. It also lasts four frames rather
-            // than five: shape buys legibility that duration used to have to.
+            // a small bright core on the screen. The duration is where it always
+            // was — a shape was the thing missing, not time, and at seven shots a
+            // second seven hundredths puts a flash on the screen for a little over
+            // half of a burst, which is a gun rather than a strobe.
             default:
-                _pool.Spawn(at + new Vector3(0.0f, 0.15f, 0.0f), 0.85f + 0.75f * bite, 0.55f,
-                            Muzzle, 0.06f, Vector2.Zero, EffectShape.Flash, spin: roll);
+                _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight, 0.0f), 0.85f + 0.75f * bite, 0.55f,
+                            Muzzle, 0.07f, Vector2.Zero, EffectShape.Flash, spin: roll);
                 Breath(at, direction, 0.35f + 0.5f * bite);
                 Kick(0.16f * bite);
                 break;
@@ -471,7 +489,7 @@ public partial class EffectDirector : Node3D
     /// a fog bank in front of the player.
     private void Breath(Vector3 at, Vector2 direction, float weight)
     {
-        _pool.Spawn(at + new Vector3(0.0f, 0.22f, 0.0f), 0.35f * weight, 1.15f * weight,
+        _pool.Spawn(at + new Vector3(0.0f, MuzzleHeight + 0.1f, 0.0f), 0.35f * weight, 1.15f * weight,
                     new Color(Smoke.R, Smoke.G, Smoke.B, 0.20f), 0.34f,
                     direction * (1.6f * weight), EffectShape.Smoke, soft: true);
     }
@@ -507,7 +525,7 @@ public partial class EffectDirector : Node3D
             // arc has a leading edge rather than being a fence of equal marks.
             float weight = 0.45f + 0.55f * Mathf.Sin(t * Mathf.Pi);
 
-            _pool.Spawn(on + new Vector3(0.0f, 0.55f, 0.0f), reach * 0.20f, reach * 0.30f,
+            _pool.Spawn(on + new Vector3(0.0f, MuzzleHeight, 0.0f), reach * 0.20f, reach * 0.30f,
                         new Color(0.84f, 0.90f, 1.0f, 0.30f * weight),
                         0.09f + 0.05f * t, spoke * (reach * 0.8f));
         }
@@ -523,7 +541,7 @@ public partial class EffectDirector : Node3D
                 Vector2 spoke = direction.Rotated(Mathf.Lerp(half, -half, t));
                 Vector3 on = at + new Vector3(spoke.X, 0.0f, spoke.Y) * (reach * 0.55f);
 
-                _pool.Spawn(on + new Vector3(0.0f, 0.75f, 0.0f), reach * 0.16f, reach * 0.40f,
+                _pool.Spawn(on + new Vector3(0.0f, MuzzleHeight + 0.2f, 0.0f), reach * 0.16f, reach * 0.40f,
                             new Color(0.95f, 0.82f, 0.58f, 0.20f), 0.20f, spoke * (reach * 0.4f));
             }
         }
@@ -827,7 +845,7 @@ public partial class EffectDirector : Node3D
             Vector3 at = shots.Position[i];
             Color tint = shots.Tint[i];
 
-            _pool.Spawn(new Vector3(at.X, at.Y + 0.45f, at.Z),
+            _pool.Spawn(new Vector3(at.X, at.Y + MuzzleHeight, at.Z),
                         0.20f * shots.Scale[i], 0.03f,
                         new Color(tint.R, tint.G, tint.B, 0.28f), 0.15f, Vector2.Zero);
         }
@@ -855,19 +873,34 @@ public partial class EffectDirector : Node3D
             float size = Mathf.Lerp(_pool.StartSize[i], _pool.EndSize[i], age);
             Vector3 p = _pool.Position[i];
 
-            // Fades out on a curve rather than linearly: a linear fade spends
-            // half its life at half brightness, which reads as a lingering smudge
-            // where a flash should already be gone.
+            // Three curves for three shapes, because "how a thing stops" is as
+            // much of what it is as how it looks.
             //
-            // Smoke fades the other way. It is the one thing here that is not a
+            // A spark falls off a square: a linear fade spends half its life at
+            // half brightness, which reads as a lingering smudge where a flash
+            // should already be gone.
+            //
+            // Smoke goes the other way. It is the one thing here that is not a
             // flash — it should thicken a moment after it is born and then thin
             // out slowly, not be at its heaviest at the instant of the shot — so
-            // it eases in rather than falling off a square.
+            // it eases in rather than falling off anything.
+            //
+            // **A muzzle flash holds and then cuts, and getting that wrong is why
+            // it could not be photographed.** On the square it was under a third
+            // of its brightness a third of the way through seven hundredths of a
+            // second, so at thirty frames a second there was about one frame in
+            // which it existed to look at — six hundred and forty frames of a
+            // recorded run contained no legible one. A cube barely moves for the
+            // first half of the life and then falls off a cliff, which is what a
+            // thing that is *emitting* and then *stops* actually does.
             Color tint = _pool.Tint[i];
-            bool wisp = _pool.Shape[i] == (byte)EffectShape.Smoke;
-            float fade = wisp
-                ? Mathf.Min(1.0f, age * 6.0f) * (1.0f - age)
-                : (1.0f - age) * (1.0f - age);
+            byte shape = _pool.Shape[i];
+            float fade = shape switch
+            {
+                (byte)EffectShape.Smoke => Mathf.Min(1.0f, age * 6.0f) * (1.0f - age),
+                (byte)EffectShape.Flash => 1.0f - age * age * age,
+                _ => (1.0f - age) * (1.0f - age),
+            };
 
             bool blended = _pool.Soft[i];
             float[] buffer = blended ? _mixBuffer : _addBuffer;

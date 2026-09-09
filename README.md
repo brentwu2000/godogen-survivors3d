@@ -126,7 +126,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/ScaleProbe.cs` | no | Sprite world-height read against a 2 m reference pole |
 | `test/GaitShot.cs` | no | A strip of frames while a movement key is held, under the game's own camera, printing travel against the facing and against the view's right (`-- hold:move_right`). It is the print that matters: strafing must read 90° off the facing and 0° off the right |
 | `test/BillboardCompare.cs` | no | The side-by-side that settled full-billboard vs Y-locked |
-| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills and a detonation just before the shutter) |
+| `test/Screenshot.cs` | no | Still of the main scene (`-- 0 0 mixed flash` checks the hit-flash channel; `fx` drives kills, a detonation and a shot just before the shutter) |
 | `test/EffectShot.cs` | no | The effect vocabulary as a row on the ground — flash, spark, smoke, gore, crit, splat, scorch — held still and spaced out. `-- bare` photographs the same seeded frame with nothing staged, and the difference is the measurement: this floor draws brown and grey patches of its own, and twice a stain that was rendering perfectly was read off a single picture as absent |
 | `test/DebriefShot.cs` | no | Still of the end-of-run report, staged from a compressed run |
 | `test/Presentation.cs` | no | The proof video (see Capture) |
@@ -913,6 +913,16 @@ things in this game that cannot be bought, opened by killing sixty in a run, and
 `Pool.Burn` field nothing drew. A burning enemy looked exactly like one that was not, right up until it
 fell over. It gets fire over the body rather than a hit flash, for the reason immediately below, and
 the scan is a rotating window over the pool because a molotov can leave forty things alight.
+
+**Everything a weapon does was drawn at ankle height, and nothing said so.** `WeaponHandler.MuzzleHeight`
+has existed since the weapon was written and was read by nothing. The projectile renderer flew shots at
+half of `ProjectileHeight` — which is the bolt *sprite's size*, 0.25 m — so every arrow, bolt and tracer
+in the game crossed the field at twelve centimetres, and `EffectDirector` put the muzzle flash at
+fifteen, correctly, to avoid adding the ground height twice to an origin that is already planted. Both
+were right in isolation and both were on the floor: a whole exchange read as something happening around
+the players' shoes. It stayed invisible for as long as the flash was a fifteen-centimetre ball, and
+became obvious the moment the flash was a metre-wide star. `Sync` takes a flight height separate from
+the quad's size now, and the flash, the tracer and the impact are on one line at a metre.
 
 **A shot that takes time to arrive leaves a wake.** Travel time is the whole of what separates a
 projectile weapon from a hitscan one — a bow's shot has to be led, and leading something you can barely
