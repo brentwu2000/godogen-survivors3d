@@ -645,29 +645,18 @@ public partial class RunGrowth : Node
 
     public string Describe(GrowthOption option) => option switch
     {
-        GrowthOption.WeaponLevel => $"weapon +1 ({_weapons?.Level ?? 0}/{_weapons?.MaxLevel ?? 0})",
-        GrowthOption.Orbit => "+1 orbiting blade",
-        GrowthOption.Shockwave => "+1 shockwave stack",
-        GrowthOption.Chain => "+18% chance a hit arcs",
-        GrowthOption.Chill => "enemies near you slow down",
-        GrowthOption.MaxHealth => $"+{HealthPerPick:F0} max HP",
-        GrowthOption.Armour => $"+{ArmourPerPick:F0} armour",
-        GrowthOption.MoveSpeed => $"+{MoveSpeedPerPick * 100.0f:F0}% speed",
-        GrowthOption.SearchSpeed => $"+{SearchSpeedPerPick * 100.0f:F0}% search",
-        GrowthOption.Pierce => "+1 pierce",
-        GrowthOption.Crit => "+12% crit",
-        GrowthOption.FireRate => "+12% fire rate",
-        GrowthOption.Area => "+18% area",
-        GrowthOption.Knockback => "+knockback",
-        GrowthOption.Ignite => "10% kills ignite",
-        GrowthOption.Detonate => "9% kills detonate",
-        GrowthOption.Lifesteal => "+0.5 HP per kill",
-        GrowthOption.Regen => "+0.8 HP/s",
-        GrowthOption.Dodge => "+10% dodge",
-        GrowthOption.Thorns => "+4 thorns",
-        GrowthOption.Reach => "+0.8 m search reach",
-        GrowthOption.Fortune => "+15% loot value",
-        _ => option.ToString(),
+        GrowthOption.WeaponLevel => Strings.Get("growth.weaponlevel",
+                                                _weapons?.Level ?? 0, _weapons?.MaxLevel ?? 0),
+        GrowthOption.MaxHealth => Strings.Get("growth.maxhealth", $"{HealthPerPick:F0}"),
+        GrowthOption.Armour => Strings.Get("growth.armour", $"{ArmourPerPick:F0}"),
+        GrowthOption.MoveSpeed => Strings.Get("growth.movespeed", $"{MoveSpeedPerPick * 100.0f:F0}"),
+        GrowthOption.SearchSpeed => Strings.Get("growth.searchspeed", $"{SearchSpeedPerPick * 100.0f:F0}"),
+
+        // The rest carry no number of their own, so the key is the option's name
+        // and nothing here has to be kept in step with the enum by hand — a new
+        // option that forgets its row shows up as «growth.whatever» on the card
+        // rather than as the enum's C# name, which is what it used to do.
+        _ => Strings.Get($"growth.{option.ToString().ToLowerInvariant()}"),
     };
 
     private float NextFloat()

@@ -180,7 +180,22 @@ public partial class HudProbe : SceneTree
             return null;
         }
 
+        // Waits for the bar to move rather than for a number of ticks, and the
+        // difference is the whole reason this stage was flaky.
+        //
+        // **This probe drives from `_PhysicsProcess` and the bar is written from
+        // `_Process`.** Headless, those are not one-to-one: with nothing to
+        // render, physics catches up in bursts, and all twelve of this stage's
+        // ticks can fall inside a single process frame — so "four ticks later"
+        // was never a guarantee that the HUD had run at all. It passed for
+        // sixteen phases because the frame boundary happened to land between
+        // tick 4 and tick 8, and it started failing the day a first-call resource
+        // load moved that boundary by a few milliseconds. The fix is to wait for
+        // the thing being asserted rather than for a proxy of it.
         if (tick < 12)
+            return null;
+
+        if (Mathf.Abs(fill.Size.X - _atHalf) < 0.5f && tick < 240)
             return null;
 
         float atLow = fill.Size.X;

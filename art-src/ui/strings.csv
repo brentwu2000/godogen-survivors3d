@@ -37,3 +37,61 @@ ui.console.switched,language is {0},語言已切換為 {0}
 locale.en.name,English,English
 locale.zh_TW.name,繁體中文,繁體中文
 fitting.console.first,next language,切換語言
+hud.boss.warning,SOMETHING BIG IS COMING,有大東西過來了
+hud.supply.drop,SUPPLY DROP,補給空投
+hud.zone.entered,{0} — HOLD OR LEAVE,{0} — 守住或離開
+hud.zone.cleared,{0} CLEARED — +{1} ROUNDS,{0} 已清空 — 彈藥 +{1}
+hud.health.armoured,{0} / {1}      armour {2},{0} / {1}      護甲 {2}
+hud.health.plain,{0} / {1},{0} / {1}
+hud.bag,bag {0}/{1},背包 {0}/{1}
+hud.bag.value,value {0},價值 {0}
+hud.bag.safe,safe {0}/{1} ({2}),保險箱 {0}/{1} ({2})
+hud.weapon.heat,heat {0}%,過熱 {0}%
+hud.weapon.venting,VENTING,散熱中
+hud.weapon.ammo,{0}/{1},{0}/{1}
+hud.weapon.dry,DRY,沒彈藥
+hud.weapon.reloading,reloading,裝填中
+hud.weapon.idle,(idle),(閒置)
+hud.weapon.level,lv {0}/{1},等級 {0}/{1}
+hud.weapon.level.max,lv {0}/{1} MAX,等級 {0}/{1} 滿
+hud.weapon.charged,CHARGED,已蓄力
+hud.adrenaline,ADRENALINE {0}s,腎上腺素 {0} 秒
+hud.keys.base,[Tab] swap   [Q] use   [F] secure,[Tab] 換武器   [Q] 使用   [F] 收進保險箱
+hud.keys.throw,[G] throw x{0},[G] 投擲 x{0}
+hud.keys.drop,[R] drop worst,[R] 丟掉最差的
+hud.payout,leave now: {0}   (x{1}),現在離開：{0}   (x{1})
+hud.exit.open,EXIT  {0}  {1} m,撤離點  {0}  {1} 米
+hud.exit.waiting,exit opens in {0}s,撤離點 {0} 秒後開啟
+hud.enemies,enemies {0},敵人 {0}
+hud.credits,credits {0},信用點 {0}
+hud.crate.remaining,"{0} LEFT, WORTH {1}",剩 {0} 格，值 {1}
+hud.banner.extracted,EXTRACTED,撤離成功
+hud.banner.banked,banked {0},帶回 {0}
+hud.banner.killed,KILLED,陣亡
+hud.banner.lost,backpack lost,背包丟了
+hud.banner.timeout,OUT OF TIME,時間到
+hud.offer.card,[{0}],[{0}]
+hud.offer.more,(+{0} more),(還有 {0} 個)
+hud.crate.searching,SEARCHING,搜刮中
+growth.weaponlevel,weapon +1 ({0}/{1}),武器 +1 ({0}/{1})
+growth.orbit,+1 orbiting blade,旋刃 +1
+growth.shockwave,+1 shockwave stack,震波 +1 層
+growth.chain,+18% chance a hit arcs,命中連鎖機率 +18%
+growth.chill,enemies near you slow down,周圍的敵人變慢
+growth.maxhealth,+{0} max HP,生命上限 +{0}
+growth.armour,+{0} armour,護甲 +{0}
+growth.movespeed,+{0}% speed,移動速度 +{0}%
+growth.searchspeed,+{0}% search,搜刮速度 +{0}%
+growth.pierce,+1 pierce,穿透 +1
+growth.crit,+12% crit,暴擊 +12%
+growth.firerate,+12% fire rate,射速 +12%
+growth.area,+18% area,範圍 +18%
+growth.knockback,+knockback,擊退提升
+growth.ignite,10% kills ignite,10% 擊殺引燃
+growth.detonate,9% kills detonate,9% 擊殺引爆
+growth.lifesteal,+0.5 HP per kill,每次擊殺回 0.5 生命
+growth.regen,+0.8 HP/s,每秒回 0.8 生命
+growth.dodge,+10% dodge,閃避 +10%
+growth.thorns,+4 thorns,荊棘 +4
+growth.reach,+0.8 m search reach,搜刮範圍 +0.8 米
+growth.fortune,+15% loot value,戰利品價值 +15%

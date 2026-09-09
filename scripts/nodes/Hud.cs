@@ -178,9 +178,9 @@ public partial class Hud : CanvasLayer
         }
     }
 
-    private void OnBossArrived() => Announce("SOMETHING BIG IS COMING", 4.0f);
+    private void OnBossArrived() => Announce(Strings.Get("hud.boss.warning"), 4.0f);
 
-    private void OnSupplyDropped(Vector3 at) => Announce("SUPPLY DROP", 4.0f);
+    private void OnSupplyDropped(Vector3 at) => Announce(Strings.Get("hud.supply.drop"), 4.0f);
 
     /// Re-taken whenever a crate arrives, because the compass points at the ones
     /// it knows about — and the two that appear mid-run are the two most worth
@@ -230,9 +230,9 @@ public partial class Hud : CanvasLayer
             // without the player having pressed anything, and it happens *because*
             // they walked somewhere. Without a line saying so, the first sign is
             // eight enemies arriving and no explanation for them.
-            zone.ZoneStarted += title => Announce($"{title.ToUpper()} — HOLD OR LEAVE", 2.6f);
+            zone.ZoneStarted += title => Announce(Strings.Get("hud.zone.entered", title.ToUpper()), 2.6f);
             zone.ZoneCleared += (title, rounds) =>
-                Announce($"{title.ToUpper()} CLEARED — +{rounds} ROUNDS", 2.6f);
+                Announce(Strings.Get("hud.zone.cleared", title.ToUpper(), rounds), 2.6f);
         }
 
         _zones = found.ToArray();
@@ -405,7 +405,7 @@ public partial class Hud : CanvasLayer
 
         float armour = _player?.Armour ?? 0.0f;
         _health.Text.Text = armour > 0.0f
-            ? $"{health:F0} / {maxHealth:F0}      armour {armour:F0}"
+            ? Strings.Get("hud.health.armoured", $"{health:F0}", $"{maxHealth:F0}", $"{armour:F0}")
             : $"{health:F0} / {maxHealth:F0}";
     }
 
@@ -420,9 +420,10 @@ public partial class Hud : CanvasLayer
         // player has to start choosing what to leave behind, and finding out at
         // the crate is finding out too late.
         Fill(_bag, fraction, fraction >= 0.8f ? CargoFull : Cargo);
-        _bag.Text.Text = $"bag {bag?.UsedBulk ?? 0}/{bag?.Capacity ?? 0}   " +
-                         $"value {bag?.TotalValue ?? 0}   " +
-                         $"safe {safe?.UsedBulk ?? 0}/{safe?.Capacity ?? 0} ({safe?.TotalValue ?? 0})";
+        _bag.Text.Text = Strings.Get("hud.bag", bag?.UsedBulk ?? 0, bag?.Capacity ?? 0) + "   "
+                       + Strings.Get("hud.bag.value", bag?.TotalValue ?? 0) + "   "
+                       + Strings.Get("hud.bag.safe", safe?.UsedBulk ?? 0, safe?.Capacity ?? 0,
+                                     safe?.TotalValue ?? 0);
     }
 
     private void UpdateArms()
@@ -451,17 +452,20 @@ public partial class Hud : CanvasLayer
                 continue;
 
             string ammo = each.FiringModel == WeaponFiringModel.Overheat
-                ? $"   heat {Mathf.RoundToInt(_weapons.HeatIn(i) * 100.0f)}%"
-                  + (_weapons.OverheatedIn(i) ? "  VENTING" : "")
+                ? "   " + Strings.Get("hud.weapon.heat",
+                                      Mathf.RoundToInt(_weapons.HeatIn(i) * 100.0f))
+                  + (_weapons.OverheatedIn(i) ? "  " + Strings.Get("hud.weapon.venting") : "")
                 : each.MagazineSize > 0
-                ? $"   {_weapons.AmmoIn(i)}/{_weapons.ReserveIn(i)}"
-                  + (_weapons.IsDryIn(i) ? "  DRY" : _weapons.ReloadingIn(i) ? "  reloading" : "")
+                ? "   " + Strings.Get("hud.weapon.ammo", _weapons.AmmoIn(i), _weapons.ReserveIn(i))
+                  + (_weapons.IsDryIn(i)
+                      ? "  " + Strings.Get("hud.weapon.dry")
+                      : _weapons.ReloadingIn(i) ? "  " + Strings.Get("hud.weapon.reloading") : "")
                 : "";
 
             // The marker says which is in hand, not which is working — a dot
             // against an idle slot would be exactly the wrong thing to learn.
             string held = i == _weapons.ActiveSlot ? "> " : "  ";
-            string idle = _weapons.FiringIn(i) ? "" : "   (idle)";
+            string idle = _weapons.FiringIn(i) ? "" : "   " + Strings.Get("hud.weapon.idle");
 
             lines.Add($"{held}{each.WeaponName}{ammo}{idle}");
         }
@@ -481,28 +485,30 @@ public partial class Hud : CanvasLayer
         Fill(_level, fraction, _weapons.AtCeiling ? CargoFull : Growth);
         _level.Text.Text = "";
 
-        _arms.Text += _weapons.AtCeiling
-            ? $"      lv {_weapons.Level}/{_weapons.MaxLevel} MAX"
-            : $"      lv {_weapons.Level}/{_weapons.MaxLevel}";
+        _arms.Text += "      " + (_weapons.AtCeiling
+            ? Strings.Get("hud.weapon.level.max", _weapons.Level, _weapons.MaxLevel)
+            : Strings.Get("hud.weapon.level", _weapons.Level, _weapons.MaxLevel));
 
         // The charge is worthless unsaid. It is the only trait whose value
         // depends on the player *knowing* it is ready — a shot that quietly does
         // three and a half times the damage is a weapon with inconsistent numbers
         // rather than one that rewards restraint.
         if (_weapons.IsCharged)
-            _arms.Text += "      CHARGED";
+            _arms.Text += "      " + Strings.Get("hud.weapon.charged");
 
         if (_player?.AdrenalineActive == true)
-            _arms.Text += $"      ADRENALINE {_player.AdrenalineRemaining:F0}s";
+            _arms.Text += "      " + Strings.Get("hud.adrenaline", $"{_player.AdrenalineRemaining:F0}");
 
         // Silent on a touch build. Naming keys that do not exist is worse than
         // naming nothing — the buttons on the right are the answer there, and
         // they say what they do on their faces.
         _keys.Text = _touchActive
             ? ""
-            : "[Tab] swap   [Q] use   [F] secure" +
-              (_player?.ThrowableCount > 0 ? $"   [G] throw x{_player.ThrowableCount}" : "") +
-              (_player?.Backpack.EntryCount > 0 ? "   [R] drop worst" : "");
+            : Strings.Get("hud.keys.base")
+              + (_player?.ThrowableCount > 0
+                  ? "   " + Strings.Get("hud.keys.throw", _player.ThrowableCount) : "")
+              + (_player?.Backpack.EntryCount > 0
+                  ? "   " + Strings.Get("hud.keys.drop") : "");
     }
 
     private void UpdateClock()
@@ -526,7 +532,7 @@ public partial class Hud : CanvasLayer
         // The payout-if-you-leave-now line is the whole decision. Without it the
         // player cannot weigh another minute against what they are already
         // holding, and the escalation is just something that happens to them.
-        _payout.Text = $"leave now: {Mathf.RoundToInt(carried * multiplier)}   (x{multiplier:F2})";
+        _payout.Text = Strings.Get("hud.payout", Mathf.RoundToInt(carried * multiplier), $"{multiplier:F2}");
         _payout.AddThemeColorOverride("font_color", carried > 0 ? Wounded : Dim);
     }
 
@@ -538,16 +544,19 @@ public partial class Hud : CanvasLayer
         if (nearest != null && _player != null)
         {
             Vector3 delta = nearest.GlobalPosition - _player.GlobalPosition;
-            line = $"EXIT  {Compass(new Vector2(delta.X, delta.Z))}  {delta.Length():F0} m";
+            line = Strings.Get("hud.exit.open",
+                               Compass(new Vector2(delta.X, delta.Z)), $"{delta.Length():F0}");
         }
         else
         {
             float opensAt = (_director?.RunSeconds ?? 0.0f) * (_director?.ExtractionOpensAt ?? 0.0f);
             float until = Mathf.Max(0.0f, opensAt - (_director?.Elapsed ?? 0.0f));
-            line = $"exit opens in {until:F0}s";
+            line = Strings.Get("hud.exit.waiting", $"{until:F0}");
         }
 
-        _exit.Text = $"{line}\nenemies {_horde?.Pool.Count ?? 0}\ncredits {_meta?.Profile.Credits ?? 0}";
+        _exit.Text = line
+                   + "\n" + Strings.Get("hud.enemies", _horde?.Pool.Count ?? 0)
+                   + "\n" + Strings.Get("hud.credits", _meta?.Profile.Credits ?? 0);
         _exit.AddThemeColorOverride("font_color", nearest != null ? Hold : Dim);
     }
 
@@ -599,8 +608,8 @@ public partial class Hud : CanvasLayer
             // "and this is what is sitting here" — without the second half the
             // player has no idea whether it is worth dropping something for.
             ShowHold(true, container.Progress, container.RemainingBulk > 0
-                ? $"{container.RemainingBulk} LEFT, WORTH {container.RemainingValue}"
-                : "SEARCHING");
+                ? Strings.Get("hud.crate.remaining", container.RemainingBulk, container.RemainingValue)
+                : Strings.Get("hud.crate.searching"));
 
             return;
         }
@@ -635,11 +644,13 @@ public partial class Hud : CanvasLayer
             _cardText[i].Visible = used;
 
             if (used)
-                _cardText[i].Text = $"[{i + 1}]\n{_growth!.Describe(_growth.Offer[i])}";
+                _cardText[i].Text = Strings.Get("hud.offer.card", i + 1)
+                                  + "\n" + _growth!.Describe(_growth.Offer[i]);
         }
 
         if (showing && _growth!.PendingPicks > 1)
-            _cardText[_growth.Offer.Length - 1].Text += $"\n(+{_growth.PendingPicks - 1} more)";
+            _cardText[_growth.Offer.Length - 1].Text +=
+                "\n" + Strings.Get("hud.offer.more", _growth.PendingPicks - 1);
     }
 
     /// Red at the edges when hit, and a slow pulse of it while nearly dead. Two
@@ -728,9 +739,11 @@ public partial class Hud : CanvasLayer
         _banner.Visible = true;
         _banner.Text = (RunState)state switch
         {
-            RunState.Extracted => $"EXTRACTED\nbanked {banked}",
-            RunState.Died => "KILLED\nbackpack lost",
-            RunState.TimedOut => "OUT OF TIME",
+            RunState.Extracted => Strings.Get("hud.banner.extracted")
+                                  + "\n" + Strings.Get("hud.banner.banked", banked),
+            RunState.Died => Strings.Get("hud.banner.killed")
+                             + "\n" + Strings.Get("hud.banner.lost"),
+            RunState.TimedOut => Strings.Get("hud.banner.timeout"),
             _ => "",
         };
 
