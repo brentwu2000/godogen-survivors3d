@@ -41,11 +41,20 @@ $skip = @(
     # just saying "slow".
     'DeckMatrix',
 
-    # TouchProbe runs headless perfectly well and has been on this list since
-    # before there was a reason written down for it. Left alone: taking a name
-    # off a skip list is how a sweep starts hanging, and finding out why costs
-    # more than the one probe is worth. Worth revisiting deliberately, not in
-    # passing.
+    # TouchProbe needs a display server that dispatches GUI input, and the
+    # headless one does not.
+    #
+    # This entry said the opposite for several phases — "runs headless perfectly
+    # well, on this list since before there was a reason written down for it" —
+    # and the reason it gave for leaving it alone was that finding out would cost
+    # more than the probe is worth. It cost one run. Headless it does not hang and
+    # it does not pass: three of its five stages fail, because a synthetic finger
+    # on the stick moves the player 0.00 m, a button that should be enabled is
+    # not, and a tap on a level-up card changes no pick. The two that do pass are
+    # the ones asking about wiring rather than about input.
+    #
+    # So it stays skipped, for a reason that is now measured rather than assumed —
+    # and the README entry saying it needs a real display was right all along.
     'TouchProbe'
 )
 

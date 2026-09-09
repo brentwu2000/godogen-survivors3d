@@ -2106,9 +2106,21 @@ matte it. Only one facing is generated; the other is a horizontal flip at runtim
 
 ## What's left
 
-Everything the player looks at has had a pass, the numbers behind it are recorded above, and 45 probes
+Everything the player looks at has had a pass, the numbers behind it are recorded above, and 48 probes
 say the systems do what they claim. What is left is almost entirely **things that need a device or a
 person**, not things that need code.
+
+**This list was read against the code on 2026-09-09, and six of its entries were wrong.** Not
+subtly: the audio bus had grown a limiter, `physics_ticks_per_second` had been pinned, the 4.7.1
+export template had been installed, the proof video had gained elites, a boss and music, one bullet's
+headline was contradicted by its own second paragraph, and the probe count in the sentence above said
+45. Every one of those was fixed by a phase that did the work and did not come back here to say so.
+
+That is worth a paragraph rather than a quiet correction, because a stale roadmap is worse than no
+roadmap: it is a list of things to do, and six of them were already done. The next phase reading it
+would have spent a day fixing what was not broken and would have found out only by looking, which is
+exactly the failure mode this file exists to prevent everywhere else. **Re-read this section against
+the code before starting anything from it.** It is half an hour and it has now paid for itself once.
 
 - **Every balance table was taken under a control scheme the game no longer has.** `[A]`/`[D]`
   strafe now instead of turning the view, which changes how fast a player crosses ground, how much
@@ -2129,8 +2141,8 @@ person**, not things that need code.
   forced it. A probe cannot own this — it is a twenty-minute play-test, not an assertion — so it is a
   thing to re-take whenever a weapon changes, and it is written here because that is the only place
   that will say so. See `WEAPONS.md`.
-- **The player is an authored body; nothing in the horde is, and the two Courier and Warden
-  survivors are not either.** Eight authored bodies were deleted before this one: seven horde
+- **The horde is the only half of the cast still procedural, and holding it there is a decision.**
+  Eight authored bodies were deleted before the first one that worked: seven horde
   variants cut in three.js, and the Drifter's predecessor cut from the blend below. Stood in a row by
   `BodyShot` every one was worse than the `MeshBuilder` body it replaced — the runner came apart into
   scattered sticks, the boss wore its head and both arms detached from the shoulders, the bloater lost
@@ -2152,8 +2164,9 @@ person**, not things that need code.
   read — `Player.CreateBody` loads the bake, appends the held weapon's procedural silhouette to the
   same surface, and falls back to `SoloBody` when the path is empty or the bake will not build; an
   empty path *is* the procedural path. **Two bakes are pointed at**: the stalker, because a quadruped
-  is a silhouette `MeshBuilder` cannot express, and the Drifter. The eight
-  dead `.res` files stay on disk and `BakeProbe` keeps checking them; nothing loads them.
+  is a silhouette `MeshBuilder` cannot express, and the Drifter. Three dead `.res` files are still on
+  the shelf — `kenney_blocky_a`, `kenney_survivor_a`, `polyart_male_c` — and `BakeProbe` checks
+  whatever is in the directory rather than a list, so they are checked and nothing loads them.
 
   **The new one has the same provenance gap as the old one and it is not fixed, only bounded.**
   `assets/models/SOURCE.md` records the sha256 and two blank fields — no page, no licence — so the
@@ -2172,11 +2185,14 @@ person**, not things that need code.
   until that file exists. Nothing loads that output now, which makes the gap a smaller one than it
   was: it blocks a *better* body arriving, not the body the game draws.
 
-- **The APK has never been built, let alone run.** Blocked on three installs this machine does not
-  have: an Android SDK, a JDK, and an export template matching 4.7.1 (the only one present is 4.6.3).
-  `export_presets.cfg` is written and committed — arm64, landscape locked, no permissions, `art-src/`
-  excluded — so with those three in place it is one `godot --headless --export-debug "Android"`. A
-  preset that has never produced an APK is a plan, not a build, and it is listed here as one.
+- **The APK has never been built, let alone run.** Blocked on **two** installs this machine does not
+  have: an Android SDK and a JDK. `java` is not on the path and there is no SDK at the default
+  location. The third blocker this entry used to name is gone — `4.7.1.stable.mono` is in
+  `%APPDATA%/Godot/export_templates` alongside the old 4.6.3, and has been for long enough that
+  nobody noticed. `export_presets.cfg` is written and committed — arm64, landscape locked, no
+  permissions, `art-src/` excluded — so with those two in place it is one
+  `godot --headless --export-debug "Android"`. A preset that has never produced an APK is a plan, not
+  a build, and it is listed here as one.
 - **Mobile performance is unmeasured**, and it is now the only place the triangle budget is still a
   guess. 150–200 concurrent enemies is a desktop measurement and an estimate everywhere else, and
   `ART.md §2`'s horde ceiling of ~4,000 triangles is a margin against a mobile GPU rather than
@@ -2223,8 +2239,13 @@ person**, not things that need code.
   health, reaches 158 s on the Service Rifle and walks out. What is still unmeasured is whether a
   *person* can hold that ground longer, which is the same question as before and now has a floor
   under it.
-- **The proof video is five phases stale.** `test/Presentation.cs` films a game without elites, a
-  boss, biomes, or music.
+- **The proof video films one biome, and that is the only true quarter of what this entry used to
+  say.** It claimed a game without elites, a boss, biomes or music. `Presentation.cs` cues three
+  elites — swift, armoured and volatile — at eight seconds, and cues the boss by dropping `BossAt` to
+  an intensity the run reaches; `MusicDirector` is in `Main.tscn` and the movie writer's `frame.wav`
+  carries what it plays. What is actually missing is the *place*: nothing sets `GameSession.Biome`, so
+  every take is biome 0, the Rail Yard, and the four others have never been filmed. One line in
+  `_Initialize` fixes it, or two takes cut together do it better.
 - **What a *busy* frame costs is unmeasured.** The Performance table's new row is a horde standing
   still: `HordePerf` spawns five hundred bodies and nothing in it fires, kills, explodes or burns, so
   the marks field is empty, the blast lights are off and the corpse field has nothing in it. Every one
@@ -2235,12 +2256,18 @@ person**, not things that need code.
   scales together, so damage per game second is unchanged — and `ImpactProbe` asserts the clock comes
   back. What no probe can say is whether 0.14 for seven and a half hundredths of a second reads as
   weight or as a dropped frame, and it is the one number in this phase that only a player can settle.
-- **`physics_ticks_per_second` is not pinned in `project.godot`** — 60 is the default and Godot strips
-  it. Behaviour is correct today, but moving to 30 Hz means re-checking every damping constant.
-- **The audio bus has no limiter.** The mix keeps its headroom by the master volume alone, set
-  against a captured run; a louder moment than any capture happened to catch would clip rather than
-  compress. The four music layers are quiet enough that all of them at once peak at 0.33, which is
-  measured, but it is headroom by arithmetic rather than by a compressor.
+- ~~**`physics_ticks_per_second` is not pinned in `project.godot`.**~~ It is —
+  `common/physics_ticks_per_second=60`, and `GameRoot` prints the tick rate at startup so a silent
+  revert would be visible in the first line of every run. The caution behind the entry is still worth
+  keeping: moving to 30 Hz means re-checking every damping constant, and the reason that is survivable
+  is that damping here is exponential rather than a per-tick multiplier.
+- ~~**The audio bus has no limiter.**~~ It has one. `AudioBus.Install` puts an
+  `AudioEffectHardLimiter` on bus 0, with no pre-gain — deliberately, because a limiter that also made
+  everything louder would be a mastering decision smuggled in as a safety net. It guards against being
+  installed twice, both by a static flag and by scanning the bus, because a run and the base each
+  build their own sound director and ten limiters in series is nine unnecessary gain stages rather
+  than ten times the protection. The measured headroom the entry quoted is still true: four music
+  layers at once peak at 0.33.
 - **Kenney is CC0 and safe to commit; Quaternius is no longer CC0.** This line used to name both, and
   as of 2026-08-28 Quaternius ships under the Quaternius Asset License v1.0 instead — generous about
   *use* (commercial, no fee, no attribution) and forbidding redistribution of the assets themselves
