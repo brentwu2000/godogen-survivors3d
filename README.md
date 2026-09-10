@@ -2332,12 +2332,19 @@ the code before starting anything from it.** It is half an hour and it has now p
   Still owed in `WEAPONS.md`: the Primary shelf, the axe pairings and the pair budget, last measured
   at `74e2a72` — thirty-one commits before the driver learned to strafe.
 - **The pair budget is 133% against a rule of 115%, and it is a design decision nobody has taken.**
-  Re-measured 2026-09-09: 927 banked per attempt on one weapon against 1233 on two. The rule is "a
-  pair inside about 115% of one weapon"; it was 110% at the step-1 rework, 138% four phases later, and
-  133% now — so the drift stopped and the excess did not go away. A probe cannot own this: it is a
-  twenty-minute play-test, not an assertion, and it is caught only when somebody runs
-  `lingers:auto slots:both` by hand. What is left is not the measurement, it is deciding whether to
-  move the second slot down or to move the rule. See `WEAPONS.md`.
+  Re-measured 2026-09-09 and again on 2026-09-10: 927 banked per attempt on one weapon against 1233 on
+  two, **both times to the digit.** The rule is "a pair inside about 115% of one weapon"; it was 110%
+  at the step-1 rework, 138% four phases later, and 133% at both of the last two takings — so the
+  drift stopped and the excess did not go away.
+
+  **That the two runs agree exactly is worth knowing about every table in this file.** `BalanceSweep`
+  is deterministic: fixed seeds, a fixed driver, `--fixed-fps`. Re-running a table changes nothing
+  unless the *game* changed, which means "owed a re-take" is never about sampling noise — it is about
+  whether anything moved underneath since. The sidearm shelf moved because the driver learned to
+  strafe between the two takings; this did not, because it was already taken after that.
+
+  So the measurement excuse is gone. A probe cannot own the rest: it is a decision, not an assertion —
+  whether to move the second slot down or to move the rule. See `WEAPONS.md`.
 - **The horde is the only half of the cast still procedural, and holding it there is a decision.**
   Eight authored bodies were deleted before the first one that worked: seven horde
   variants cut in three.js, and the Drifter's predecessor cut from the blend below. Stood in a row by
