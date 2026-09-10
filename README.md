@@ -2156,8 +2156,8 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
 | `assets/ui/portraits/*.png` | the roster design sheet, via `art-src/ui/cut_portraits.py` | 5 x 292x619 | the survivor select cards |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
-| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 84 KB, 384 glyphs | the UI, in both languages |
-| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 139 keys x 2 locales | the roster, the HUD, the growth cards, the debrief, the shelter's prompts |
+| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 99 KB, 448 glyphs | the UI, in both languages |
+| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 221 keys x 2 locales | every screen the game draws; the nouns in `.tres` are still English |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
 barriers, rubble heaps, walls, dumpsters, and two landmarks — and `PropRenderer` draws each kind as
@@ -2209,22 +2209,24 @@ would have spent a day fixing what was not broken and would have found out only 
 exactly the failure mode this file exists to prevent everywhere else. **Re-read this section against
 the code before starting anything from it.** It is half an hour and it has now paid for itself once.
 
-- **The game speaks Chinese on six screens and English on the seventh, and the nouns are English
-  everywhere.** `UI.md` carries the plan and the order; what is done is the roster, the Console
-  fitting, the HUD, the growth cards, the debrief and the shelter's fitting prompts — 139 keys across
-  two locales, against a 384-glyph subset that `FontProbe` re-checks every sweep.
+- **Every screen speaks Chinese and every noun on them is still English.** `UI.md` carries the plan
+  and the order; what is done is the roster, the Console fitting, the HUD, the growth cards, the
+  debrief, the shelter's fitting prompts and the base screen's six pages and twenty-three messages —
+  221 keys across two locales, against a 448-glyph subset that `FontProbe` re-checks every sweep.
 
-  **What is left is `BaseScreen`'s six pages and then the content nouns.** The pages are about 34
-  literals and are the screen a player spends the between-runs time on. The nouns are a different
-  shape and a larger job: fifteen weapon names, twenty items, seventeen gear pieces, nine enemy
-  variants, five biomes and their blurbs, the contract lines, the unlock conditions and the collection
-  sets are all English literals that `Build*.cs` writes into `.tres`, so the fix is a key convention in
-  the tools rather than more `Strings.Get` at the call sites. `CharacterResource.Blurb` already holds a
-  key rather than a sentence and is the pattern to copy.
+  **What is left is the content nouns, and it is a different job rather than more of the same one.**
+  Fifteen weapon names, twenty items, seventeen gear pieces, nine enemy variants, five biomes and
+  their blurbs, the contract lines, the unlock conditions and the collection sets are English literals
+  that `Build*.cs` writes into `.tres`, so the screens read them and draw them without the table ever
+  being asked. The fix is a key convention in the tools rather than more `Strings.Get` at the call
+  sites; `CharacterResource.Role` and `.Blurb` already hold keys rather than sentences and are the
+  pattern to copy.
 
-  **Doing the pages first will look unfinished, and that is the honest order rather than a mistake.**
-  Chrome without nouns reads as "買了 Service Rifle，花了 350" on every line of the shop — the content
-  half is not polish deferred behind the chrome, it is what makes the chrome look done.
+  **That the chrome is done is what makes the gap visible, which is what the order was for.** The
+  armoury draws `Combat Knife  [已裝上]` and `Fire Axe  250 點`, and the summary line under the cursor
+  is still `6 dmg  3.2/s  1.6 m  bleed`. Every padded column lines up in Chinese, because `[已裝上]` is
+  six cells where `[equipped]` is eleven and `Strings.Pad` counts cells — the last three columns still
+  using C#'s `{x,-18}` were converted with the pages.
 
   The failure mode this track has already produced once is a field that *is* a key being interpolated
   rather than resolved: the base screen drew "playing as RIN — character.rin.blurb" from the moment the

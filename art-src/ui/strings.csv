@@ -138,3 +138,85 @@ fitting.map.first,change terrain,更換地形
 fitting.map.second,play today's run,今日挑戰
 fitting.gate.title,GATE,大門
 fitting.gate.first,launch,出發
+base.header,BASE     credits {0}     stash worth {1}     runs {2} out / {3} lost,基地     信用點 {0}     存貨 {1}     撤離 {2} 次 / 陣亡 {3} 次
+base.walk.header,credits {0}      stash worth {1}      runs {2} out / {3} lost,信用點 {0}      存貨 {1}      撤離 {2} 次 / 陣亡 {3} 次
+base.walk,walk to a fitting,走到一個設施前面
+base.practice,practice   knife {0}   long {1}   bow {2}   firearm {3}   tech {4}   (not for sale),熟練度   刀 {0}   長柄 {1}   弓 {2}   槍械 {3}   科技 {4}   (不販售)
+base.heading,heading for  {0} — {1}   [B] change{2},前往  {0} — {1}   [B] 更換{2}
+base.next,(next opens after {0} extractions),(下一個要撤離 {0} 次才開放)
+base.playing,playing as   {0} — {1},本次出擊   {0} — {1}
+base.stats,{0} hp   {1} m/s   {2} bulk   [C] at the gate to change,{0} 生命   {1} 米/秒   {2} 負重   [C] 在大門更換
+base.above,... {0} above,... 上面還有 {0} 個
+base.below,... {0} below,... 下面還有 {0} 個
+base.state.locked,[locked],[未開放]
+base.state.equipped,[equipped],[已裝上]
+base.state.owned,[owned],[已擁有]
+base.state.price,{0} cr,{0} 點
+base.state.none,—,—
+base.note.lost,(lost if you die),(陣亡就失去)
+locker.worth,everything carried out of a run and not spent: {0} credits,帶出來還沒花掉的東西：{0} 信用點
+locker.empty,empty — nothing has come back yet,空的 — 還沒有東西被帶回來
+locker.row,{0} x {1},{0} x {1}
+records.best,banked {0}      killed {1}      lasted {2}s,帶回 {0}      擊殺 {1}      撐了 {2} 秒
+records.streak,multiplier x{0}      streak {1} (now {2}),倍率 x{0}      連勝 {1}（現在 {2}）
+records.crates,crates {0}      best throw {1}      bosses {2},補給箱 {0}      最佳投擲 {1}      首領 {2}
+records.escape,narrowest escape {0}      fastest out {1},最險脫身 {0}      最快撤離 {1}
+records.hp,{0} HP,{0} 生命
+records.secs,{0}s,{0} 秒
+records.practice,practice   knife {0}   long {1}   bow {2}   firearm {3}   tech {4},熟練度   刀 {0}   長柄 {1}   弓 {2}   槍械 {3}   科技 {4}
+records.curiosities,CURIOSITIES,收藏品
+records.set,{0}  {1}/{2},{0}  {1}/{2}
+records.set.paid,— paid,— 已領
+records.set.bounty,— {0} cr,— {0} 點
+records.piece,[{0}] {1},[{0}] {1}
+records.keep,selling one does not lose it — the record is kept at the door,賣掉不會失去紀錄 — 紀錄留在門口
+board.title,CONTRACT BOARD,合約板
+board.row,{0} {1} cr,{0} {1} 點
+board.taking,<- taking this,<- 已接下
+board.note,"a contract is a promise about how you play, not a bonus",合約是對打法的承諾，不是獎金
+board.none.1,"none taken — a run without one still pays,",沒接 — 不接一樣有收益，
+board.none.2,it just does not ask anything of you,只是不會對你有任何要求
+map.heading,heading for  {0},前往  {0}
+map.next,the next opens after {0} extractions,下一個要撤離 {0} 次才開放
+map.today,TODAY  {0},今日  {0}
+map.today.job,{0} — {1},{0} — {1}
+map.today.done,done: {0} points,已完成：{0} 分
+map.today.streak,{0} days running,連續 {0} 天
+map.today.terms,"one attempt, no credits, no risk",一次機會，沒有信用點，也沒有風險
+gate.contract,carrying a contract: {0},帶著合約：{0}
+gate.nocontract,no contract,沒有合約
+gate.warning,everything above starting kit is lost if you do not come back,沒回來的話，起始配備以外的全部失去
+prompt.credits,credits {0},信用點 {0}
+prompt.stash,stash   {0},存貨   {0}
+prompt.walk,[W][S] walk   [A][D] turn,[W][S] 走動   [A][D] 轉向
+prompt.fittings.1,"armoury, locker, records,",軍械庫、置物櫃、紀錄、
+prompt.fittings.2,"board, map table, gate",合約、地圖桌、大門
+prompt.first,[E] {0},[E] {0}
+prompt.second,[C] {0},[C] {0}
+prompt.choose,up/down choose,上下選擇
+fitting.armoury.sidearm,carry as sidearm,當副武器帶著
+msg.join,; ,；
+msg.records.nothing,nothing to do here — this is the record book,這裡沒事做 — 這是紀錄簿
+msg.nothing,nothing else to do here,這裡沒有別的事可做
+msg.locked,{0} is locked — {1},{0} 尚未開放 — {1}
+msg.notforsale,{0} is not for sale,{0} 不販售
+msg.cannotafford,{0} costs {1}; you have {2},{0} 要 {1}；你有 {2}
+msg.bought,bought {0} for {1},買了 {0}，花了 {1}
+msg.worn,"{0} is worn, not carried",{0} 是穿的，不是拿的
+msg.bothhands,{0} takes both hands,{0} 要兩隻手
+msg.sidearm,carrying {0} as sidearm,把 {0} 當副武器帶著
+msg.notowned,you do not own {0},你沒有 {0}
+msg.startingkit,{0} is starting kit — it is what a dead run comes back to,{0} 是起始配備 — 陣亡之後回來的就是它
+msg.cannotsell,{0} cannot be sold,{0} 不能賣
+msg.sold,sold {0} back for {1},賣回 {0}，得到 {1}
+msg.sold.slot, — back to starting kit in that slot, — 那一格回到起始配備
+msg.wearing,wearing {0},穿上 {0}
+msg.carrying,carrying {0},拿著 {0}
+msg.contract.took,took the contract: {0},接下合約：{0}
+msg.reroll.poor,a new board costs {0}; you have {1},重擲要 {0}；你有 {1}
+msg.reroll,new contracts for {0},花 {0} 換了一批新合約
+msg.stash.empty,nothing in the stash,存貨是空的
+msg.stash.sold,sold the stash for {0},賣掉存貨，得到 {0}
+msg.biome,heading for {0},前往 {0}
+msg.biome.none,nowhere else to go yet,還沒有別的地方可去
+msg.daily.done,today's run is done — {0} points. the next one is tomorrow,今日挑戰已完成 — {0} 分。下一次是明天

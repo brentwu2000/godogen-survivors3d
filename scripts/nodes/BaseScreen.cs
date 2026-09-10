@@ -65,7 +65,22 @@ public partial class BaseScreen : Control
         _catalogue = new ShopCatalogue();
         _shelter = GetParent()?.GetNodeOrNull<Shelter>("Shelter");
 
-        if (_shelter != null)
+        // **A missing shelter is a broken scene, and it used to be a second
+        // screen.** This class carried a whole flat layout for the case — every
+        // page's content in two columns at once, plus a `SideColumn` that
+        // restated the records, the daily and the contract board — reachable only
+        // if `Base.tscn` had no `Shelter` sibling. `BuildBase.cs` adds one
+        // unconditionally, so nothing had rendered it for as long as the room has
+        // existed, and it was quietly diverging: a phase that changed a page
+        // changed the page.
+        //
+        // Dead code that draws a screen is worse than dead code that does not.
+        // It reads as a supported layout, so it asks to be kept working — and the
+        // localisation phase would have translated sixty lines of it before
+        // anybody asked whether a player can reach it.
+        if (_shelter == null)
+            GD.PushError("Base.tscn has no Shelter sibling — the base screen has no page to draw");
+        else
             _shelter.FocusChanged += _ => Redraw();
 
         // A player who has never played goes straight into a run.
@@ -154,7 +169,7 @@ public partial class BaseScreen : Control
 
             // Records has nothing to press. Saying so is better than a key that
             // silently does nothing, which the player reads as a bug in the key.
-            case Fitting.Records: _message = "nothing to do here — this is the record book"; break;
+            case Fitting.Records: _message = Strings.Get("msg.records.nothing"); break;
 
             default: Choose(); break;
         }
@@ -192,7 +207,7 @@ public partial class BaseScreen : Control
             default:
                 (_, _, string second) = Shelter.Prompt(Focus);
                 if (second.Length == 0)
-                    _message = "nothing else to do here";
+                    _message = Strings.Get("msg.nothing");
 
                 break;
         }
@@ -246,13 +261,13 @@ public partial class BaseScreen : Control
         // player off to earn credits that will not help.
         if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
         {
-            _message = $"{entry.Name} is locked — {reason.ToLower()}";
+            _message = Strings.Get("msg.locked", entry.Name, reason.ToLower());
             return false;
         }
 
         if (entry.Price <= 0)
         {
-            _message = $"{entry.Name} is not for sale";
+            _message = Strings.Get("msg.notforsale", entry.Name);
             return false;
         }
 
@@ -260,13 +275,13 @@ public partial class BaseScreen : Control
         {
             // Nothing is deducted and nothing is granted. A partial purchase is
             // the one outcome a shop must never have.
-            _message = $"{entry.Name} costs {entry.Price}; you have {_profile.Credits}";
+            _message = Strings.Get("msg.cannotafford", entry.Name, entry.Price, _profile.Credits);
             return false;
         }
 
         _profile.Credits -= entry.Price;
         _profile.Grant(entry.Path);
-        _message = $"bought {entry.Name} for {entry.Price}";
+        _message = Strings.Get("msg.bought", entry.Name, entry.Price);
         return true;
     }
 
@@ -288,7 +303,7 @@ public partial class BaseScreen : Control
 
         if (entry.Slot != null)
         {
-            _message = $"{entry.Name} is worn, not carried";
+            _message = Strings.Get("msg.worn", entry.Name);
             return;
         }
 
@@ -300,7 +315,7 @@ public partial class BaseScreen : Control
         // is built to refuse.
         if (wanted != null && wanted.Slot != WeaponSlot.Sidearm)
         {
-            _message = $"{entry.Name} takes both hands";
+            _message = Strings.Get("msg.bothhands", entry.Name);
             return;
         }
 
@@ -313,7 +328,7 @@ public partial class BaseScreen : Control
             _profile.LoadoutWeapon = "res://resources/weapons/scavenged_rifle.tres";
 
         _profile.LoadoutSecondary = entry.Path;
-        _message = $"{_message}{(_message.Length > 0 ? "; " : "")}carrying {entry.Name} as sidearm";
+        _message = Join(_message, Strings.Get("msg.sidearm", entry.Name));
         Persist();
     }
 
@@ -335,13 +350,13 @@ public partial class BaseScreen : Control
 
         if (!_profile.Owns(entry.Path))
         {
-            _message = $"you do not own {entry.Name}";
+            _message = Strings.Get("msg.notowned", entry.Name);
             return;
         }
 
         if (Profile.IsStartingKit(entry.Path))
         {
-            _message = $"{entry.Name} is starting kit — it is what a dead run comes back to";
+            _message = Strings.Get("msg.startingkit", entry.Name);
             return;
         }
 
@@ -350,13 +365,13 @@ public partial class BaseScreen : Control
 
         if (!_profile.Revoke(entry.Path))
         {
-            _message = $"{entry.Name} cannot be sold";
+            _message = Strings.Get("msg.cannotsell", entry.Name);
             return;
         }
 
         _profile.Credits += refund;
-        _message = $"sold {entry.Name} back for {refund}" +
-                   (wasEquipped ? " — back to starting kit in that slot" : "");
+        _message = Strings.Get("msg.sold", entry.Name, refund)
+                 + (wasEquipped ? Strings.Get("msg.sold.slot") : "");
         Persist();
     }
 
@@ -370,7 +385,7 @@ public partial class BaseScreen : Control
         if (entry.Slot is { } slot)
         {
             _profile.EquippedGear[(int)slot] = entry.Path;
-            _message = $"{_message}{(_message.Length > 0 ? "; " : "")}wearing {entry.Name}";
+            _message = Join(_message, Strings.Get("msg.wearing", entry.Name));
             return;
         }
 
@@ -386,7 +401,7 @@ public partial class BaseScreen : Control
         else
             _profile.LoadoutWeapon = entry.Path;
 
-        _message = $"{_message}{(_message.Length > 0 ? "; " : "")}carrying {entry.Name}";
+        _message = Join(_message, Strings.Get("msg.carrying", entry.Name));
     }
 
     /// Commits to one of the three jobs on the board.
@@ -402,7 +417,7 @@ public partial class BaseScreen : Control
             return;
 
         _profile.ContractIndex = index;
-        _message = $"took the contract: {offer[index].Describe()}";
+        _message = Strings.Get("msg.contract.took", offer[index].Describe());
         Persist();
     }
 
@@ -412,13 +427,13 @@ public partial class BaseScreen : Control
     {
         if (_profile.Credits < ContractBook.RerollCost)
         {
-            _message = $"a new board costs {ContractBook.RerollCost}; you have {_profile.Credits}";
+            _message = Strings.Get("msg.reroll.poor", ContractBook.RerollCost, _profile.Credits);
             return;
         }
 
         _profile.Credits -= ContractBook.RerollCost;
         _profile.RollContracts();
-        _message = $"new contracts for {ContractBook.RerollCost}";
+        _message = Strings.Get("msg.reroll", ContractBook.RerollCost);
         Persist();
     }
 
@@ -429,13 +444,13 @@ public partial class BaseScreen : Control
         int value = ShopCatalogue.StashValue(_profile);
         if (value <= 0)
         {
-            _message = "nothing in the stash";
+            _message = Strings.Get("msg.stash.empty");
             return;
         }
 
         _profile.Credits += value;
         _profile.Stash.Clear();
-        _message = $"sold the stash for {value}";
+        _message = Strings.Get("msg.stash.sold", value);
         Persist();
     }
 
@@ -604,7 +619,7 @@ public partial class BaseScreen : Control
             : new Color(0.42f, 0.44f, 0.50f);
 
         _screen.Text = Unix(RosterScreen());
-        _side.Text = Unix(_shelter == null ? SideColumn() : PromptColumn());
+        _side.Text = Unix(PromptColumn());
     }
 
     /// The roster, drawn into the same label the shop uses.
@@ -702,12 +717,12 @@ public partial class BaseScreen : Control
                 continue;
 
             _profile.Biome = next;
-            _message = $"heading for {BiomeBook.Load(next).BiomeName}";
+            _message = Strings.Get("msg.biome", BiomeBook.Load(next).BiomeName);
             Persist();
             return;
         }
 
-        _message = "nowhere else to go yet";
+        _message = Strings.Get("msg.biome.none");
     }
 
     /// Today's run, once.
@@ -722,8 +737,7 @@ public partial class BaseScreen : Control
 
         if (_profile.DailyDone(today.DateKey))
         {
-            _message = $"today's run is done — {_profile.Daily[today.DateKey]} points. " +
-                       $"the next one is tomorrow";
+            _message = Strings.Get("msg.daily.done", _profile.Daily[today.DateKey]);
             return;
         }
 
@@ -776,15 +790,16 @@ public partial class BaseScreen : Control
 
         var text = new System.Text.StringBuilder();
 
-        text.AppendLine($"BASE     credits {_profile.Credits}     " +
-                        $"stash worth {ShopCatalogue.StashValue(_profile)}     " +
-                        $"runs {_profile.RunsSurvived} out / {_profile.RunsLost} lost");
+        text.AppendLine(Strings.Get("base.header", _profile.Credits,
+                                    ShopCatalogue.StashValue(_profile),
+                                    _profile.RunsSurvived, _profile.RunsLost));
 
         // Practice is listed but has no price. It is the one axis the shop
         // cannot reach, and saying so on the screen is cheaper than a player
         // wondering why it is missing.
-        text.AppendLine($"practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
-                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   tech {_profile.Proficiency[4]}   (not for sale)");
+        text.AppendLine(Strings.Get("base.practice", _profile.Proficiency[0], _profile.Proficiency[1],
+                                    _profile.Proficiency[2], _profile.Proficiency[3],
+                                    _profile.Proficiency[4]));
 
         // Where the run is going, on the shop screen rather than at launch.
         // Terrain has to be known while equipment is being bought, or the
@@ -792,10 +807,10 @@ public partial class BaseScreen : Control
         // the two exist.
         BiomeResource here = BiomeBook.Load(_profile.Biome);
         string more = BiomeBook.All.Length > 1 && !BiomeBook.Allows(_profile, _profile.Biome + 1)
-            ? $"   (next opens after {BiomeBook.OpensAt(_profile.Biome + 1)} extractions)"
+            ? "   " + Strings.Get("base.next", BiomeBook.OpensAt(_profile.Biome + 1))
             : "";
 
-        text.AppendLine($"heading for  {here.BiomeName} — {here.Blurb}   [B] change{more}");
+        text.AppendLine(Strings.Get("base.heading", here.BiomeName, here.Blurb, more));
 
         // Who is going, next to where they are going. The two lines are read
         // together because the choice is made together.
@@ -810,9 +825,9 @@ public partial class BaseScreen : Control
         // Nothing caught it because nothing could: the string is present and
         // non-empty, `Get` is never called so there is no `«key»` to notice, and
         // the only reader is an eye on the one screen the probes do not render.
-        text.AppendLine($"playing as   {who.CharacterName} — {Strings.Get(who.Blurb)}");
-        text.AppendLine($"             {who.MaxHealth:F0} hp   {who.MoveSpeed:F1} m/s   "
-                      + $"{who.CarryCapacity} bulk   [C] at the gate to change");
+        text.AppendLine(Strings.Get("base.playing", who.CharacterName, Strings.Get(who.Blurb)));
+        text.AppendLine("             " + Strings.Get("base.stats", $"{who.MaxHealth:F0}",
+                                                      $"{who.MoveSpeed:F1}", who.CarryCapacity));
 
         // What the cursor is on, in the piece's own numbers.
         //
@@ -839,7 +854,7 @@ public partial class BaseScreen : Control
         (int first, int last) = Window(_catalogue.All.Count);
 
         if (first > 0)
-            text.AppendLine($"     ... {first} above");
+            text.AppendLine("     " + Strings.Get("base.above", first));
 
         for (int i = first; i < last; i++)
         {
@@ -853,21 +868,25 @@ public partial class BaseScreen : Control
             // game ever explains how to get it.
             string? locked = owned ? null : UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier);
 
-            string state = locked != null ? "[locked]"
-                : equipped ? "[equipped]"
-                : owned ? "[owned]"
-                : entry.Price > 0 ? $"{entry.Price} cr"
-                : "—";
+            string state = locked != null ? Strings.Get("base.state.locked")
+                : equipped ? Strings.Get("base.state.equipped")
+                : owned ? Strings.Get("base.state.owned")
+                : entry.Price > 0 ? Strings.Get("base.state.price", entry.Price)
+                : Strings.Get("base.state.none");
 
             string note = locked != null ? $"  {locked.ToLower()}"
-                : !Profile.IsStartingKit(entry.Path) && owned ? "  (lost if you die)"
+                : !Profile.IsStartingKit(entry.Path) && owned ? "  " + Strings.Get("base.note.lost")
                 : "";
 
-            text.AppendLine($"{(i == _cursor ? " >" : "  ")} {entry.Name,-18} {state,-12}{note}");
+            // Padded by cells, not by characters. `[已裝上]` is six cells and
+            // eight would be counted by `{state,-12}`, so the note column would
+            // start in a different place on every translated row.
+            text.AppendLine($"{(i == _cursor ? " >" : "  ")} "
+                          + Strings.Pad(entry.Name, 18) + " " + Strings.Pad(state, 12) + note);
         }
 
         if (last < _catalogue.All.Count)
-            text.AppendLine($"     ... {_catalogue.All.Count - last} below");
+            text.AppendLine("     " + Strings.Get("base.below", _catalogue.All.Count - last));
 
         // Newlines normalised on the way into the Label.
         //
@@ -881,11 +900,21 @@ public partial class BaseScreen : Control
         // flat screen showed all of it at once, which is why every decision on it
         // cost the same — a shop, a contract board, a record book and a launch
         // button competing for one reader.
-        _screen.Text = Unix(_shelter == null ? text.ToString() : Page(text.ToString()));
-        _side.Text = Unix(_shelter == null ? SideColumn() : PromptColumn());
+        _screen.Text = Unix(Page(text.ToString()));
+        _side.Text = Unix(PromptColumn());
     }
 
     private static string Unix(string text) => text.Replace("\r\n", "\n");
+
+    /// Two things that happened to one key, in one line.
+    ///
+    /// The separator is a key rather than a literal "; ", because a Chinese
+    /// clause joined by a Latin semicolon and a space reads as a typo. It is the
+    /// same call the roster made the other way round: the comma between ability
+    /// values stayed Latin, because that is a list of numbers and takes the Latin
+    /// comma even in Chinese typesetting, while this joins two sentences.
+    private static string Join(string first, string second) =>
+        first.Length > 0 ? first + Strings.Get("msg.join") + second : second;
 
     /// The page for whatever the player is standing at.
     ///
@@ -913,10 +942,11 @@ public partial class BaseScreen : Control
     private string WalkingPage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine($"credits {_profile.Credits}      stash worth {ShopCatalogue.StashValue(_profile)}" +
-                        $"      runs {_profile.RunsSurvived} out / {_profile.RunsLost} lost");
+        text.AppendLine(Strings.Get("base.walk.header", _profile.Credits,
+                                    ShopCatalogue.StashValue(_profile),
+                                    _profile.RunsSurvived, _profile.RunsLost));
         text.AppendLine();
-        text.AppendLine("  walk to a fitting");
+        text.AppendLine("  " + Strings.Get("base.walk"));
         return text.ToString();
     }
 
@@ -968,21 +998,21 @@ public partial class BaseScreen : Control
     private string LockerPage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine("LOCKER");
+        text.AppendLine(Strings.Get("fitting.locker.title"));
         text.AppendLine();
 
         int worth = ShopCatalogue.StashValue(_profile);
-        text.AppendLine($"  everything carried out of a run and not spent: {worth} credits");
+        text.AppendLine("  " + Strings.Get("locker.worth", worth));
         text.AppendLine();
 
         if (_profile.Stash.Count == 0)
         {
-            text.AppendLine("  empty — nothing has come back yet");
+            text.AppendLine("  " + Strings.Get("locker.empty"));
             return text.ToString();
         }
 
         foreach (var entry in _profile.Stash)
-            text.AppendLine($"  {entry.Value,3} x {entry.Key}");
+            text.AppendLine("  " + Strings.Get("locker.row", Strings.PadLeft($"{entry.Value}", 3), entry.Key));
 
         return text.ToString();
     }
@@ -990,41 +1020,50 @@ public partial class BaseScreen : Control
     private string RecordsPage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine("RECORDS");
+        text.AppendLine(Strings.Get("fitting.records.title"));
         text.AppendLine();
-        text.AppendLine($"  banked {_profile.BestBank}      killed {_profile.BestKills}      " +
-                        $"lasted {_profile.BestSeconds:F0}s");
-        text.AppendLine($"  multiplier x{_profile.BestMultiplier:F2}      " +
-                        $"streak {_profile.BestStreak} (now {_profile.Streak})");
-        text.AppendLine($"  crates {_profile.MostCrates}      best throw {_profile.BestThrow}      " +
-                        $"bosses {_profile.BestBossKills}");
-        text.AppendLine($"  narrowest escape {(_profile.HasNarrowEscape ? $"{_profile.NarrowestEscape:F0} HP" : "—")}" +
-                        $"      fastest out {(_profile.HasFastExtraction ? $"{_profile.FastestExtraction:F0}s" : "—")}");
+        text.AppendLine("  " + Strings.Get("records.best", _profile.BestBank, _profile.BestKills,
+                                           $"{_profile.BestSeconds:F0}"));
+        text.AppendLine("  " + Strings.Get("records.streak", $"{_profile.BestMultiplier:F2}",
+                                           _profile.BestStreak, _profile.Streak));
+        text.AppendLine("  " + Strings.Get("records.crates", _profile.MostCrates,
+                                           _profile.BestThrow, _profile.BestBossKills));
+        text.AppendLine("  " + Strings.Get("records.escape",
+            _profile.HasNarrowEscape ? Strings.Get("records.hp", $"{_profile.NarrowestEscape:F0}")
+                                     : Strings.Get("base.state.none"),
+            _profile.HasFastExtraction ? Strings.Get("records.secs", $"{_profile.FastestExtraction:F0}")
+                                       : Strings.Get("base.state.none")));
         text.AppendLine();
-        text.AppendLine($"  practice   knife {_profile.Proficiency[0]}   long {_profile.Proficiency[1]}   " +
-                        $"bow {_profile.Proficiency[2]}   firearm {_profile.Proficiency[3]}   tech {_profile.Proficiency[4]}");
+        text.AppendLine("  " + Strings.Get("records.practice", _profile.Proficiency[0],
+                                           _profile.Proficiency[1], _profile.Proficiency[2],
+                                           _profile.Proficiency[3], _profile.Proficiency[4]));
         text.AppendLine();
 
         // The sets, with pieces ticked. On the records wall rather than the
         // locker, because this is the one screen that is about what has been done
         // rather than about what to buy — and a collection listed next to a price
         // reads as something to shop for.
-        text.AppendLine("CURIOSITIES");
+        text.AppendLine(Strings.Get("records.curiosities"));
 
         for (int set = 0; set < CollectionBook.All.Length; set++)
         {
             CollectionBook.Set entry = CollectionBook.All[set];
             bool claimed = _profile.ClaimedSets.Contains(entry.Name);
 
-            text.AppendLine($"  {entry.Name}  {CollectionBook.Found(_profile, set)}/{entry.Pieces.Length}" +
-                            (claimed ? "  — paid" : $"  — {entry.Bounty} cr"));
+            text.AppendLine("  " + Strings.Get("records.set", entry.Name,
+                                               CollectionBook.Found(_profile, set), entry.Pieces.Length)
+                          + "  " + (claimed ? Strings.Get("records.set.paid")
+                                            : Strings.Get("records.set.bounty", entry.Bounty)));
 
             foreach (string piece in entry.Pieces)
-                text.AppendLine($"    [{(_profile.Collected.Contains(piece) ? "x" : " ")}] {piece}");
+            {
+                text.AppendLine("    " + Strings.Get("records.piece",
+                    _profile.Collected.Contains(piece) ? "x" : " ", piece));
+            }
         }
 
         text.AppendLine();
-        text.AppendLine("  selling one does not lose it — the record is kept at the door");
+        text.AppendLine("  " + Strings.Get("records.keep"));
 
         return text.ToString();
     }
@@ -1032,21 +1071,36 @@ public partial class BaseScreen : Control
     private string BoardPage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine("CONTRACT BOARD");
+        text.AppendLine(Strings.Get("board.title"));
         text.AppendLine();
 
         Contract[] offer = _profile.ContractOffer();
         for (int i = 0; i < offer.Length; i++)
         {
             bool taken = _profile.ContractIndex == i;
-            text.AppendLine($"{(i == _contractCursor ? " >" : "  ")} {offer[i].Describe(),-34} " +
-                            $"{offer[i].Reward,4} cr" + (taken ? "   <- taking this" : ""));
+
+            // `Strings.Pad` rather than `{x,-34}`. A translated job description
+            // is Han and C#'s alignment counts characters, so the reward column
+            // would sit somewhere different on every row — the same drift the
+            // roster was rebuilt to stop.
+            text.AppendLine($"{(i == _contractCursor ? " >" : "  ")} "
+                          + Strings.Get("board.row", Strings.Pad(offer[i].Describe(), 34),
+                                        Strings.PadLeft($"{offer[i].Reward}", 4))
+                          + (taken ? "   " + Strings.Get("board.taking") : ""));
         }
 
         text.AppendLine();
-        text.AppendLine(_profile.HasContract
-            ? "  a contract is a promise about how you play, not a bonus"
-            : "  none taken — a run without one still pays,\n  it just does not ask anything of you");
+
+        // Two lines rather than one string with a newline in it. The English
+        // sentence broke where English breaks; a translator needs the break
+        // wherever their sentence breaks, and cannot move it inside a cell.
+        if (_profile.HasContract)
+            text.AppendLine("  " + Strings.Get("board.note"));
+        else
+        {
+            text.AppendLine("  " + Strings.Get("board.none.1"));
+            text.AppendLine("  " + Strings.Get("board.none.2"));
+        }
 
         return text.ToString();
     }
@@ -1054,15 +1108,15 @@ public partial class BaseScreen : Control
     private string MapPage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine("MAP TABLE");
+        text.AppendLine(Strings.Get("fitting.map.title"));
         text.AppendLine();
 
         BiomeResource here = BiomeBook.Load(_profile.Biome);
-        text.AppendLine($"  heading for  {here.BiomeName}");
+        text.AppendLine("  " + Strings.Get("map.heading", here.BiomeName));
         text.AppendLine($"  {here.Blurb}");
 
         if (BiomeBook.All.Length > 1 && !BiomeBook.Allows(_profile, _profile.Biome + 1))
-            text.AppendLine($"  the next opens after {BiomeBook.OpensAt(_profile.Biome + 1)} extractions");
+            text.AppendLine("  " + Strings.Get("map.next", BiomeBook.OpensAt(_profile.Biome + 1)));
 
         text.AppendLine();
 
@@ -1070,12 +1124,14 @@ public partial class BaseScreen : Control
         bool done = _profile.DailyDone(today.DateKey);
         int streak = _profile.DailyStreak(today.DateKey);
 
-        text.AppendLine($"  TODAY  {today.DateKey}");
-        text.AppendLine($"    {BiomeBook.Load(today.Biome).BiomeName} — {today.Job.Describe()}");
+        text.AppendLine("  " + Strings.Get("map.today", today.DateKey));
+        text.AppendLine("    " + Strings.Get("map.today.job",
+                                             BiomeBook.Load(today.Biome).BiomeName,
+                                             today.Job.Describe()));
         text.AppendLine(done
-            ? $"    done: {_profile.Daily[today.DateKey]} points" +
-              (streak > 1 ? $"      {streak} days running" : "")
-            : "    one attempt, no credits, no risk");
+            ? "    " + Strings.Get("map.today.done", _profile.Daily[today.DateKey])
+              + (streak > 1 ? "      " + Strings.Get("map.today.streak", streak) : "")
+            : "    " + Strings.Get("map.today.terms"));
 
         return text.ToString();
     }
@@ -1083,16 +1139,17 @@ public partial class BaseScreen : Control
     private string GatePage()
     {
         var text = new System.Text.StringBuilder();
-        text.AppendLine("GATE");
+        text.AppendLine(Strings.Get("fitting.gate.title"));
         text.AppendLine();
 
         BiomeResource here = BiomeBook.Load(_profile.Biome);
         text.AppendLine($"  {here.BiomeName}");
         text.AppendLine(_profile.HasContract
-            ? $"  carrying a contract: {_profile.ContractOffer()[_profile.ContractIndex].Describe()}"
-            : "  no contract");
+            ? "  " + Strings.Get("gate.contract",
+                                 _profile.ContractOffer()[_profile.ContractIndex].Describe())
+            : "  " + Strings.Get("gate.nocontract"));
         text.AppendLine();
-        text.AppendLine("  everything above starting kit is lost if you do not come back");
+        text.AppendLine("  " + Strings.Get("gate.warning"));
 
         return text.ToString();
     }
@@ -1107,34 +1164,38 @@ public partial class BaseScreen : Control
         var text = new System.Text.StringBuilder();
         (string title, string first, string second) = Shelter.Prompt(Focus);
 
-        text.AppendLine($"credits {_profile.Credits}");
-        text.AppendLine($"stash   {ShopCatalogue.StashValue(_profile)}");
+        text.AppendLine(Strings.Get("prompt.credits", _profile.Credits));
+        text.AppendLine(Strings.Get("prompt.stash", ShopCatalogue.StashValue(_profile)));
         text.AppendLine();
 
         if (title.Length == 0)
         {
-            text.AppendLine("[W][S] walk   [A][D] turn");
+            text.AppendLine(Strings.Get("prompt.walk"));
             text.AppendLine();
-            text.AppendLine("armoury, locker, records,");
-            text.AppendLine("board, map table, gate");
+            text.AppendLine(Strings.Get("prompt.fittings.1"));
+            text.AppendLine(Strings.Get("prompt.fittings.2"));
         }
         else
         {
             text.AppendLine(title);
             if (first.Length > 0)
-                text.AppendLine($"  [E] {first}");
+                text.AppendLine("  " + Strings.Get("prompt.first", first));
 
             // The armoury's second verb changes with the row, so the prompt has
             // to as well — a fitting whose key does two things and says one is
             // worse than one that does nothing.
             if (Focus == Fitting.Armoury && _cursor >= 0 && _cursor < _catalogue.All.Count)
-                second = _catalogue.All[_cursor].Slot == null ? "carry as sidearm" : "sell it back";
+            {
+                second = _catalogue.All[_cursor].Slot == null
+                    ? Strings.Get("fitting.armoury.sidearm")
+                    : Strings.Get("fitting.armoury.second");
+            }
 
             if (second.Length > 0)
-                text.AppendLine($"  [C] {second}");
+                text.AppendLine("  " + Strings.Get("prompt.second", second));
 
             if (Focus is Fitting.Armoury or Fitting.Board)
-                text.AppendLine("  up/down choose");
+                text.AppendLine("  " + Strings.Get("prompt.choose"));
         }
 
         if (_message.Length > 0)
@@ -1168,77 +1229,6 @@ public partial class BaseScreen : Control
         return (first, first + Rows);
     }
 
-    /// The right-hand column: what to chase, what to take, and which keys do it.
-    ///
-    /// Records sit next to contracts on purpose. Neither changes a number in the
-    /// next run — one is a target, the other is a job — and putting the pair
-    /// beside the shop, which changes every number, is what makes the two kinds
-    /// of progress legible as different things.
-    private string SideColumn()
-    {
-        var text = new System.Text.StringBuilder();
-
-        text.AppendLine("PERSONAL BEST");
-        text.AppendLine($"  banked {_profile.BestBank}      killed {_profile.BestKills}      " +
-                        $"lasted {_profile.BestSeconds:F0}s");
-        text.AppendLine($"  multiplier x{_profile.BestMultiplier:F2}      " +
-                        $"streak {_profile.BestStreak} (now {_profile.Streak})");
-
-        // The record book: things the run has always measured and nothing kept.
-        // Sentinel values are printed as a dash rather than as a number, because
-        // "narrowest escape 3.4e+38 HP" is worse than saying it has not happened.
-        text.AppendLine($"  crates {_profile.MostCrates}      " +
-                        $"best throw {_profile.BestThrow}      " +
-                        $"bosses {_profile.BestBossKills}");
-        text.AppendLine($"  narrowest escape {(_profile.HasNarrowEscape ? $"{_profile.NarrowestEscape:F0} HP" : "—")}" +
-                        $"      fastest out {(_profile.HasFastExtraction ? $"{_profile.FastestExtraction:F0}s" : "—")}");
-        text.AppendLine();
-
-        DailyRun.Setup today = DailyRun.Today();
-        bool done = _profile.DailyDone(today.DateKey);
-        int streak = _profile.DailyStreak(today.DateKey);
-
-        text.AppendLine($"TODAY  {today.DateKey}");
-        text.AppendLine($"  {BiomeBook.Load(today.Biome).BiomeName} — {today.Job.Describe()}");
-        text.AppendLine(done
-            ? $"  done: {_profile.Daily[today.DateKey]} points" +
-              (streak > 1 ? $"      {streak} days running" : "")
-            : "  [D] play it — one attempt, no credits, no risk");
-        text.AppendLine();
-
-        text.AppendLine("CONTRACTS");
-        Contract[] offer = _profile.ContractOffer();
-        for (int i = 0; i < offer.Length; i++)
-        {
-            bool taken = _profile.ContractIndex == i;
-            text.AppendLine($"  [{i + 1}] {offer[i].Describe(),-32} {offer[i].Reward,4} cr" +
-                            (taken ? "   <- taking this" : ""));
-        }
-
-        if (!_profile.HasContract)
-        {
-            text.AppendLine();
-            text.AppendLine("  none taken — a run without one still pays,");
-            text.AppendLine("  it just does not ask anything of you");
-        }
-
-        text.AppendLine();
-        text.AppendLine("KEYS");
-        text.AppendLine("  up/down choose          enter buy or equip");
-        text.AppendLine("  [1][2][3] take a contract");
-        text.AppendLine($"  [R] reroll contracts ({ContractBook.RerollCost} cr)");
-        text.AppendLine("  [B] change terrain      [D] today's run");
-        text.AppendLine("  [C] at the gate: change survivor");
-        text.AppendLine("  [S] sell stash          [L] launch");
-
-        if (_message.Length > 0)
-        {
-            text.AppendLine();
-            text.AppendLine(_message);
-        }
-
-        return text.ToString();
-    }
 
     private bool IsEquipped(ShopCatalogue.Entry entry) => entry.Slot is { } slot
         ? _profile.EquippedGear[(int)slot] == entry.Path

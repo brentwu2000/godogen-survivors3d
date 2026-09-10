@@ -284,10 +284,23 @@ Each step is playable before the next starts and closes against a probe, per the
    `Shelter`, and the names in the weapon, gear, contract and item resources. That is the bulk of the
    phase and it is mechanical now that the mechanism is proven end to end.
 
-   **The roster, the Console fitting, the HUD, the growth cards, the debrief and the shelter's fitting
-   prompts are through.** What is left is `BaseScreen`'s six pages — about 34 literals, and the page a
-   player spends the between-runs time on — and then the content nouns in the weapon, gear, item,
-   enemy, biome, contract, unlock and collection resources.
+   **Every screen is through.** The roster, the Console fitting, the HUD, the growth cards, the
+   debrief, the shelter's fitting prompts and now `BaseScreen`'s six pages and its twenty-three
+   messages — 221 keys across two locales, against a 448-glyph subset.
+
+   **What is left is the content nouns, and they are a different job rather than more of this one.**
+   Fifteen weapon names, twenty items, seventeen gear pieces, nine enemy variants, five biomes and
+   their blurbs, the contract descriptions, the unlock conditions and the collection sets are English
+   literals that `Build*.cs` writes into `.tres`, so the screens read them and draw them without ever
+   touching the table. The fix is a key convention in the tools; `CharacterResource.Role` and `.Blurb`
+   already work that way and are the pattern.
+
+   **Sixty lines of the base screen were deleted rather than translated.** `SideColumn` and the
+   flat-screen branch drew every page's content at once for the case where `Base.tscn` has no
+   `Shelter` sibling — which `BuildBase.cs` adds unconditionally, so nothing had rendered them since
+   the room was built. Dead code that draws a screen is worse than dead code that does not: it reads
+   as a supported layout, so it asks to be kept working, and this phase would have translated all of
+   it before anybody asked whether a player can reach it. A missing shelter is a pushed error now.
 
    *Probe:* `StringProbe` — the table loads, every locale takes the same placeholders as English,
    every key formats in every locale, and no key comes back as `«key»`. It still does not scan for a
@@ -331,16 +344,18 @@ Each step is playable before the next starts and closes against a probe, per the
 **Steps 1 and 2 are worth doing even if the rest is deferred.** The font is the risk, and the table is
 the thing every later locale is free against.
 
-**What remains is one mechanical job in two halves.** The chrome half is `BaseScreen`'s six pages —
-about 34 literals, the last screen still drawing English at a player who picked Chinese. The content
-half is larger and is a different shape: fifteen weapon names, twenty item names, seventeen gear names,
-nine enemy variants, five biomes and their blurbs, the contract descriptions, the unlock conditions and
-the collection sets are all English literals written into `.tres` by `Build*.cs`, so the fix is a key
-convention in the tools rather than more `Strings.Get` at the call sites. `CharacterResource` already
-works that way and is the pattern.
+**What remains is the content nouns, and the chrome being done is what makes that visible.** The
+armoury draws `Combat Knife  [已裝上]` and `Fire Axe  250 點`, and the shop's own summary line under the
+cursor is still `6 dmg  3.2/s  1.6 m  bleed`. That is the state this order was chosen to produce:
+translating the chrome first does not finish the screen, it shows exactly which words are not in the
+table yet.
 
-**Do them in that order and the first half will look unfinished, which is the point.** Translating the
-chrome while the nouns stay English produces "買了 Service Rifle，花了 350" on every line of the shop —
-so the content half is not polish deferred behind the chrome, it is what makes the chrome look done.
-The font gate will catch anything the subset cannot draw, and `BaseLoopProbe`'s page walk will catch
-every noun that becomes a key and is then drawn raw.
+**The column arithmetic held.** Every padded column on the armoury page lines up in Chinese — `[已裝上]`
+is six cells where `[equipped]` is eleven, and `Strings.Pad` counts cells, so the note column starts at
+the same place on every row. The three places still using C#'s `{x,-18}` — the shop rows, the contract
+descriptions and the reward column — were the last of that kind and are converted.
+
+The remaining job has two hazards and both already have an assertion under them. A noun that becomes a
+key and is then drawn raw is caught by `BaseLoopProbe`'s page walk; a character the subset cannot draw
+is caught by `FontProbe`. What neither can see is whether a translated weapon name still *fits*
+eighteen cells, and that is a screenshot rather than a probe.
