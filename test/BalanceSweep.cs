@@ -109,6 +109,17 @@ public partial class BalanceSweep : SceneTree
         /// How many weapon slots fired.
         public readonly int Slots;
 
+        /// The terrain it was played on, or -1 for whatever `GameSession`
+        /// defaults to.
+        ///
+        /// Carried from what the sweep *asked for* rather than read back out of
+        /// the run, the same way `Linger` and `Seed` are. A biome is a setting
+        /// applied before the level exists, so there is nothing for the run to
+        /// report that the caller does not already know — and a column read back
+        /// from the child would be a second source of truth for a number that has
+        /// one.
+        public readonly int Biome;
+
         /// The share of this run's arrivals that came as a knot, 0 for a
         /// scattered run. Printed per row rather than summarised, because the
         /// question it answers is a 2x2 — does a loadout that wants a crowd do
@@ -119,8 +130,9 @@ public partial class BalanceSweep : SceneTree
         public Row(bool zone, int zoneTier, int level, int picks, int weaponLevel, int weaponMax,
                    float ceilingAt, float linger, ulong seed, string outcome, float seconds,
                    int banked, int lowestHp, int peak, string weapon, string character, string gear, float knotShare,
-                   string line, int picksInLine, int slots)
+                   string line, int picksInLine, int slots, int biome)
         {
+            Biome = biome;
             Slots = slots;
             KnotShare = knotShare;
             Line = line;
@@ -179,6 +191,17 @@ public partial class BalanceSweep : SceneTree
 
         // One empty entry: the Phase 8 pick order, which plays no line at all.
         string[] lines = { "" };
+
+        // Which terrain. -1 is "whatever `GameSession` defaults to", which is the
+        // Rail Yard and is what every table in this file was taken on.
+        //
+        // **The terrain comparison is the one table this instrument could not
+        // produce.** It exists in `README.md` — four linger tiers across three
+        // biomes — and it was taken by hand, one `AutoPlay` invocation at a time,
+        // which is why it has been owed a re-take for four phases and has not
+        // had one: nothing could re-run it as a command. There are five biomes
+        // now, so the hand-taken table is also two columns short of the game.
+        int[] biomes = { -1 };
 
         // How many weapon slots fire. Two is the game; one is the game before
         // both slots did, and it is the only honest control for "what is a pair
@@ -290,6 +313,20 @@ public partial class BalanceSweep : SceneTree
             if (arg == "slots:both")
                 slotArms = new[] { "", "solo" };
 
+            if (arg.StartsWith("biomes:"))
+            {
+                string[] named = arg[7..].Split(',');
+                var parsed = new System.Collections.Generic.List<int>();
+                foreach (string part in named)
+                {
+                    if (int.TryParse(part, out int index))
+                        parsed.Add(index);
+                }
+
+                if (parsed.Count > 0)
+                    biomes = parsed.ToArray();
+            }
+
             if (arg.StartsWith("lingers:"))
             {
                 string[] parts = arg[8..].Split(',');
@@ -317,9 +354,11 @@ public partial class BalanceSweep : SceneTree
         GD.Print($"sweeping {lingers.Length} linger tiers x {seeds.Length} layouts x " +
                  $"{arms.Length} arm(s) x {weapons.Length} weapon(s) x " +
                  $"{characters.Length} survivor(s) x {loadouts.Length} loadout(s) x " +
-                 $"{lines.Length} line(s) x {slotArms.Length} slot arm(s) = " +
-                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length * lines.Length * slotArms.Length} runs");
+                 $"{lines.Length} line(s) x {slotArms.Length} slot arm(s) x " +
+                 $"{biomes.Length} terrain(s) = " +
+                 $"{lingers.Length * seeds.Length * arms.Length * weapons.Length * characters.Length * loadouts.Length * lines.Length * slotArms.Length * biomes.Length} runs");
 
+        foreach (int biome in biomes)
         foreach (string slotArm in slotArms)
         foreach (string line in lines)
         foreach (string loadout in loadouts)
@@ -332,13 +371,14 @@ public partial class BalanceSweep : SceneTree
                 {
                     foreach (ulong seed in seeds)
                     {
-                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout, line, slotArm);
+                        Row? row = RunOne(linger, seed, arm, weapon, character, loadout, line, slotArm, biome);
                         if (row is { } value)
                             rows.Add(value);
                         else
                             GD.PushError($"  linger {linger:F0} seed {seed} arm {arm} "
                                        + $"weapon {(weapon.Length > 0 ? weapon : "kit")} "
-                                       + $"as {(character.Length > 0 ? character : "default")}: no result");
+                                       + $"as {(character.Length > 0 ? character : "default")} "
+                                       + $"on biome {biome}: no result");
                     }
                 }
             }
@@ -350,7 +390,7 @@ public partial class BalanceSweep : SceneTree
     /// One child process. `OS.Execute` blocks until it exits, which is what makes
     /// this a sequential sweep rather than twenty Godots fighting over the GPU.
     private static Row? RunOne(float linger, ulong seed, int arm, string weapon, string character,
-                               string loadout, string growthLine, string slotArm)
+                               string loadout, string growthLine, string slotArm, int biome)
     {
         var output = new Godot.Collections.Array();
 
@@ -376,6 +416,9 @@ public partial class BalanceSweep : SceneTree
         if (slotArm.Length > 0)
             args.Add(slotArm);
 
+        if (biome >= 0)
+            args.Add($"biome:{biome}");
+
         if (arm != NoZone)
         {
             args.Add("--zone");
@@ -399,7 +442,7 @@ public partial class BalanceSweep : SceneTree
             foreach (string text in line.AsString().Split('\n'))
             {
                 if (text.Contains("SWEEP "))
-                    return Parse(text, linger, seed, arm != NoZone);
+                    return Parse(text, linger, seed, arm != NoZone, biome);
 
                 if (text.Trim().Length > 0)
                     last = text.Trim();
@@ -423,7 +466,7 @@ public partial class BalanceSweep : SceneTree
         return null;
     }
 
-    private static Row Parse(string line, float linger, ulong seed, bool zone)
+    private static Row Parse(string line, float linger, ulong seed, bool zone, int biome)
     {
         string outcome = Field(line, "outcome");
         return new Row(
@@ -445,7 +488,8 @@ public partial class BalanceSweep : SceneTree
             Number(line, "knotShare"),
             Field(line, "line"),
             Mathf.RoundToInt(Number(line, "inLine")),
-            Mathf.RoundToInt(Number(line, "slots")));
+            Mathf.RoundToInt(Number(line, "slots")),
+            biome);
     }
 
     private static string Field(string line, string key)
@@ -537,6 +581,7 @@ public partial class BalanceSweep : SceneTree
         ReportArms(rows);
         ReportWeapons(rows);
         ReportCharacters(rows);
+        ReportBiomes(rows);
         ReportLoadouts(rows);
         ReportLines(rows);
         ReportSlots(rows);
@@ -716,6 +761,55 @@ public partial class BalanceSweep : SceneTree
     /// different runs", because a resource comparing favourably with another
     /// resource is not a run. This is the arm D3b asked for when the roster
     /// shipped.
+    /// What the terrain is worth, as a difference between terrains.
+    ///
+    /// Printed only when more than one was swept, for the same reason
+    /// `ReportWeapons` is: one terrain's median is the ordinary table and does
+    /// not need a breakdown of itself.
+    ///
+    /// **This is the table `README.md` calls "The baseline" and it was taken by
+    /// hand.** Four linger tiers across three biomes, one `AutoPlay` invocation
+    /// per cell, which is why it has been owed a re-take since the driver learned
+    /// to strafe and has not had one — and why it is still three biomes wide in a
+    /// game with five.
+    private static void ReportBiomes(System.Collections.Generic.List<Row> rows)
+    {
+        var seen = new System.Collections.Generic.List<int>();
+        foreach (Row row in rows)
+        {
+            if (row.Biome >= 0 && !seen.Contains(row.Biome))
+                seen.Add(row.Biome);
+        }
+
+        if (seen.Count < 2)
+            return;
+
+        seen.Sort();
+
+        var groups = new System.Collections.Generic.List<(string, System.Collections.Generic.List<Row>)>();
+
+        foreach (int index in seen)
+        {
+            var picked = new System.Collections.Generic.List<Row>();
+            foreach (Row row in rows)
+            {
+                if (row.Biome == index)
+                    picked.Add(row);
+            }
+
+            // Named rather than numbered. An index is what the flag takes and a
+            // name is what the reader is comparing, and a table of "0 1 2 3 4"
+            // asks them to hold `BiomeBook.Order` in their head while they read
+            // it. `BiomeName` is the identity and stays English here on purpose:
+            // this is an instrument, and a table that changes language with the
+            // machine it ran on is a table nobody can grep.
+            BiomeResource biome = BiomeBook.Load(index);
+            groups.Add((biome.BiomeName, picked));
+        }
+
+        PrintGroups("terrain", groups);
+    }
+
     private static void ReportCharacters(System.Collections.Generic.List<Row> rows)
     {
         var seen = new System.Collections.Generic.List<string>();

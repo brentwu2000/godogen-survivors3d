@@ -145,12 +145,15 @@ the input map, the `.tres` data, the fitted sprites and every sound the same way
 ### Capture
 
 ```bash
-godot --write-movie screenshots/result/frame.png --fixed-fps 30 --quit-after 800 \
-      --script test/Presentation.cs
+godot --write-movie screenshots/result/frame.png --fixed-fps 30 --quit-after 1100 \
+      --script test/Presentation.cs -- biome:0
 ffmpeg -y -framerate 30 -i screenshots/result/frame%08d.png -i screenshots/result/frame.wav \
-      -c:v libx264 -pix_fmt yuv420p -crf 20 -c:a aac -b:a 128k -shortest \
+      -frames:v 1050 -c:v libx264 -pix_fmt yuv420p -crf 20 -c:a aac -b:a 128k -shortest \
       -movflags +faststart screenshots/result/survivors3d.mp4
 ```
+
+**`biome:N` picks the place, and the numbers above are for `biome:0` alone.** See the paragraph on
+per-biome pacing below.
 
 The movie writer emits `frame.wav` beside the frames, so the clip can carry the game's own audio; mux
 it in rather than shipping a silent film of a phase that was mostly about sound. That wav is **32-bit
@@ -159,14 +162,45 @@ artefact of the wrong sample width and cost one wrong tuning pass to work out.
 
 `--quit-after N` writes exactly N frames, so that number *is* the edit. The film ends on the debrief
 rather than on the banner — the capture sets `GameSession.LaunchedFromBase`, and since the report waits
-for a key nobody presses, the last seconds are what the run was worth. Capture 700 and encode 640 (21.3
-s): the run finishes around frame 525, which leaves the report on screen long enough to read and short
-enough not to be dead air. `screenshots/` is not versioned; re-run the above to regenerate it.
+for a key nobody presses, the last seconds are what the run was worth. `screenshots/` is not versioned;
+re-run the above to regenerate it.
+
+**Those numbers were wrong for long enough to matter, and the block and the prose did not agree with
+each other either** — the command said `--quit-after 800` and the paragraph under it said to capture
+700 and encode 640. Measured 2026-09-10 on `biome:0`: the elites arrive at 8 s, **the boss at 26.4 s**,
+and the run extracts at **31.0 s** — frame 930. Either number stops the film in the middle of a fight,
+with no boss in it and no debrief, and neither gets reported: a capture that runs out of frames exits
+cleanly. The run got longer when the driver learned to route and to strafe, and nothing re-measured the
+edit afterwards. Capture 1100, encode 1050.
+
+**`-crf 20` costs about 37 Mbit/s on this content, and that is not a mistake in the flag.** The ground
+is per-pixel noise and the air carries particles, which is close to the worst case for inter-frame
+prediction: 22 seconds encodes to 102 MB. `-preset slow -crf 26` roughly halves it, and is what to
+reach for when the file has to be sent somewhere rather than watched off the disk.
 
 `Presentation.cs` injects compressed values into `_Initialize` — 44 enemies at open, a 40 s run,
 extraction open from t=0, spawn 6→8.5/s, and an opening crowd drawn from an intensity just under the
 brute's unlock so the brutes *arrive* — and does not touch `RunDirector`'s own defaults. Shot at
 shipping numbers the first minute is an empty field: correct by design, and nothing to film.
+
+**Those compressed values are tuned to the Rail Yard, which is why "just set the biome" was never the
+whole fix.** The flag has existed for a while; what had not been done was pointing it somewhere and
+watching the result. One take each, 700 frames:
+
+| Place | What the take is |
+| :--- | :--- |
+| Rail Yard | extracts at 31.0 s — needs 1100 frames, not 700 |
+| Ash District | **extracts at 17.7 s banking 528** — a whole run inside 700 frames |
+| Cold Storage | dies at 19.8 s, with the boss standing behind the debrief |
+| The Flats | dies at 14.4 s |
+| Old Town | does not finish inside 700 frames at all |
+
+An opening crowd seeded just under the brute's unlock is a fixed number of enemies against a route
+whose length is a property of the terrain, so one pacing is generous in one place and lethal in
+another. **Two places are on film now** — `survivors3d.mp4` at 1050 frames and
+`survivors3d_ash_district.mp4` at 660, the second shorter because its run is. The other three need
+their own pacing rather than their own take, and that is a tuning job on `OpeningHorde` and the spawn
+ramp per biome rather than a flag.
 
 It walked in straight lines until Phase 14 put real cover on the map, and then spent every take pressed
 against a container while the horde ate it — the run died at fifteen seconds having banked the same 98
@@ -1900,10 +1934,13 @@ printed, for reasons that had nothing to do with what was being measured.
 Median 1276 banked at 69 s, 12/12 out. The two bold rows were `Stuck, 120 at 70 s` and
 `Stuck, 440 at 71 s`; the other ten moved too, because a routing change moves every route.
 
-The tables further down that section are still the older set. The three above the divider replace what
-they were about; the ones this instrument does not produce — the terrain comparison, the weapon rows,
-the survivor rows — are still the right shape and the right comparisons, and are still owed a re-take.
-**Re-take the one that is about to settle something before it settles it.**
+The tables further down that section are the older set apart from the terrain baseline, which is
+re-taken and is the first thing below the divider. What is still owed is **the weapon rows and the
+survivor rows**, which live in `WEAPONS.md` and `CHARACTERS.md` and are a `weapons:` or `characters:`
+sweep across twelve layouts rather than one across five places — an order of magnitude more runs.
+They are still the right shape and the right comparisons; every absolute second in them was measured
+by a driver that could not strafe. **Re-take the one that is about to settle something before it
+settles it.**
 
 `test/AutoPlay.cs` found that the first version gave the player **no reason to stay**: loitering 180 s
 banked exactly what leaving immediately banked (266 either way), because all value sat in crates and
@@ -1941,33 +1978,57 @@ costs — a real cost, on a real weapon, invisible on any run shorter than two m
 crowd that has to route around fifty blocks arrives slower than it spawns. The field the player is
 kiting through is denser than the same run used to be, and the reason is the map, not the rate.
 
-### The baseline
+### The baseline, and the shape of it is not what it was
 
-Twelve cells — four loiter tiers across three terrains, one seed, the bot from `test/AutoPlay.cs`.
+Twenty cells — four loiter tiers across **all five** terrains, one seed, the bot from
+`test/AutoPlay.cs`, re-taken 2026-09-10:
 
-| Loiter | Rail Yard | Old Town | The Flats |
-| ---: | :--- | :--- | :--- |
-| 0 s | 421 at 26 s | 339 at 24 s | 332 at 32 s |
-| 60 s | **987** at 74 s | **978** at 74 s | 383 at 71 s |
-| 120 s | 392 at 130 s | 492 at 134 s | 378 at 133 s |
-| 180 s | 479 at 193 s | **died** at 147 s | **456** at 192 s |
+```bash
+godot --headless --script test/BalanceSweep.cs -- seeds:1 biomes:0,1,2,3,4 lingers:0,60,120,180
+```
 
-**These are not the numbers this table had a phase ago, and the game did not change — the driver did.**
-The bot used to route to `found[0]` and `found[1]`, whichever two crates the generator happened to
-place first, and during the linger phase it walked to the *nearest* unlooted crate. Both rules are
+| Loiter | Rail Yard | Old Town | The Flats | Ash District | Cold Storage |
+| ---: | :--- | :--- | :--- | :--- | :--- |
+| 0 s | 751 at 40 s | 363 at 26 s | 813 at 27 s | 753 at 39 s | 382 at 18 s |
+| 60 s | 960 at 72 s | 897 at 74 s | **1935** at 70 s | 1097 at 77 s | 887 at 73 s |
+| 120 s | 1723 at 134 s | 1410 at 140 s | **3062** at 134 s | 1168 at 133 s | 1527 at 133 s |
+| 180 s | **2399** at 190 s | died at 164 s | died at 148 s | died at 153 s | died at 142 s |
+
+**This table was taken by hand until now, and that is why it was four phases stale.** Four cells at a
+time, one `AutoPlay` invocation per cell, no command that reproduces it — so the entry saying it was
+owed a re-take stayed true through a routing fix, a strafing driver, two new biomes and the supply
+caches. `BalanceSweep` has a `biomes:` axis now and the line above is the whole of it. The old table
+was also three columns wide in a five-biome game, which is the same problem wearing a different hat.
+
+**The curve no longer peaks and collapses; it climbs until it kills you.** The old reading — best at
+60 s, worst after — is gone on every terrain: 751 → 960 → 1723 → 2399 on the Rail Yard, and the same
+monotone shape in all five columns up to 120 s. The supply caches at 25% and 58% of the clock are what
+pays for the second minute, and they were measured into the four-tier table above the divider before
+this one was re-taken; this is that result across places rather than across layouts.
+
+**The third minute is lethal on four terrains out of five.** Only the Rail Yard walks out at 180 s,
+banking 2399 — the best cell in the table. The other four die between 142 and 164 s, every one of them
+at 0 health with the bag still on. So "the second half of the clock is reachable" is a statement about
+one place, and the earlier finding that it needs a better weapon is a statement about the other four.
+
+**The Flats is now the best terrain in the game, and it used to measure as the worst.** 1935 at 60 s
+and 3062 at 120 s, against 383 and 378 in the table this replaces. Nothing about The Flats changed.
+The bot used to route to `found[0]` and `found[1]` — whichever two crates the generator happened to
+place first — and during the linger phase it walked to the *nearest* unlooted crate. Both rules are
 uncorrelated with where the value is: `RarityBias` runs from 1 at the spawn to the biome's depth figure
-at the edge, so "nearest" is a rule for systematically collecting the cheapest loot on the map. Every
-balance number this project has ever printed came from a bot that could not see the one mechanic the
-level generator is built around.
+at the edge, so "nearest" is a rule for systematically collecting the cheapest loot on the map, and
+The Flats is the biome built entirely around going deep. It picks by worth-per-metre now. That column
+was left untouched at Phase 26 on the grounds that it might be the bot; it was the bot, and this is
+how much of it was.
 
-It picks by worth-per-metre now, and The Flats — which existed to reward going deep and measured as
-the worst terrain in the game — climbs with time instead of falling. That column was left untouched at
-Phase 26 on the grounds that it might be the bot. It was the bot.
+**Cold Storage is the poorest place and the safest way to be poor.** It banks least at every tier
+below two minutes, its worst crowd across the whole sweep is 94 against The Flats' 161, and its 0 s
+run is over in 18 seconds — rooms and doorways make a short route and a slow crowd. It is the one
+terrain where leaving early is not obviously wrong.
 
-**The bot is not uniformly better at surviving, and that is correct.** Old Town now dies at 180 s where
-it used to walk out at 187 s: going deep in a dense biome means being far from the pad when it goes
-wrong. It takes more risk for more value, which is what a player does, and a driver that never took a
-risk was measuring a game nobody plays.
+**Old Town never gets hurt until it dies.** Median lowest health 100 across its first three tiers, and
+then 0. A biome with no line of fire is a biome where the crowd is either not on you or entirely on
+you, and there is no reading on the HUD that distinguishes the two until it is too late to act on.
 
 ### The second minute
 
@@ -2243,13 +2304,23 @@ the code before starting anything from it.** It is half an hour and it has now p
   adds one more call site that can make the same mistake, which is why it is an assertion and not a
   note.
 
-- **Three of the balance tables are re-taken; the rest are not.** The four-tier sweep, the auto arm
-  and the pair budget were re-measured on 2026-09-09 under the control scheme the game actually has
-  and with the driver that can reach all twelve layouts — see Balance, above the divider. What is
-  still owed is everything `BalanceSweep` does not produce on its own: the three-terrain comparison,
-  the per-weapon rows, and the survivor rows. Those are still the right *shape* — the comparisons
-  between weapons are between weapons — and every absolute second in them was measured by a driver
-  that could not strafe. **Re-take the one that is about to settle something before it settles it.**
+- **Four of the balance tables are re-taken; the weapon and survivor rows are not.** The four-tier
+  sweep, the auto arm and the pair budget were re-measured on 2026-09-09; the terrain baseline was
+  re-taken on 2026-09-10 and is now five columns rather than three, because `BalanceSweep` grew a
+  `biomes:` axis and the table stopped being something somebody assembles by hand. **That is most of
+  why it was stale for four phases** — an instrument that cannot re-run a table is an instrument that
+  guarantees the table goes stale, and the fix was the axis rather than the patience.
+
+  What it found is worth reading before anything is tuned against the old shape: **the payout curve no
+  longer peaks at 60 s and collapses, it climbs until it kills you**, and **the third minute is lethal
+  on four terrains out of five** — only the Rail Yard walks out at 180 s. The Flats, which measured as
+  the worst place in the game, is now the best by a factor of five at two minutes; nothing about it
+  changed except a driver that can see `RarityBias`.
+
+  Still owed: **the per-weapon rows in `WEAPONS.md` and the survivor rows in `CHARACTERS.md`.** Those
+  are a `weapons:` or `characters:` sweep across twelve layouts — 48 runs for the four sidearms alone,
+  against 20 for the whole terrain table — so they are their own phase rather than a line in this one.
+  Every absolute second in them was measured by a driver that could not strafe.
 - **The pair budget is 133% against a rule of 115%, and it is a design decision nobody has taken.**
   Re-measured 2026-09-09: 927 banked per attempt on one weapon against 1233 on two. The rule is "a
   pair inside about 115% of one weapon"; it was 110% at the step-1 rework, 138% four phases later, and
@@ -2357,13 +2428,21 @@ the code before starting anything from it.** It is half an hour and it has now p
   reason to be. Whether a *person* can hold that ground longer than the bot is the same question as
   before — the bot still does not use cover and does not kite — and it now has a floor under it and a
   weapon attached to it.
-- **The proof video films one biome, and that is the only true quarter of what this entry used to
-  say.** It claimed a game without elites, a boss, biomes or music. `Presentation.cs` cues three
-  elites — swift, armoured and volatile — at eight seconds, and cues the boss by dropping `BossAt` to
-  an intensity the run reaches; `MusicDirector` is in `Main.tscn` and the movie writer's `frame.wav`
-  carries what it plays. What is actually missing is the *place*: nothing sets `GameSession.Biome`, so
-  every take is biome 0, the Rail Yard, and the four others have never been filmed. One line in
-  `_Initialize` fixes it, or two takes cut together do it better.
+- **The proof video films two biomes now, and the reason it was one was not the missing line this
+  entry named.** `Presentation.cs` has taken `biome:N` for a while — what had not been done was
+  pointing it somewhere and watching. Doing that found the actual blocker: **the compressed pacing is
+  tuned to the Rail Yard.** Same script, one take each, and Cold Storage dies at 19.8 s, The Flats at
+  14.4 s, and Old Town does not finish inside the capture at all. Ash District extracts at 17.7 s
+  banking 528 and is on film.
+
+  **It also found that the capture recipe's own frame counts were stale by thirteen seconds.** The
+  Rail Yard run ends at 31.0 s with the boss at 26.4 s, against a documented 700-frame capture that
+  stops at 23.3 — so anybody following the recipe as written got a film with no boss and no debrief,
+  and nothing said so, because a capture that runs out of frames exits cleanly. Fixed in Capture,
+  along with the measurement it should have carried.
+
+  What is left for the other three is a **per-biome pacing pass** — `OpeningHorde` and the spawn ramp
+  against a route whose length is a property of the terrain — rather than another take.
 - ~~**What a *busy* frame costs is unmeasured.**~~ `HordePerf -- 500 mixed fight warmup:600` measures
   it: 1.51 ms mean and 131 draw calls with every pool at or near its ceiling, against 1.13 ms and 89
   idle. See Performance. What that run also found is that the *old* warm-up of one second was too
