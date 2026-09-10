@@ -32,7 +32,7 @@ public partial class BuildBiomes : SceneTree
             {
                 BiomeName = "Rail Yard",
                 StructureSet = System.Array.ConvertAll(PropLibrary.YardStructureSet, kind => (int)kind),
-                Blurb = "mixed cover, honest sight lines",
+                Blurb = "biome.rail_yard.blurb",
                 TileWeights = new[] { 1.0f, 1.0f, 1.0f, 1.0f },
                 CrateCount = 8,
                 DepthRarityBias = 1.9f,
@@ -55,7 +55,7 @@ public partial class BuildBiomes : SceneTree
             new()
             {
                 BiomeName = "Old Town",
-                Blurb = "no line of fire; the crowd arrives close",
+                Blurb = "biome.old_town.blurb",
                 TileWeights = new[] { 0.2f, 1.2f, 1.8f, 2.2f },
 
                 // The first pass was 1.6x count at 0.75x size, and the probe put
@@ -102,7 +102,7 @@ public partial class BuildBiomes : SceneTree
             new()
             {
                 BiomeName = "The Flats",
-                Blurb = "nothing in the way, in either direction",
+                Blurb = "biome.the_flats.blurb",
                 TileWeights = new[] { 3.4f, 0.9f, 0.15f, 0.4f },
                 ClusterCountScale = 0.55f,
                 ClusterSizeScale = 1.5f,
@@ -153,7 +153,7 @@ public partial class BuildBiomes : SceneTree
             new()
             {
                 BiomeName = "Ash District",
-                Blurb = "long streets, blind corners; the crowd comes down one",
+                Blurb = "biome.ash_district.blurb",
                 TileWeights = new[] { 0.9f, 0.55f, 3.0f, 1.1f },
 
                 // Few clusters, large. A street is made of long blocks, and many
@@ -236,7 +236,7 @@ public partial class BuildBiomes : SceneTree
             new()
             {
                 BiomeName = "Cold Storage",
-                Blurb = "rooms and doorways; nothing has a long shot",
+                Blurb = "biome.cold_storage.blurb",
                 TileWeights = new[] { 0.35f, 0.7f, 3.6f, 1.4f },
 
                 // Many partitions, and long. The count is up and the size is up,

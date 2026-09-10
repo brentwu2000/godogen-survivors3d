@@ -25,6 +25,7 @@ public partial class StringProbe : SceneTree
         failed |= !StageEveryLocaleAgreesWithEnglish();
         failed |= !StageEveryKeyFormats();
         failed |= !StageWideCharactersCountTwice();
+        failed |= !StageEveryNounHasARow();
 
         GD.Print("");
         GD.Print(failed ? "PROBE FAILED" : "PROBE OK");
@@ -120,6 +121,83 @@ public partial class StringProbe : SceneTree
         Strings.Use(was);
         GD.Print($"every key formats in every locale: {(ok ? "ok" : "FAILED")}");
         return ok;
+    }
+
+    /// Every content noun the game can draw has a row under `noun.`.
+    ///
+    /// **This is the stage that makes `Strings.Noun`'s fallback safe.** A noun
+    /// with no row draws its English name rather than «key», which is the right
+    /// behaviour on a screen — a weapon added today should read as "Service
+    /// Rifle" in Chinese and not as a diagnostic — and is exactly the shape of
+    /// failure nobody notices. One English word among forty Chinese ones reads as
+    /// a proper noun somebody chose to leave alone.
+    ///
+    /// **Read off `resources/` rather than a list**, so a weapon added next month
+    /// is checked the day it is added. A list here would be a second copy of the
+    /// catalogue that has to be remembered, which is the thing that would not be.
+    /// The collection sets are the exception and come from `CollectionBook`,
+    /// because a set is code rather than a resource; its pieces are item names and
+    /// are covered by the item sweep already.
+    private static bool StageEveryNounHasARow()
+    {
+        (string Directory, string Field)[] shelves =
+        {
+            ("res://resources/weapons", "WeaponName"),
+            ("res://resources/items", "ItemName"),
+            ("res://resources/gear", "GearName"),
+            ("res://resources/enemies", "TypeName"),
+            ("res://resources/biomes", "BiomeName"),
+        };
+
+        var wanted = new System.Collections.Generic.List<string>();
+
+        foreach ((string directory, string field) in shelves)
+        {
+            foreach (string path in Files(directory))
+            {
+                var resource = GD.Load<Resource>(path);
+                if (resource == null)
+                    continue;
+
+                Variant value = resource.Get(field);
+                string name = value.AsString();
+
+                if (name.Length > 0)
+                    wanted.Add(name);
+            }
+        }
+
+        foreach (CollectionBook.Set set in CollectionBook.All)
+            wanted.Add(set.Name);
+
+        bool ok = true;
+
+        foreach (string name in wanted)
+        {
+            if (Strings.Noun(name) == name && System.Array.IndexOf(Strings.AllKeys, Strings.NounKey(name)) < 0)
+            {
+                GD.PushError($"  \"{name}\" has no row at '{Strings.NounKey(name)}' "
+                           + "and would draw in English on every screen");
+                ok = false;
+            }
+        }
+
+        GD.Print($"every content noun has a row: {(ok ? "ok" : "FAILED")} ({wanted.Count} nouns)");
+        return ok;
+    }
+
+    /// The `.tres` files in a directory, the way `ShopCatalogue` reads its stock.
+    private static System.Collections.Generic.IEnumerable<string> Files(string directory)
+    {
+        using var handle = DirAccess.Open(directory);
+        if (handle == null)
+            yield break;
+
+        foreach (string file in handle.GetFiles())
+        {
+            if (file.EndsWith(".tres"))
+                yield return $"{directory}/{file}";
+        }
     }
 
     /// The measurement the whole page layout rests on.

@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_djrbh")
 BiomeName = "Cold Storage"
-Blurb = "rooms and doorways; nothing has a long shot"
+Blurb = "biome.cold_storage.blurb"
 TileWeights = PackedFloat32Array(0.35, 0.7, 3.6, 1.4)
 ClusterCountScale = 1.5
 ClusterSizeScale = 1.45

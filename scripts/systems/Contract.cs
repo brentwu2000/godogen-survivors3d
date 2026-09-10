@@ -115,10 +115,10 @@ public readonly struct Contract
     private string VariantName(RunLog? log)
     {
         if (log != null)
-            return log.TypeName(Subject);
+            return Strings.Noun(log.TypeName(Subject));
 
         return Subject >= 0 && Subject < Horde.TypeNames.Length
-            ? Horde.TypeNames[Subject]
+            ? Strings.Noun(Horde.TypeNames[Subject])
             : Subject.ToString();
     }
 }

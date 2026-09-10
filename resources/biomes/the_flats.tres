@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_ljgfy")
 BiomeName = "The Flats"
-Blurb = "nothing in the way, in either direction"
+Blurb = "biome.the_flats.blurb"
 TileWeights = PackedFloat32Array(3.4, 0.9, 0.15, 0.4)
 ClusterCountScale = 0.55
 ClusterSizeScale = 1.5

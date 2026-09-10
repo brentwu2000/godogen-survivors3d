@@ -18,9 +18,19 @@ using Godot;
 [GlobalClass]
 public partial class BiomeResource : Resource
 {
+    /// **The identity, and it is never translated.** A biome's name is what
+    /// `PropShot` and the balance tables name it by, and `Strings.Noun` looks the
+    /// drawn form up beside it rather than replacing it. Same rule as an item
+    /// name, and for the same reason: something else keys off it.
     [Export] public string BiomeName { get; set; } = "";
 
     /// One line on the base screen, so the choice is made knowing what it is.
+    ///
+    /// **A key, not a sentence** — `biome.rail_yard.blurb` — so a call site draws
+    /// it with `Strings.Get` and never by interpolation. Interpolating it puts
+    /// `biome.rail_yard.blurb` on the screen and passes every automatic check in
+    /// the project, which is what happened to `CharacterResource.Blurb` for
+    /// sixteen phases. `BaseLoopProbe` walks the pages and fails on it now.
     [Export] public string Blurb { get; set; } = "";
 
     // --- Layout -------------------------------------------------------------

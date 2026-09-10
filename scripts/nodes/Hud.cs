@@ -467,7 +467,7 @@ public partial class Hud : CanvasLayer
             string held = i == _weapons.ActiveSlot ? "> " : "  ";
             string idle = _weapons.FiringIn(i) ? "" : "   " + Strings.Get("hud.weapon.idle");
 
-            lines.Add($"{held}{each.WeaponName}{ammo}{idle}");
+            lines.Add($"{held}{Strings.Noun(each.WeaponName)}{ammo}{idle}");
         }
 
         // A newline escape, never AppendLine. That writes Environment.NewLine,

@@ -113,7 +113,7 @@ grep -E 'StartingReserve|TraitAmount' resources/weapons/sidearm_pistol.tres
 | `test/BalanceSweep.cs` | yes | Twenty runs across four linger tiers and five layouts; fails if nothing reaches 180 s |
 | `test/TouchProbe.cs` | no | Synthetic fingers: the stick moves the player, a held button fires once, a dead button is dead, and the level-up card can be tapped |
 | `test/ModifierProbe.cs` | yes | Every upgrade changes the run, and pierce, area, ignite, detonate, thorns and lifesteal do what their card says |
-| `test/StringProbe.cs` | yes | The translation table: it loads, every locale takes the same placeholders as English — a dropped `{0}` reads perfectly and has lost the number — every key formats in every locale, and a Han glyph measures two cells so `Strings.Pad` keeps a column straight |
+| `test/StringProbe.cs` | yes | The translation table: it loads, every locale takes the same placeholders as English — a dropped `{0}` reads perfectly and has lost the number — every key formats in every locale, a Han glyph measures two cells so `Strings.Pad` keeps a column straight, and every content noun on the shelves in `resources/` has a row under `noun.` |
 | `test/ImpactProbe.cs` | yes | Twelve stages of the feedback that is not a muzzle flash: a kill stains the floor downrange of the shove and on the ground, the floor clears itself and never overflows, both blend channels carry puffs, a crit emits more than the same shot without one, a burning body is on fire while an identical cold one is not, a ranged enemy charges before it fires and not before that, an explosion is a light source and stops being one, a hit puts a number over it that goes away, damage from a bearing lights that bearing and no other and four bodies standing on the player light the side they are on, a body falls away from the shot that killed it and the ground takes it back, the corpse field has a ceiling the living are never dropped for — and the clock is untouched headless and comes back when it is not |
 | `test/TraitProbe.cs` | yes | Every weapon carries a signature, and bleed, cleave, ricochet, burst, chill and mark each do what only they do — the last two also that the status is *spent* rather than permanent |
 | `test/SupplyProbe.cs` | yes | Caches land on the clock and once each, they are richer than anything the map placed, and a crate that arrives mid-run is counted when it is emptied |
@@ -2156,8 +2156,8 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
 | `assets/ui/portraits/*.png` | the roster design sheet, via `art-src/ui/cut_portraits.py` | 5 x 292x619 | the survivor select cards |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
-| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 99 KB, 448 glyphs | the UI, in both languages |
-| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 221 keys x 2 locales | every screen the game draws; the nouns in `.tres` are still English |
+| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 132 KB, 569 glyphs | the UI, in both languages |
+| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 290 keys x 2 locales | every screen the game draws, and 63 of its nouns |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
 barriers, rubble heaps, walls, dumpsters, and two landmarks — and `PropRenderer` draws each kind as
@@ -2209,24 +2209,33 @@ would have spent a day fixing what was not broken and would have found out only 
 exactly the failure mode this file exists to prevent everywhere else. **Re-read this section against
 the code before starting anything from it.** It is half an hour and it has now paid for itself once.
 
-- **Every screen speaks Chinese and every noun on them is still English.** `UI.md` carries the plan
-  and the order; what is done is the roster, the Console fitting, the HUD, the growth cards, the
-  debrief, the shelter's fitting prompts and the base screen's six pages and twenty-three messages —
-  221 keys across two locales, against a 448-glyph subset that `FontProbe` re-checks every sweep.
+- **Every screen and every noun on the shelves speaks Chinese; two kinds of sentence do not.** `UI.md`
+  carries the plan and the order. Done: the roster, the Console fitting, the HUD, the growth cards,
+  the debrief, the shelter's prompts, the base screen's six pages and twenty-three messages, and the
+  63 content nouns — fifteen weapons, fifteen items, seventeen pieces of gear, nine enemy variants,
+  five biomes and their blurbs, two collection sets. 290 keys across two locales, against a
+  569-glyph subset that `FontProbe` re-checks every sweep.
 
-  **What is left is the content nouns, and it is a different job rather than more of the same one.**
-  Fifteen weapon names, twenty items, seventeen gear pieces, nine enemy variants, five biomes and
-  their blurbs, the contract lines, the unlock conditions and the collection sets are English literals
-  that `Build*.cs` writes into `.tres`, so the screens read them and draw them without the table ever
-  being asked. The fix is a key convention in the tools rather than more `Strings.Get` at the call
-  sites; `CharacterResource.Role` and `.Blurb` already hold keys rather than sentences and are the
-  pattern to copy.
+  **The identity is never translated, and that was the design decision the phase turned on.**
+  "Wedding Ring" is a key in the save file — `Profile.Stash` is a dictionary of item names,
+  `Collected` an array of them, `ClaimedSets` holds a set's name — and `EnemyTypeResource.TypeName`
+  resolves the path of a baked body. Turning any of those into a translation key would either break
+  every existing save or make what a save *contains* depend on the language it was written in. So
+  `Strings.Noun` is a lookup *beside* the identity, keyed on the name's own slug under `noun.`:
+  nothing about the resources changes, nothing about the saves changes, and the call sites that change
+  are exactly the ones that draw.
 
-  **That the chrome is done is what makes the gap visible, which is what the order was for.** The
-  armoury draws `Combat Knife  [已裝上]` and `Fire Axe  250 點`, and the summary line under the cursor
-  is still `6 dmg  3.2/s  1.6 m  bleed`. Every padded column lines up in Chinese, because `[已裝上]` is
-  six cells where `[equipped]` is eleven and `Strings.Pad` counts cells — the last three columns still
-  using C#'s `{x,-18}` were converted with the pages.
+  **A noun with no row draws its English name rather than «key»**, which is right on a screen and is
+  the exact shape of failure nobody notices — one English word among forty Chinese ones reads as a
+  proper noun somebody chose to leave alone. `StringProbe` closes that: it enumerates every noun by
+  reading `resources/` rather than a list, so a weapon added next month is checked the day it is
+  added, and it names the missing row.
+
+  **What is left is the two kinds of sentence that are composed rather than stored.** The unlock
+  conditions (`extract without firing a gun`) are prose in `UnlockBook`, and the shop's summary line
+  (`6 dmg  3.2/s  1.6 m  bleed`) is assembled in `ShopCatalogue` out of numbers and a trait name.
+  Neither is a noun and neither is a whole string anybody can translate as it stands; both need
+  splitting into a format and its arguments first, the way `CharacterResource.AbilityLine` was.
 
   The failure mode this track has already produced once is a field that *is* a key being interpolated
   rather than resolved: the base screen drew "playing as RIN — character.rin.blurb" from the moment the

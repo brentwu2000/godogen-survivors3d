@@ -199,7 +199,7 @@ public partial class DebriefScreen : CanvasLayer
         for (int i = 0; i < run.KillsByType.Length; i++)
         {
             if (run.KillsByType[i] > 0)
-                parts.Add($"{log.TypeName(i)} {run.KillsByType[i]}");
+                parts.Add($"{Strings.Noun(log.TypeName(i))} {run.KillsByType[i]}");
         }
 
         return parts.Count > 0 ? $"      {string.Join("   ", parts)}" : "";

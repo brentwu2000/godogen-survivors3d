@@ -261,13 +261,13 @@ public partial class BaseScreen : Control
         // player off to earn credits that will not help.
         if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
         {
-            _message = Strings.Get("msg.locked", entry.Name, reason.ToLower());
+            _message = Strings.Get("msg.locked", Strings.Noun(entry.Name), reason.ToLower());
             return false;
         }
 
         if (entry.Price <= 0)
         {
-            _message = Strings.Get("msg.notforsale", entry.Name);
+            _message = Strings.Get("msg.notforsale", Strings.Noun(entry.Name));
             return false;
         }
 
@@ -275,13 +275,13 @@ public partial class BaseScreen : Control
         {
             // Nothing is deducted and nothing is granted. A partial purchase is
             // the one outcome a shop must never have.
-            _message = Strings.Get("msg.cannotafford", entry.Name, entry.Price, _profile.Credits);
+            _message = Strings.Get("msg.cannotafford", Strings.Noun(entry.Name), entry.Price, _profile.Credits);
             return false;
         }
 
         _profile.Credits -= entry.Price;
         _profile.Grant(entry.Path);
-        _message = Strings.Get("msg.bought", entry.Name, entry.Price);
+        _message = Strings.Get("msg.bought", Strings.Noun(entry.Name), entry.Price);
         return true;
     }
 
@@ -303,7 +303,7 @@ public partial class BaseScreen : Control
 
         if (entry.Slot != null)
         {
-            _message = Strings.Get("msg.worn", entry.Name);
+            _message = Strings.Get("msg.worn", Strings.Noun(entry.Name));
             return;
         }
 
@@ -315,7 +315,7 @@ public partial class BaseScreen : Control
         // is built to refuse.
         if (wanted != null && wanted.Slot != WeaponSlot.Sidearm)
         {
-            _message = Strings.Get("msg.bothhands", entry.Name);
+            _message = Strings.Get("msg.bothhands", Strings.Noun(entry.Name));
             return;
         }
 
@@ -328,7 +328,7 @@ public partial class BaseScreen : Control
             _profile.LoadoutWeapon = "res://resources/weapons/scavenged_rifle.tres";
 
         _profile.LoadoutSecondary = entry.Path;
-        _message = Join(_message, Strings.Get("msg.sidearm", entry.Name));
+        _message = Join(_message, Strings.Get("msg.sidearm", Strings.Noun(entry.Name)));
         Persist();
     }
 
@@ -350,13 +350,13 @@ public partial class BaseScreen : Control
 
         if (!_profile.Owns(entry.Path))
         {
-            _message = Strings.Get("msg.notowned", entry.Name);
+            _message = Strings.Get("msg.notowned", Strings.Noun(entry.Name));
             return;
         }
 
         if (Profile.IsStartingKit(entry.Path))
         {
-            _message = Strings.Get("msg.startingkit", entry.Name);
+            _message = Strings.Get("msg.startingkit", Strings.Noun(entry.Name));
             return;
         }
 
@@ -365,12 +365,12 @@ public partial class BaseScreen : Control
 
         if (!_profile.Revoke(entry.Path))
         {
-            _message = Strings.Get("msg.cannotsell", entry.Name);
+            _message = Strings.Get("msg.cannotsell", Strings.Noun(entry.Name));
             return;
         }
 
         _profile.Credits += refund;
-        _message = Strings.Get("msg.sold", entry.Name, refund)
+        _message = Strings.Get("msg.sold", Strings.Noun(entry.Name), refund)
                  + (wasEquipped ? Strings.Get("msg.sold.slot") : "");
         Persist();
     }
@@ -385,7 +385,7 @@ public partial class BaseScreen : Control
         if (entry.Slot is { } slot)
         {
             _profile.EquippedGear[(int)slot] = entry.Path;
-            _message = Join(_message, Strings.Get("msg.wearing", entry.Name));
+            _message = Join(_message, Strings.Get("msg.wearing", Strings.Noun(entry.Name)));
             return;
         }
 
@@ -401,7 +401,7 @@ public partial class BaseScreen : Control
         else
             _profile.LoadoutWeapon = entry.Path;
 
-        _message = Join(_message, Strings.Get("msg.carrying", entry.Name));
+        _message = Join(_message, Strings.Get("msg.carrying", Strings.Noun(entry.Name)));
     }
 
     /// Commits to one of the three jobs on the board.
@@ -717,7 +717,7 @@ public partial class BaseScreen : Control
                 continue;
 
             _profile.Biome = next;
-            _message = Strings.Get("msg.biome", BiomeBook.Load(next).BiomeName);
+            _message = Strings.Get("msg.biome", Strings.Noun(BiomeBook.Load(next).BiomeName));
             Persist();
             return;
         }
@@ -810,7 +810,7 @@ public partial class BaseScreen : Control
             ? "   " + Strings.Get("base.next", BiomeBook.OpensAt(_profile.Biome + 1))
             : "";
 
-        text.AppendLine(Strings.Get("base.heading", here.BiomeName, here.Blurb, more));
+        text.AppendLine(Strings.Get("base.heading", Strings.Noun(here.BiomeName), Strings.Get(here.Blurb), more));
 
         // Who is going, next to where they are going. The two lines are read
         // together because the choice is made together.
@@ -882,7 +882,7 @@ public partial class BaseScreen : Control
             // eight would be counted by `{state,-12}`, so the note column would
             // start in a different place on every translated row.
             text.AppendLine($"{(i == _cursor ? " >" : "  ")} "
-                          + Strings.Pad(entry.Name, 18) + " " + Strings.Pad(state, 12) + note);
+                          + Strings.Pad(Strings.Noun(entry.Name), 18) + " " + Strings.Pad(state, 12) + note);
         }
 
         if (last < _catalogue.All.Count)
@@ -1050,7 +1050,7 @@ public partial class BaseScreen : Control
             CollectionBook.Set entry = CollectionBook.All[set];
             bool claimed = _profile.ClaimedSets.Contains(entry.Name);
 
-            text.AppendLine("  " + Strings.Get("records.set", entry.Name,
+            text.AppendLine("  " + Strings.Get("records.set", Strings.Noun(entry.Name),
                                                CollectionBook.Found(_profile, set), entry.Pieces.Length)
                           + "  " + (claimed ? Strings.Get("records.set.paid")
                                             : Strings.Get("records.set.bounty", entry.Bounty)));
@@ -1058,7 +1058,7 @@ public partial class BaseScreen : Control
             foreach (string piece in entry.Pieces)
             {
                 text.AppendLine("    " + Strings.Get("records.piece",
-                    _profile.Collected.Contains(piece) ? "x" : " ", piece));
+                    _profile.Collected.Contains(piece) ? "x" : " ", Strings.Noun(piece)));
             }
         }
 
@@ -1112,8 +1112,8 @@ public partial class BaseScreen : Control
         text.AppendLine();
 
         BiomeResource here = BiomeBook.Load(_profile.Biome);
-        text.AppendLine("  " + Strings.Get("map.heading", here.BiomeName));
-        text.AppendLine($"  {here.Blurb}");
+        text.AppendLine("  " + Strings.Get("map.heading", Strings.Noun(here.BiomeName)));
+        text.AppendLine("  " + Strings.Get(here.Blurb));
 
         if (BiomeBook.All.Length > 1 && !BiomeBook.Allows(_profile, _profile.Biome + 1))
             text.AppendLine("  " + Strings.Get("map.next", BiomeBook.OpensAt(_profile.Biome + 1)));
@@ -1126,7 +1126,7 @@ public partial class BaseScreen : Control
 
         text.AppendLine("  " + Strings.Get("map.today", today.DateKey));
         text.AppendLine("    " + Strings.Get("map.today.job",
-                                             BiomeBook.Load(today.Biome).BiomeName,
+                                             Strings.Noun(BiomeBook.Load(today.Biome).BiomeName),
                                              today.Job.Describe()));
         text.AppendLine(done
             ? "    " + Strings.Get("map.today.done", _profile.Daily[today.DateKey])
@@ -1143,7 +1143,7 @@ public partial class BaseScreen : Control
         text.AppendLine();
 
         BiomeResource here = BiomeBook.Load(_profile.Biome);
-        text.AppendLine($"  {here.BiomeName}");
+        text.AppendLine("  " + Strings.Noun(here.BiomeName));
         text.AppendLine(_profile.HasContract
             ? "  " + Strings.Get("gate.contract",
                                  _profile.ContractOffer()[_profile.ContractIndex].Describe())

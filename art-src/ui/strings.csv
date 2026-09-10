@@ -220,3 +220,72 @@ msg.stash.sold,sold the stash for {0},賣掉存貨，得到 {0}
 msg.biome,heading for {0},前往 {0}
 msg.biome.none,nowhere else to go yet,還沒有別的地方可去
 msg.daily.done,today's run is done — {0} points. the next one is tomorrow,今日挑戰已完成 — {0} 分。下一次是明天
+noun.arc_lance,Arc Lance,電弧長矛
+noun.bolt_launcher,Bolt Launcher,弩箭發射器
+noun.combat_knife,Combat Knife,格鬥刀
+noun.fire_axe,Fire Axe,消防斧
+noun.hand_emitter,Hand Emitter,掌心發射器
+noun.hunting_bow,Hunting Bow,獵弓
+noun.katana,Katana,武士刀
+noun.marksman_rifle,Marksman Rifle,精準步槍
+noun.pulse_rifle,Pulse Rifle,脈衝步槍
+noun.pump_shotgun,Pump Shotgun,泵動霰彈槍
+noun.reaper_scythe,Reaper Scythe,收割之鐮
+noun.scavenged_rifle,Scavenged Rifle,拼裝步槍
+noun.service_rifle,Service Rifle,制式步槍
+noun.sidearm_pistol,Sidearm Pistol,手槍
+noun.war_hammer,War Hammer,戰錘
+noun.adrenaline_shot,Adrenaline Shot,腎上腺素針
+noun.antiviral_serum,Antiviral Serum,抗病毒血清
+noun.canned_food,Canned Food,罐頭食物
+noun.circuit_board,Circuit Board,電路板
+noun.control_rod,Control Rod,控制棒
+noun.crayon_drawing,Crayon Drawing,蠟筆畫
+noun.dog_tags,Dog Tags,兵籍牌
+noun.fuse_coupling,Fuse Coupling,保險絲接頭
+noun.medkit,Medkit,醫療包
+noun.molotov,Molotov,汽油彈
+noun.pipe_bomb,Pipe Bomb,土製炸彈
+noun.rifle_rounds,Rifle Rounds,步槍彈
+noun.scrap_metal,Scrap Metal,廢金屬
+noun.turbine_blade,Turbine Blade,渦輪葉片
+noun.wedding_ring,Wedding Ring,婚戒
+noun.bandolier,Bandolier,彈藥帶
+noun.blade_harness,Blade Harness,刀刃背架
+noun.canvas_pack,Canvas Pack,帆布背包
+noun.copper_coil,Copper Coil,銅線圈
+noun.cracked_capacitor,Cracked Capacitor,裂紋電容
+noun.demolition_rig,Demolition Rig,爆破裝具
+noun.frost_cell,Frost Cell,冷凍電池
+noun.lucky_bone,Lucky Bone,幸運骨
+noun.plate_carrier,Plate Carrier,防彈板背心
+noun.running_shoes,Running Shoes,跑鞋
+noun.scuffed_boots,Scuffed Boots,磨損的靴子
+noun.stitched_vest,Stitched Vest,縫補背心
+noun.tourniquet,Tourniquet,止血帶
+noun.tread_boots,Tread Boots,抓地靴
+noun.trekking_pack,Trekking Pack,行軍背包
+noun.whetstone,Whetstone,磨刀石
+noun.worn_jacket,Worn Jacket,舊夾克
+noun.walker,walker,行屍
+noun.runner,runner,奔屍
+noun.brute,brute,蠻屍
+noun.bloater,bloater,脹屍
+noun.spitter,spitter,噴吐者
+noun.boss,boss,首領
+noun.stalker,stalker,潛行者
+noun.bulwark,bulwark,壁壘
+noun.lantern,lantern,提燈者
+noun.rail_yard,Rail Yard,調車場
+noun.old_town,Old Town,舊城區
+noun.the_flats,The Flats,平原
+noun.ash_district,Ash District,灰燼區
+noun.cold_storage,Cold Storage,冷凍庫
+noun.someones_life,Someone's Life,某人的一生
+noun.the_grid,The Grid,電網
+biome.rail_yard.blurb,"mixed cover, honest sight lines",掩體交錯，視線誠實
+biome.old_town.blurb,no line of fire; the crowd arrives close,沒有射界；人潮貼身而來
+biome.the_flats.blurb,"nothing in the way, in either direction",兩個方向都沒有任何遮蔽
+biome.ash_district.blurb,"long streets, blind corners; the crowd comes down one",長街與盲角；人潮只從一條下來
+biome.cold_storage.blurb,rooms and doorways; nothing has a long shot,房間與門洞；沒有東西打得遠
+hud.curiosity,CURIOSITY — {0}  ({1} {2}/{3}),收藏品 — {0}  （{1} {2}/{3}）

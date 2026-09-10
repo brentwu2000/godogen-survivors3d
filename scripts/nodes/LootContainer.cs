@@ -296,7 +296,8 @@ public partial class LootContainer : Node3D
             // The count includes this piece, which is not yet recorded anywhere:
             // the record is written at the door. Saying "1/3" while holding the
             // second piece would be technically true and read as a bug.
-            _hud.Announce($"CURIOSITY — {name.ToUpper()}  ({set} {found + 1}/{total})", 3.2f);
+            _hud.Announce(Strings.Get("hud.curiosity", Strings.Noun(name).ToUpper(),
+                                      Strings.Noun(set), found + 1, total), 3.2f);
         }
     }
 

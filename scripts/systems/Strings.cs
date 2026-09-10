@@ -304,6 +304,69 @@ public static class Strings
     public static string Raw(int key, int locale) =>
         _table == null ? "" : _table.Values[key * _table.Locales.Length + locale];
 
+    /// A content noun — a weapon, an item, a piece of gear, an enemy variant, a
+    /// biome, a collection set — in the player's language.
+    ///
+    /// **The identity is the argument and it is never translated.** "Wedding
+    /// Ring" is a key in the save file: `Profile.Stash` is a dictionary of item
+    /// names, `Profile.Collected` is an array of them, `ClaimedSets` holds a set's
+    /// name, and `EnemyTypeResource.TypeName` resolves the path of a baked body.
+    /// Turning any of those into a translation key would either break every
+    /// existing save or make what a save *contains* depend on the language it was
+    /// written in — a profile that loses its collection when somebody tries the
+    /// other language is a worse bug than an untranslated word.
+    ///
+    /// So the identity stays English forever and this is a lookup beside it: the
+    /// noun's own name, slugged, under `noun.`. Nothing about the resource
+    /// changes, nothing about the save changes, and the call sites that change are
+    /// exactly the ones that draw.
+    ///
+    /// **A noun with no row draws its English name rather than «key».** That is
+    /// deliberate and it is the one place in this file where a missing row is not
+    /// an error: a weapon added today and translated next week should read as
+    /// "Service Rifle" on a Chinese screen, not as a diagnostic. What makes that
+    /// safe rather than silent is `StringProbe`, which enumerates every noun the
+    /// game can draw — by reading `resources/` rather than a list — and fails if
+    /// one has no row. The fallback is for the minute between adding a weapon and
+    /// adding its row, not for shipping.
+    public static string Noun(string identity)
+    {
+        if (identity.Length == 0)
+            return identity;
+
+        string key = NounKey(identity);
+        return _index != null && _index.ContainsKey(key) ? Get(key) : identity;
+    }
+
+    /// `"Wedding Ring"` to `"noun.wedding_ring"`.
+    ///
+    /// Apostrophes are dropped rather than replaced, so "Someone's Life" is
+    /// `someones_life` and not `someone_s_life`. Anything else that is not a
+    /// letter or a digit becomes one underscore, and runs of them collapse —
+    /// otherwise "Sidearm  Pistol" and "Sidearm Pistol" would be two keys, and a
+    /// double space is not something anybody would see in a diff.
+    public static string NounKey(string identity)
+    {
+        var slug = new System.Text.StringBuilder("noun.");
+        bool gap = false;
+
+        foreach (char c in identity)
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                if (gap && slug.Length > "noun.".Length)
+                    slug.Append('_');
+
+                gap = false;
+                slug.Append(char.ToLowerInvariant(c));
+            }
+            else if (c != '\'')
+                gap = true;
+        }
+
+        return slug.ToString();
+    }
+
     /// The first key of the table that appears verbatim in `drawn`, or `""`.
     ///
     /// **The one localisation failure that leaves no trace.** A missing key comes

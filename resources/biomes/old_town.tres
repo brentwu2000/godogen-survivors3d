@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1_u8i7i")
 BiomeName = "Old Town"
-Blurb = "no line of fire; the crowd arrives close"
+Blurb = "biome.old_town.blurb"
 TileWeights = PackedFloat32Array(0.2, 1.2, 1.8, 2.2)
 ClusterCountScale = 2.0
 ClusterSizeScale = 1.25

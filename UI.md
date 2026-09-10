@@ -288,12 +288,27 @@ Each step is playable before the next starts and closes against a probe, per the
    debrief, the shelter's fitting prompts and now `BaseScreen`'s six pages and its twenty-three
    messages — 221 keys across two locales, against a 448-glyph subset.
 
-   **What is left is the content nouns, and they are a different job rather than more of this one.**
-   Fifteen weapon names, twenty items, seventeen gear pieces, nine enemy variants, five biomes and
-   their blurbs, the contract descriptions, the unlock conditions and the collection sets are English
-   literals that `Build*.cs` writes into `.tres`, so the screens read them and draw them without ever
-   touching the table. The fix is a key convention in the tools; `CharacterResource.Role` and `.Blurb`
-   already work that way and are the pattern.
+   **The content nouns are done too, and not the way this file predicted.** The prediction was
+   "either the tools write keys and the screens translate them, or the resources gain a per-locale
+   field". Both are wrong, for a reason neither had looked for: **the names are identities.**
+   `Profile.Stash` is a dictionary keyed by item name, `Collected` is an array of them, `ClaimedSets`
+   holds a set's name, and `EnemyTypeResource.TypeName` resolves the path of a baked body. A tool that
+   wrote `noun.wedding_ring` into the resource would have broken every save on disk, and a per-locale
+   field would have made what a save *contains* depend on the language it was written in.
+
+   So `Strings.Noun(identity)` is a lookup beside the name rather than a replacement for it, keyed on
+   the name's own slug under `noun.`. The resources are untouched, the saves are untouched, and the
+   call sites that changed are exactly the ones that draw. 63 nouns.
+
+   The prediction's other half was right and is worth keeping: `WeaponProbe`'s dominance stage does
+   print weapon names, and it prints them in English still, because it reads the resource and the
+   resource is the identity. That is the correct outcome rather than a lucky one — a probe naming a
+   weapon in whatever language the machine is set to would be a probe you cannot grep.
+
+   **A noun with no row draws its English name rather than «key».** That is right on a screen and is
+   also the exact shape of failure nobody notices — one English word among forty Chinese ones reads as
+   a proper noun somebody chose to leave alone. `StringProbe` enumerates every noun by reading
+   `resources/` rather than a list, so a weapon added next month is checked the day it is added.
 
    **Sixty lines of the base screen were deleted rather than translated.** `SideColumn` and the
    flat-screen branch drew every page's content at once for the case where `Base.tscn` has no
@@ -344,18 +359,22 @@ Each step is playable before the next starts and closes against a probe, per the
 **Steps 1 and 2 are worth doing even if the rest is deferred.** The font is the risk, and the table is
 the thing every later locale is free against.
 
-**What remains is the content nouns, and the chrome being done is what makes that visible.** The
-armoury draws `Combat Knife  [已裝上]` and `Fire Axe  250 點`, and the shop's own summary line under the
-cursor is still `6 dmg  3.2/s  1.6 m  bleed`. That is the state this order was chosen to produce:
-translating the chrome first does not finish the screen, it shows exactly which words are not in the
-table yet.
+**What remains is the two kinds of sentence that are composed rather than stored.** The unlock
+conditions — `extract without firing a gun`, `kill the boss and walk out` — are prose in `UnlockBook`.
+The shop's summary line under the cursor — `6 dmg  3.2/s  1.6 m  bleed` — is assembled in
+`ShopCatalogue` out of four numbers and a trait name. Neither is a noun and neither is a whole string
+anybody can hand a translator: they have to be split into a format and its arguments first, the way
+`CharacterResource.AbilityLine` was, because Chinese does not put the number where English does.
 
-**The column arithmetic held.** Every padded column on the armoury page lines up in Chinese — `[已裝上]`
-is six cells where `[equipped]` is eleven, and `Strings.Pad` counts cells, so the note column starts at
-the same place on every row. The three places still using C#'s `{x,-18}` — the shop rows, the contract
-descriptions and the reward column — were the last of that kind and are converted.
+`Contract.Describe` is the same shape and the same job. Its subject already resolves — a contract asks
+for 行屍 rather than for `walker` — and the sentence around it does not.
 
-The remaining job has two hazards and both already have an assertion under them. A noun that becomes a
-key and is then drawn raw is caught by `BaseLoopProbe`'s page walk; a character the subset cannot draw
-is caught by `FontProbe`. What neither can see is whether a translated weapon name still *fits*
-eighteen cells, and that is a screenshot rather than a probe.
+**The column arithmetic held all the way through.** Every padded column on the armoury page lines up in
+Chinese: `[已裝上]` is six cells where `[equipped]` is eleven, `格鬥刀` is six where `Combat Knife` is
+twelve, and `Strings.Pad` counts cells. The last three places still counting characters — the shop
+rows, the contract descriptions and the reward column — were converted with the pages.
+
+The two hazards left both have an assertion under them. A field that holds a key and is drawn raw is
+caught by `BaseLoopProbe`'s page walk; a noun with no row, and a character the subset cannot draw, are
+caught by `StringProbe` and `FontProbe`. What none of them can see is whether a translated sentence
+still *fits* — that is a screenshot, and `test/BaseShot.cs -- locale:zh_TW` is how it is taken.
