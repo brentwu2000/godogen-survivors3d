@@ -79,15 +79,15 @@ public partial class DebriefScreen : CanvasLayer
 
         _title.Text = run.Outcome switch
         {
-            RunState.Extracted => "EXTRACTED",
-            RunState.Died => "KILLED",
-            RunState.TimedOut => "OUT OF TIME",
-            _ => "RUN OVER",
+            RunState.Extracted => Strings.Get("debrief.title.extracted"),
+            RunState.Died => Strings.Get("debrief.title.killed"),
+            RunState.TimedOut => Strings.Get("debrief.title.timeout"),
+            _ => Strings.Get("debrief.title.over"),
         };
         _title.AddThemeColorOverride("font_color", run.Survived ? Good : Bad);
 
         _body.Text = Compose(meta, run, log);
-        _footer.Text = "[Enter] back to base";
+        _footer.Text = Strings.Get("debrief.footer");
     }
 
     /// Polled, not event-driven. `Input.ActionPress` moves the poll state without
@@ -122,26 +122,32 @@ public partial class DebriefScreen : CanvasLayer
         // 513" and "you got 238 and doubled it by staying" are different
         // sentences about the same number, and only the second one is a lesson.
         text.AppendLine(run.Survived
-            ? $"banked {run.Banked}      carried {run.BackpackValue + run.SafeBoxValue} x{run.Multiplier:F2} for lasting {run.Seconds:F0}s"
-            : $"banked {run.Banked}      the backpack ({run.BackpackValue}) is gone; the safe box ({run.SafeBoxValue}) is not");
+            ? Strings.Get("debrief.banked.out", run.Banked,
+                          run.BackpackValue + run.SafeBoxValue,
+                          $"{run.Multiplier:F2}", $"{run.Seconds:F0}")
+            : Strings.Get("debrief.banked.died", run.Banked,
+                          run.BackpackValue, run.SafeBoxValue));
 
-        text.AppendLine($"credits {profile.Credits}      streak {profile.Streak}      " +
-                        $"runs {profile.RunsSurvived} out / {profile.RunsLost} lost");
+        text.AppendLine(Strings.Get("debrief.credits", profile.Credits, profile.Streak)
+                      + "      "
+                      + Strings.Get("debrief.runs", profile.RunsSurvived, profile.RunsLost));
         text.AppendLine();
 
-        text.AppendLine($"killed {run.Kills}{KillBreakdown(run, log)}");
-        text.AppendLine($"searched {run.CratesLooted} crates for {run.LootValue}      " +
-                        $"used {run.ItemsUsed}, threw {run.ItemsThrown}      " +
-                        $"lowest health {run.LowestHealth:F0}/{run.MaxHealth:F0}");
+        text.AppendLine(Strings.Get("debrief.killed", run.Kills) + KillBreakdown(run, log));
+        text.AppendLine(Strings.Get("debrief.searched", run.CratesLooted, run.LootValue)
+                      + "      "
+                      + Strings.Get("debrief.items", run.ItemsUsed, run.ItemsThrown)
+                      + "      "
+                      + Strings.Get("debrief.lowest", $"{run.LowestHealth:F0}", $"{run.MaxHealth:F0}"));
 
         // Practice was always meant to be a line on this screen (it is why it was
         // moved to a once-per-run settlement at all). It had only ever been a
         // console print.
         if (run.ProficiencyTotal > 0)
-            text.AppendLine($"practice{Practice(run, profile)}");
+            text.AppendLine(Strings.Get("debrief.practice") + Practice(run, profile));
 
         if (run.LostEquipment.Length > 0)
-            text.AppendLine($"lost: {Names(run.LostEquipment)}");
+            text.AppendLine(Strings.Get("debrief.lost", Names(run.LostEquipment)));
 
         // The collection, at the one moment the player is looking at what the run
         // was worth. It used to appear nowhere except a line on the base screen,
@@ -150,7 +156,7 @@ public partial class DebriefScreen : CanvasLayer
         // by without a word.
         if (run.CuriositiesFound.Length > 0)
         {
-            text.AppendLine($"recovered: {string.Join(", ", run.CuriositiesFound)}");
+            text.AppendLine(Strings.Get("debrief.recovered", string.Join(", ", run.CuriositiesFound)));
 
             foreach (string piece in run.CuriositiesFound)
             {
@@ -158,12 +164,12 @@ public partial class DebriefScreen : CanvasLayer
                 if (set < 0)
                     continue;
 
-                text.AppendLine($"  {piece} — {CollectionBook.All[set].Name}");
+                text.AppendLine("  " + Strings.Get("debrief.set.piece", piece, CollectionBook.All[set].Name));
             }
         }
 
         if (run.SetBounty > 0)
-            text.AppendLine($"SET COMPLETE — +{run.SetBounty} credits");
+            text.AppendLine(Strings.Get("debrief.set.complete", run.SetBounty));
 
         text.AppendLine();
         text.AppendLine(ContractLine(meta, run, log));
@@ -177,7 +183,7 @@ public partial class DebriefScreen : CanvasLayer
         // did to get it learns what this game rewards, which is the only part
         // that changes what they do next.
         foreach (Unlock unlock in meta.NewUnlocks)
-            text.AppendLine($"unlocked {unlock.Name} — {unlock.Condition.ToLower()}");
+            text.AppendLine(Strings.Get("debrief.unlocked", unlock.Name, unlock.Condition.ToLower()));
 
         // "\r\n" from AppendLine draws as two breaks in a Godot Label. Same fix
         // as the base screen; the debrief has been double-spaced for as long.
@@ -205,7 +211,8 @@ public partial class DebriefScreen : CanvasLayer
         for (int i = 0; i < run.ProficiencyGained.Length; i++)
         {
             if (run.ProficiencyGained[i] > 0)
-                parts.Add($"{(WeaponCategory)i} +{run.ProficiencyGained[i]} (now {profile.Proficiency[i]})");
+                parts.Add(Strings.Get("debrief.practice.gain", (WeaponCategory)i,
+                                      run.ProficiencyGained[i], profile.Proficiency[i]));
         }
 
         return parts.Count > 0 ? $"      {string.Join("   ", parts)}" : "";
@@ -216,11 +223,11 @@ public partial class DebriefScreen : CanvasLayer
     private static string ContractLine(MetaManager meta, RunRecord run, RunLog? log)
     {
         if (meta.ContractTaken is not { } contract)
-            return "no contract taken";
+            return Strings.Get("debrief.contract.none");
 
         return meta.ContractMet
-            ? $"CONTRACT MET — {contract.Describe(log)}   +{contract.Reward}"
-            : $"contract failed — {contract.Describe(log)}   ({contract.Progress(run)})";
+            ? Strings.Get("debrief.contract.met", contract.Describe(log), contract.Reward)
+            : Strings.Get("debrief.contract.failed", contract.Describe(log), contract.Progress(run));
     }
 
     private static string Records(Profile.RecordsBeaten beaten, RunRecord run)
@@ -229,13 +236,13 @@ public partial class DebriefScreen : CanvasLayer
             return "";
 
         var parts = new System.Collections.Generic.List<string>();
-        if (beaten.Bank) parts.Add($"banked {run.Banked}");
-        if (beaten.Kills) parts.Add($"killed {run.Kills}");
-        if (beaten.Seconds) parts.Add($"lasted {run.Seconds:F0}s");
-        if (beaten.Multiplier) parts.Add($"multiplier x{run.Multiplier:F2}");
-        if (beaten.Streak) parts.Add("longest streak");
+        if (beaten.Bank) parts.Add(Strings.Get("debrief.best.bank", run.Banked));
+        if (beaten.Kills) parts.Add(Strings.Get("debrief.best.kills", run.Kills));
+        if (beaten.Seconds) parts.Add(Strings.Get("debrief.best.seconds", $"{run.Seconds:F0}"));
+        if (beaten.Multiplier) parts.Add(Strings.Get("debrief.best.multiplier", $"{run.Multiplier:F2}"));
+        if (beaten.Streak) parts.Add(Strings.Get("debrief.best.streak"));
 
-        return $"NEW BEST — {string.Join(", ", parts)}";
+        return Strings.Get("debrief.best", string.Join(", ", parts));
     }
 
     private static string Names(string[] paths)

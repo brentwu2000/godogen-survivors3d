@@ -65,10 +65,11 @@ public partial class BaseLoopProbe : SceneTree
 
         switch (_stage)
         {
-            case 0: return Step(StageLaunch, "the base screen launches a run");
-            case 1: return Step(StageDie, "the run ends");
-            case 2: return Step(StageDebrief, "the debrief reports it and waits");
-            case 3: return Step(StageReturn, "and hands control back to the base");
+            case 0: return Step(StageNoKeysOnScreen, "the base screen resolves every key it draws");
+            case 1: return Step(StageLaunch, "the base screen launches a run");
+            case 2: return Step(StageDie, "the run ends");
+            case 3: return Step(StageDebrief, "the debrief reports it and waits");
+            case 4: return Step(StageReturn, "and hands control back to the base");
             default:
                 Restore();
                 GD.Print(_failed ? "PROBE FAILED" : "PROBE OK");
@@ -88,6 +89,147 @@ public partial class BaseLoopProbe : SceneTree
         _stage++;
         _tick = 0;
         return false;
+    }
+
+    /// Nothing on the base screen is a key that somebody forgot to resolve.
+    ///
+    /// **The failure this catches leaves no other trace.** A field that holds a
+    /// key and is interpolated rather than resolved draws the key: the screen is
+    /// present, non-empty, padded correctly and fully drawable, and it says
+    /// "playing as RIN — character.rin.blurb". `StringProbe` cannot see it — the
+    /// table is fine. `FontProbe` cannot see it — every character is ASCII.
+    /// `Get` is never called, so there is no `«key»` to notice.
+    ///
+    /// It happened: `CharacterResource.Blurb` became a key when the roster was
+    /// extracted, the roster screen was updated and this line was not, and the
+    /// base screen drew the key for the whole time in between, in English as well
+    /// as in Chinese. This is the assertion that would have said so on the first
+    /// sweep after.
+    ///
+    /// The base screen is the right place for it because it is the page that
+    /// draws the most *content* — a survivor, a biome, a shop entry, a contract
+    /// — and content is what `Build*.cs` turns into keys one field at a time.
+    /// The fittings, in the order the room lays them out.
+    private static readonly Fitting[] Pages =
+    {
+        Fitting.Armoury, Fitting.Locker, Fitting.Records,
+        Fitting.Board, Fitting.Map, Fitting.Console, Fitting.Gate,
+    };
+
+    /// Ticks each page is given: one to be stood on, one for the shelter to
+    /// notice, one for the screen to draw from the new focus.
+    private const int PageTicks = 4;
+
+    private bool _pagesClean = true;
+
+    private bool? StageNoKeysOnScreen(int tick)
+    {
+        var shelter = CurrentScene?.GetNodeOrNull<Shelter>("Shelter");
+        var player = CurrentScene?.GetNodeOrNull<Player>("Player");
+
+        if (shelter == null || player == null)
+        {
+            GD.PushError($"  no shelter={shelter == null} or player={player == null} in the base");
+            return false;
+        }
+
+        // **Every page, not whichever one happens to be up.** The first version
+        // of this stage read the screen where the probe found it — standing at
+        // the gate — and passed with the bug it was written for still in the
+        // code, because the survivor's blurb is on the *armoury* page and the
+        // gate page does not draw it. A leak check that reads one page of seven
+        // is a check that reports on the page with the least content in it.
+        //
+        // Teleported rather than walked. Walking the room is `ShelterProbe`'s
+        // stage; what this needs is only that the focus changes and the screen
+        // redraws from it.
+        // `_tick` is incremented before the stage runs, so the first tick a stage
+        // sees is 1 and not 0. Counting pages off it directly skipped the first
+        // teleport and then checked the armoury page while standing at the gate.
+        int t = tick - 1;
+        int page = t / PageTicks;
+        if (page >= Pages.Length)
+            return _pagesClean;
+
+        int within = t % PageTicks;
+
+        if (within == 0)
+        {
+            player.GlobalPosition = shelter.Stations[Pages[page]];
+            return null;
+        }
+
+        if (within < PageTicks - 1)
+            return null;
+
+        if (shelter.Focus != Pages[page])
+        {
+            GD.PushError($"  meant to be standing on {Pages[page]} and the shelter reads {shelter.Focus}");
+            _pagesClean = false;
+            return null;
+        }
+
+        _pagesClean &= NothingLeaks(CurrentScene, $"the {Pages[page]} page");
+        return null;
+    }
+
+    /// Every `Label` under `root`, checked against the key table.
+    ///
+    /// Walked rather than named, so a page added to either panel later is
+    /// covered without anybody remembering to add it here.
+    private static bool NothingLeaks(Node? root, string what)
+    {
+        if (root == null)
+        {
+            GD.PushError($"  no {what} to read");
+            return false;
+        }
+
+        if (!Strings.Ready())
+        {
+            GD.PushError("  the string table did not load");
+            return false;
+        }
+
+        bool ok = true;
+        int read = 0;
+
+        foreach (Node node in Walk(root))
+        {
+            if (node is not Label label || label.Text.Length == 0)
+                continue;
+
+            read++;
+            string leaked = Strings.Leak(label.Text);
+
+            if (leaked.Length > 0)
+            {
+                GD.PushError($"  {what}: '{label.Name}' draws the key '{leaked}' "
+                           + "rather than what it stands for");
+                ok = false;
+            }
+        }
+
+        if (read == 0)
+        {
+            GD.PushError($"  {what} drew no text at all, so this stage measured nothing");
+            ok = false;
+        }
+        else if (!ok)
+            GD.Print($"  {read} label(s) read on {what}");
+
+        return ok;
+    }
+
+    private static System.Collections.Generic.IEnumerable<Node> Walk(Node root)
+    {
+        yield return root;
+
+        foreach (Node child in root.GetChildren())
+        {
+            foreach (Node deeper in Walk(child))
+                yield return deeper;
+        }
     }
 
     private bool? StageLaunch(int tick)
@@ -197,9 +339,15 @@ public partial class BaseLoopProbe : SceneTree
         GD.Print($"  debrief visible after 1.5s = {debrief.Visible} (never blinked = {_debriefStayed}); " +
                  $"record says {run?.Outcome} at {run?.Seconds:F1}s, banked {run?.Banked}");
 
+        // The same key check the base screen gets, on the other page that draws
+        // content. The debrief names weapons, items, enemy variants, contracts,
+        // unlocks and collection pieces — six sources, every one of which is a
+        // literal today and a key the day `Build*.cs` extracts it.
+        bool clean = NothingLeaks(debrief, "the debrief");
+
         // Then dismiss it the way a player would.
         Input.ActionPress("ui_accept");
-        return debrief.Visible && _debriefStayed && run != null && run.Outcome == RunState.Died;
+        return clean && debrief.Visible && _debriefStayed && run != null && run.Outcome == RunState.Died;
     }
 
     private bool _debriefStayed = true;

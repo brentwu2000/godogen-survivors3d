@@ -95,3 +95,46 @@ growth.dodge,+10% dodge,閃避 +10%
 growth.thorns,+4 thorns,荊棘 +4
 growth.reach,+0.8 m search reach,搜刮範圍 +0.8 米
 growth.fortune,+15% loot value,戰利品價值 +15%
+debrief.title.extracted,EXTRACTED,撤離成功
+debrief.title.killed,KILLED,陣亡
+debrief.title.timeout,OUT OF TIME,時間到
+debrief.title.over,RUN OVER,任務結束
+debrief.footer,[Enter] back to base,[Enter] 回基地
+debrief.banked.out,banked {0}      carried {1} x{2} for lasting {3}s,帶回 {0}      撐了 {3} 秒，{1} x{2}
+debrief.banked.died,banked {0}      the backpack ({1}) is gone; the safe box ({2}) is not,帶回 {0}      背包裡的 {1} 沒了；保險箱的 {2} 還在
+debrief.credits,credits {0}      streak {1},信用點 {0}      連勝 {1}
+debrief.runs,runs {0} out / {1} lost,撤離 {0} 次 / 陣亡 {1} 次
+debrief.killed,killed {0},擊殺 {0}
+debrief.searched,searched {0} crates for {1},搜刮 {0} 個補給箱，值 {1}
+debrief.items,"used {0}, threw {1}",使用 {0} 個，投擲 {1} 個
+debrief.lowest,lowest health {0}/{1},最低生命 {0}/{1}
+debrief.practice,practice,熟練度
+debrief.lost,lost: {0},失去：{0}
+debrief.recovered,recovered: {0},收藏：{0}
+debrief.set.piece,{0} — {1},{0} — {1}
+debrief.set.complete,SET COMPLETE — +{0} credits,收藏完成 — 信用點 +{0}
+debrief.unlocked,unlocked {0} — {1},已開放 {0} — {1}
+debrief.practice.gain,{0} +{1} (now {2}),{0} +{1}（現在 {2}）
+debrief.contract.none,no contract taken,沒有接合約
+debrief.contract.met,CONTRACT MET — {0}   +{1},合約完成 — {0}   +{1}
+debrief.contract.failed,contract failed — {0}   ({1}),合約失敗 — {0}   ({1})
+debrief.best.bank,banked {0},帶回 {0}
+debrief.best.kills,killed {0},擊殺 {0}
+debrief.best.seconds,lasted {0}s,撐了 {0} 秒
+debrief.best.multiplier,multiplier x{0},倍率 x{0}
+debrief.best.streak,longest streak,最長連勝
+debrief.best,NEW BEST — {0},新紀錄 — {0}
+fitting.armoury.title,ARMOURY,軍械庫
+fitting.armoury.first,buy or equip,購買或裝上
+fitting.armoury.second,sell it back,賣回去
+fitting.locker.title,LOCKER,置物櫃
+fitting.locker.first,sell the stash,賣掉存貨
+fitting.records.title,RECORDS,紀錄
+fitting.board.title,CONTRACTS,合約
+fitting.board.first,take the one selected,接下選中的
+fitting.board.second,reroll the board,重擲版面
+fitting.map.title,MAP TABLE,地圖桌
+fitting.map.first,change terrain,更換地形
+fitting.map.second,play today's run,今日挑戰
+fitting.gate.title,GATE,大門
+fitting.gate.first,launch,出發

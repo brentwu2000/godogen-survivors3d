@@ -50,6 +50,17 @@ __pycache__/
 assets/models/polyart_zombies.glb
 assets/models/polyart_zombies.glb.import
 
+# And the textures Godot cuts out of it on import, which this entry did not have
+# and the three below it did.
+#
+# A `.glb` carries its textures inside itself, and the importer writes them out
+# beside it as `<name>_<n>.png` the first time it reads the file. So excluding
+# the `.glb` excludes the geometry and leaves the artwork sitting in the working
+# tree, untracked and unignored, one `git add -A` away from being committed —
+# which is the redistribution the licence forbids, minus the mesh.
+assets/models/polyart_zombies_*.png
+assets/models/polyart_zombies_*.png.import
+
 # A downloaded character whose licence is not recorded, which is a stronger
 # reason to keep it out than the size is.
 #
@@ -80,6 +91,33 @@ assets/models/rin_v2.glb
 assets/models/rin_v2.glb.import
 assets/models/rin_v2_*.png
 assets/models/rin_v2_*.png.import
+
+# The Blender survivor experiments, which nothing loads.
+#
+# `build_survivor.py`, `build_survivor_v2.py` and `build_survivor_from_cc0.py`
+# each cut a whole survivor out of `art-src/models/base/rigged_anime_girl_cc0.blend`
+# and write the export here. All three predate the roster: the game's five
+# characters come from PROJECT LAST DAWN and load out of `resources/bodies/`, and
+# grep finds no `.cs`, `.tres` or `.tscn` that names any of these files.
+#
+# So they are outputs kept only so the scripts that made them can be re-run — and
+# the largest is a 10 MB re-export of the base blend itself, which is the same ten
+# megabytes of unattributable geometry the base file is excluded for. The `.blend`
+# sources stay tracked because they are the recipe; the exports do not, because
+# re-running the script is the way to get one back.
+assets/models/survivor_anime_apocalypse.glb
+assets/models/survivor_anime_apocalypse.glb.import
+assets/models/survivor_anime_apocalypse_*.webp
+assets/models/survivor_anime_apocalypse_*.webp.import
+
+# The same, for the two `survivor_apocalypse` exports: the importer's extracted
+# textures and its sidecars. The `.glb` files themselves are tracked from before
+# this rule and are the entry above them in `README.md`'s ledger, not here.
+assets/models/survivor_apocalypse*.glb.import
+assets/models/survivor_apocalypse_*.png
+assets/models/survivor_apocalypse_*.png.import
+assets/textures/survivor_material_atlas_v2.png
+assets/textures/survivor_material_atlas_v2.png.import
 
 # PROJECT LAST DAWN's five characters. **CC BY 4.0 permits committing these** —
 # see `assets/models/SOURCE.md`, which finally has an author, a URL and a licence

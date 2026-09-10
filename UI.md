@@ -284,10 +284,27 @@ Each step is playable before the next starts and closes against a probe, per the
    `Shelter`, and the names in the weapon, gear, contract and item resources. That is the bulk of the
    phase and it is mechanical now that the mechanism is proven end to end.
 
+   **The roster, the Console fitting, the HUD, the growth cards, the debrief and the shelter's fitting
+   prompts are through.** What is left is `BaseScreen`'s six pages — about 34 literals, and the page a
+   player spends the between-runs time on — and then the content nouns in the weapon, gear, item,
+   enemy, biome, contract, unlock and collection resources.
+
    *Probe:* `StringProbe` — the table loads, every locale takes the same placeholders as English,
-   every key formats in every locale, and no key comes back as `«key»`. What it does not yet have is
-   the scan asserting **no user-visible literal remains outside the table**, which is the assertion
-   that will drive the remaining 300 and should land with them.
+   every key formats in every locale, and no key comes back as `«key»`. It still does not scan for a
+   user-visible literal left outside the table.
+
+   **What did land is the assertion for the opposite mistake, which is the one that had already
+   happened.** `BaseLoopProbe` walks all seven fittings, reads every `Label` on each page, and fails if
+   the text contains a key from the table verbatim; the debrief gets the same read. That catches a
+   field which *is* a key being interpolated instead of resolved — `$"{who.Blurb}"` where
+   `Strings.Get(who.Blurb)` was meant — which draws "playing as RIN — character.rin.blurb" and passes
+   every other check in the project: the table is intact, so `StringProbe` is happy; every character is
+   ASCII, so `FontProbe` is happy; `Get` is never called, so there is no `«key»` to see.
+
+   It had been on screen since the roster was extracted, in English as well as in Chinese, because the
+   roster screen was updated and the base screen's copy of the same line was not. Every field
+   `Build*.cs` turns into a key adds one more call site that can make it, which is why this is an
+   assertion rather than a rule to remember.
 3. ~~**Width-aware alignment.**~~ **Done.** `Strings.Pad` / `PadLeft` / `Cells` count East Asian Wide
    as two, and the roster uses them where it used C#'s `{x,-18}` — which counts *characters*, so every
    column after a translated one shifted by however many hanzi were in it. `StringProbe` asserts the
@@ -301,23 +318,29 @@ Each step is playable before the next starts and closes against a probe, per the
 
    The subset is 56 KB and 279 characters now, up from 31 KB and 172. The column is complete for every
    key that exists, which is every key the roster needs and nothing else yet.
-5. **The Console fitting.** Language switches at runtime, persists to the profile at Version 3, and
-   defaults from `OS.GetLocale()` on a fresh save.
+5. ~~**The Console fitting.**~~ **Done.** It is a fitting on the wall like every other one: stand at
+   it, `[E]` cycles the language, the room redraws, and the choice persists. It cost no profile
+   version — the field defaults to empty and an empty field means "ask the system", so a save written
+   before the fitting existed reads back as a player who has not chosen yet, which is exactly what
+   they are.
 
-   Today the locale is `en` unless a script passes `-- locale:zh_TW`, and that default is deliberate
-   rather than unfinished: four probes read rendered strings, so defaulting to `OS.GetLocale()` before
-   they force `en` would turn the sweep red on a Chinese machine and green on a reviewer's.
-   `Strings.FromSystem` exists and is wired to nothing on purpose.
-
-   *Probe:* switching re-renders the room; a v2 save migrates and lands on the OS locale; a fresh save
-   on a Chinese OS starts Chinese.
+   *Probe:* `StringProbe` for the table and `ShelterProbe` for the fitting.
 6. ~~**The Quarters fitting.**~~ **Superseded.** The roster is a page and it opens at the Gate on
    purpose — see the correction at the top of this file. The Gate keeps `[C]`.
 
 **Steps 1 and 2 are worth doing even if the rest is deferred.** The font is the risk, and the table is
 the thing every later locale is free against.
 
-**What remains is one large mechanical job and one small design one.** The job is the other ~300
-literals; the mechanism they go through is proven, the font gate will catch anything the subset cannot
-draw, and each screen is independently reviewable against a before-and-after screenshot. The design one
-is step 5, which is a fitting, a profile field and a migration.
+**What remains is one mechanical job in two halves.** The chrome half is `BaseScreen`'s six pages —
+about 34 literals, the last screen still drawing English at a player who picked Chinese. The content
+half is larger and is a different shape: fifteen weapon names, twenty item names, seventeen gear names,
+nine enemy variants, five biomes and their blurbs, the contract descriptions, the unlock conditions and
+the collection sets are all English literals written into `.tres` by `Build*.cs`, so the fix is a key
+convention in the tools rather than more `Strings.Get` at the call sites. `CharacterResource` already
+works that way and is the pattern.
+
+**Do them in that order and the first half will look unfinished, which is the point.** Translating the
+chrome while the nouns stay English produces "買了 Service Rifle，花了 350" on every line of the shop —
+so the content half is not polish deferred behind the chrome, it is what makes the chrome look done.
+The font gate will catch anything the subset cannot draw, and `BaseLoopProbe`'s page walk will catch
+every noun that becomes a key and is then drawn raw.

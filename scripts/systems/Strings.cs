@@ -303,4 +303,37 @@ public static class Strings
     /// The raw cell, for a probe checking a locale that is not the current one.
     public static string Raw(int key, int locale) =>
         _table == null ? "" : _table.Values[key * _table.Locales.Length + locale];
+
+    /// The first key of the table that appears verbatim in `drawn`, or `""`.
+    ///
+    /// **The one localisation failure that leaves no trace.** A missing key comes
+    /// back as `«key»` and is unmissable; a wrong placeholder is caught by
+    /// `StringProbe`; a missing glyph is caught by `FontProbe`. But a field that
+    /// holds a key and is interpolated instead of resolved — `$"{who.Blurb}"`
+    /// where `Strings.Get(who.Blurb)` was meant — produces a screen that is
+    /// present, non-empty, correctly padded, fully drawable, and says
+    /// "playing as RIN — character.rin.blurb". Every automatic check passes.
+    ///
+    /// That happened, and it survived from the roster extraction until somebody
+    /// read the line. It will happen again for every field that becomes a key,
+    /// which is most of `Build*.cs` — so this is the assertion the screens hold
+    /// each other to, rather than a rule to remember at each call site.
+    ///
+    /// A key is a dotted lowercase identifier and no sentence in either locale
+    /// contains one, so a verbatim match is the whole test. Scanning every key
+    /// against a page is a few thousand `Contains` on a string of a few hundred
+    /// characters, which costs nothing in a probe and is never run in the game.
+    public static string Leak(string drawn)
+    {
+        if (_table == null || string.IsNullOrEmpty(drawn))
+            return "";
+
+        foreach (string key in _table.Keys)
+        {
+            if (drawn.Contains(key, System.StringComparison.Ordinal))
+                return key;
+        }
+
+        return "";
+    }
 }

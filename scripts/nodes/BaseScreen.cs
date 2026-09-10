@@ -800,7 +800,17 @@ public partial class BaseScreen : Control
         // Who is going, next to where they are going. The two lines are read
         // together because the choice is made together.
         CharacterResource who = CharacterBook.Load(_profile.Character);
-        text.AppendLine($"playing as   {who.CharacterName} — {who.Blurb}");
+
+        // `Strings.Get(who.Blurb)` and not `who.Blurb`. **The field holds a key
+        // rather than a sentence**, and has since the roster was extracted — the
+        // roster screen resolves it and this line was not changed with it, so the
+        // base screen has been drawing "playing as RIN — character.rin.blurb"
+        // ever since, in English as well as in Chinese.
+        //
+        // Nothing caught it because nothing could: the string is present and
+        // non-empty, `Get` is never called so there is no `«key»` to notice, and
+        // the only reader is an eye on the one screen the probes do not render.
+        text.AppendLine($"playing as   {who.CharacterName} — {Strings.Get(who.Blurb)}");
         text.AppendLine($"             {who.MaxHealth:F0} hp   {who.MoveSpeed:F1} m/s   "
                       + $"{who.CarryCapacity} bulk   [C] at the gate to change");
 
