@@ -167,6 +167,55 @@ next survivor could be dark, matte and short-haired and nothing would catch it.
 
 Drifter, Courier and Warden are unchanged to the digit. The four new ones are below.
 
+### Measured, for the first time since the roster shipped
+
+Everything above this heading is design. **Nothing had ever asked the game whether five survivors
+produce five different runs** — `CharacterProbe` compares the table against itself, which answers
+whether the roster is a ladder and not whether it is a choice. Twelve layouts, `linger:auto`, the
+starting kit, 60 runs:
+
+```bash
+godot --headless --script test/BalanceSweep.cs -- lingers:auto \
+      characters:rin,mika,akira,sora,yuna
+```
+
+| Survivor | | survived | median banked | median seconds | median lowest HP |
+| :--- | :--- | ---: | ---: | ---: | ---: |
+| AKIRA | Warden | 12/12 | 1260 | **130** | **84** |
+| MIKA | Courier | 11/12 | **1500** | 59 | 46 |
+| RIN | Drifter | 12/12 | 1233 | 60 | 59 |
+| YUNA | Revenant | 12/12 | 1162 | 88 | 75 |
+| SORA | Scout | 11/12 | 1073 | 55 | 41 |
+
+**They are five different runs, and the spread is wider than the stat table suggests.** 1073 to 1500
+banked is 40%, and 55 to 130 seconds is a factor of 2.4 — on the same twelve layouts, the same
+weapons and the same bot. Whatever else the roster is, it is not five skins.
+
+**The two ends of the table are the two things a survivor can sell, and they do not trade.** AKIRA
+buys clock: 130 seconds and 84 health left, on a blade that is already turning and a floor that is
+cold, so fewer things ever reach contact. MIKA buys credits: the most banked in the *shortest* runs,
+because +8 bulk and loot ×1.15 are paid at the moment of pickup rather than over time, and she
+finishes on the lowest health but one. Neither is winning at the other's number, which is what a
+roster is for.
+
+**AKIRA's row is the same finding as the Katana's, from the other side.** Both are "hold things off
+you", both come out at roughly twice the median run length, and neither leads on banked. Under
+`linger:auto` the bot stays while it is not losing, so anything that stops it losing buys time — and
+time is where the payout curve climbs. That is one mechanism showing up in a weapon table and a
+survivor table independently, which is the most confidence this project has ever had in a balance
+statement.
+
+**SORA is behind on every column and that is the one row worth arguing about.** Lowest banked, shortest
+runs, lowest health, and one of the two deaths. Her note says she is the fastest thing on the map and
+the easiest to kill, and the file already says the Scout "is about *leaving*, and nothing in the deck
+is about leaving" — this is that sentence with numbers under it. **A bot is the worst possible reader
+of her**: it walks to a point and stands there, so speed buys it nothing and 70 health costs it
+everything. The honest reading is that this row measures the driver more than it measures the
+survivor, and the honest fix is that a survivor whose whole case rests on a skill the instrument does
+not have needs a human play-test before anyone moves her numbers.
+
+
+
 **Five lines, five survivors, one each.** `RunGrowth.GrowthLine` has exactly five members and H3 made
 them the shape of a run. A survivor that favours one is the earliest possible commitment to a build —
 earlier than the shop, earlier than the first card — which is precisely the H4 complaint that

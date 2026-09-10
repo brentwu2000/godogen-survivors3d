@@ -222,6 +222,48 @@ Two caveats, both load-bearing:
 - **Every axe pair banks far less than every rifle pair** — 542 to 983 against 1079 to 1779. That is
   the melee gap this whole file opens with, and two weapons firing has not closed it.
 
+### Re-taken under the strafing driver, and the survival column stopped saying anything
+
+Every number above this heading predates `de0cc70` — mouse-look and WASD strafing — by thirty-one
+commits. Same instrument, same twelve layouts, same Primary:
+
+```bash
+godot --headless --script test/BalanceSweep.cs -- lingers:auto \
+      weapons:scavenged_rifle+combat_knife,scavenged_rifle+sidearm_pistol,\
+scavenged_rifle+hand_emitter,scavenged_rifle+katana
+```
+
+| Sidearm | survived | median banked | median seconds | median lowest HP | vs the knife |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Combat Knife | 12/12 | 1233 | 60 | 59 | — |
+| Hand Emitter | 12/12 | 1338 | 76 | 60 | 108% |
+| Sidearm Pistol | 12/12 | 1340 | 75 | 60 | 109% |
+| **Katana** | 12/12 | **1512** | **128** | 60 | **123%** |
+
+**48 runs out of 48 walked out, and that is the finding rather than a good result.** The survival
+column has been the second thing every table in this file was read on, and it no longer discriminates
+between anything: a driver that can strafe, given the choice of when to leave, does not die. Whatever
+these four weapons differ by, it is not whether you survive them — so the column should be read as
+"the bot did not get itself killed" and every comparison in this file that leaned on 9/12 against
+11/12 was leaning on a driver that could not sidestep.
+
+**The Sidearm Pistol's 73% was the driver, not the weapon.** 104% before the pathing fix, 73% after,
+**109%** now. The section above reads that 73% as the pistol being asked the wrong question — a ranged
+sidearm beside a rifle that already reaches 18 m — and that argument stands on its own; what does not
+stand is the number it was built from. The pistol beats the knife beside a rifle, and the axe pairing
+is a second question rather than a rescue.
+
+**The Katana at 123% is the only breach of the 115% budget on the shelf**, and it is the only one that
+changes the *shape* of a run: 128 seconds against 60 for the knife, on the same health. Under
+`linger:auto` the bot stays while it is not losing, so a blade that keeps things off you buys clock,
+and clock is where the payout curve now climbs. That makes the katana the one row where the budget
+question is a real design decision rather than arithmetic.
+
+**Nothing reached 180 s and the sweep exits 1 on that verdict.** Longest run 175.1 s, on the Katana
+arm. The earlier finding that the Service Rifle reaches the second half is about the *Primary*; the
+Primary here is the Scavenged Rifle the starting kit carries, and no sidearm on the shelf carries it
+over the line.
+
 ### Re-measured at step 5, and the budget had already moved
 
 Same instrument, same twelve layouts, `lingers:auto`. **Taken before the slot bug above was found, so

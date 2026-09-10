@@ -1935,12 +1935,10 @@ Median 1276 banked at 69 s, 12/12 out. The two bold rows were `Stuck, 120 at 70 
 `Stuck, 440 at 71 s`; the other ten moved too, because a routing change moves every route.
 
 The tables further down that section are the older set apart from the terrain baseline, which is
-re-taken and is the first thing below the divider. What is still owed is **the weapon rows and the
-survivor rows**, which live in `WEAPONS.md` and `CHARACTERS.md` and are a `weapons:` or `characters:`
-sweep across twelve layouts rather than one across five places — an order of magnitude more runs.
-They are still the right shape and the right comparisons; every absolute second in them was measured
-by a driver that could not strafe. **Re-take the one that is about to settle something before it
-settles it.**
+re-taken and is the first thing below the divider. **The sidearm shelf is re-taken and the roster is
+measured for the first time** — see `WEAPONS.md` and `CHARACTERS.md`. What is still owed is the rest
+of the weapon rows: the Primary shelf, the axe pairings and the pair budget, all of which predate the
+strafing driver. **Re-take the one that is about to settle something before it settles it.**
 
 `test/AutoPlay.cs` found that the first version gave the player **no reason to stay**: loitering 180 s
 banked exactly what leaving immediately banked (266 either way), because all value sat in crates and
@@ -2317,10 +2315,22 @@ the code before starting anything from it.** It is half an hour and it has now p
   the worst place in the game, is now the best by a factor of five at two minutes; nothing about it
   changed except a driver that can see `RarityBias`.
 
-  Still owed: **the per-weapon rows in `WEAPONS.md` and the survivor rows in `CHARACTERS.md`.** Those
-  are a `weapons:` or `characters:` sweep across twelve layouts — 48 runs for the four sidearms alone,
-  against 20 for the whole terrain table — so they are their own phase rather than a line in this one.
-  Every absolute second in them was measured by a driver that could not strafe.
+  **The sidearm shelf is re-taken and the roster is measured for the first time**, 108 runs between
+  them, and two results carry further than their own tables:
+
+  - **48 of 48 sidearm runs walked out.** The survival column every table in `WEAPONS.md` was read on
+    no longer discriminates between anything — a driver that can strafe, choosing when to leave, does
+    not die. Every "9/12 against 11/12" in that file was leaning on a bot that could not sidestep. The
+    Sidearm Pistol's 73% was the driver too; it is 109% now, and the Katana at 123% is the only breach
+    of the pair budget left on the shelf.
+  - **The roster is five different runs, and by more than the stat table suggests** — 1073 to 1500
+    banked and 55 to 130 seconds across the same twelve layouts. AKIRA buys clock, MIKA buys credits,
+    and neither wins at the other's number. **AKIRA's row and the Katana's are one finding seen from
+    two directions**: anything that stops the bot losing buys time, and time is where the payout curve
+    now climbs.
+
+  Still owed in `WEAPONS.md`: the Primary shelf, the axe pairings and the pair budget, last measured
+  at `74e2a72` — thirty-one commits before the driver learned to strafe.
 - **The pair budget is 133% against a rule of 115%, and it is a design decision nobody has taken.**
   Re-measured 2026-09-09: 927 banked per attempt on one weapon against 1233 on two. The rule is "a
   pair inside about 115% of one weapon"; it was 110% at the step-1 rework, 138% four phases later, and
