@@ -2156,8 +2156,8 @@ billboard sprite or procedural geometry, so no GLB is imported and no paid 3D ge
 | `assets/textures/body/*.png` | the skin plates plus a painted face, via `make_body_atlas.py` | 6 layers × 3 categories, 512×512 | the body atlas, stacked per category |
 | `assets/ui/portraits/*.png` | the roster design sheet, via `art-src/ui/cut_portraits.py` | 5 x 292x619 | the survivor select cards |
 | `assets/audio/*.tres` | synthesised by `BuildAudio.cs` | 22.05 kHz mono | 13 one-shots + 1 loop |
-| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 132 KB, 569 glyphs | the UI, in both languages |
-| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 290 keys x 2 locales | every screen the game draws, and 63 of its nouns |
+| `assets/fonts/ui.otf` | Noto Sans Mono CJK TC via `art-src/fonts/build_font.py` | 136 KB, 585 glyphs | the UI, in both languages |
+| `resources/strings.tres` | `art-src/ui/strings.csv` via `BuildStrings.cs` | 350 keys x 2 locales | every string the game draws |
 
 Cover is not an asset at all. `PropLibrary` builds seven props out of boxes at startup — containers,
 barriers, rubble heaps, walls, dumpsters, and two landmarks — and `PropRenderer` draws each kind as
@@ -2209,33 +2209,30 @@ would have spent a day fixing what was not broken and would have found out only 
 exactly the failure mode this file exists to prevent everywhere else. **Re-read this section against
 the code before starting anything from it.** It is half an hour and it has now paid for itself once.
 
-- **Every screen and every noun on the shelves speaks Chinese; two kinds of sentence do not.** `UI.md`
-  carries the plan and the order. Done: the roster, the Console fitting, the HUD, the growth cards,
-  the debrief, the shelter's prompts, the base screen's six pages and twenty-three messages, and the
-  63 content nouns — fifteen weapons, fifteen items, seventeen pieces of gear, nine enemy variants,
-  five biomes and their blurbs, two collection sets. 290 keys across two locales, against a
-  569-glyph subset that `FontProbe` re-checks every sweep.
+- ~~**The game speaks English at a player who picked Chinese.**~~ **Done.** Every string the game
+  draws comes out of the table — the roster, the Console fitting, the HUD, the growth cards, the
+  debrief, the shelter's prompts, the base screen's six pages and its messages, the 68 content nouns,
+  the eight unlock conditions, the contract board and the shop's summary line. 350 keys across two
+  locales, against a 585-glyph subset that `FontProbe` re-checks every sweep. `UI.md` has the plan and
+  what it got wrong.
 
-  **The identity is never translated, and that was the design decision the phase turned on.**
-  "Wedding Ring" is a key in the save file — `Profile.Stash` is a dictionary of item names,
-  `Collected` an array of them, `ClaimedSets` holds a set's name — and `EnemyTypeResource.TypeName`
-  resolves the path of a baked body. Turning any of those into a translation key would either break
-  every existing save or make what a save *contains* depend on the language it was written in. So
-  `Strings.Noun` is a lookup *beside* the identity, keyed on the name's own slug under `noun.`:
-  nothing about the resources changes, nothing about the saves changes, and the call sites that change
-  are exactly the ones that draw.
+  **The identity is never translated, and that was the decision the whole job turned on.** "Wedding
+  Ring" is a key in the save file — `Profile.Stash` is a dictionary of item names, `Collected` an array
+  of them, `ClaimedSets` holds a set's name — and `EnemyTypeResource.TypeName` resolves the path of a
+  baked body. Both of the obvious approaches would have broken something a player owns: writing keys
+  into the resource breaks every save on disk, and a per-locale field makes what a save *contains*
+  depend on the language it was written in. `Strings.Noun` looks the drawn form up *beside* the name.
 
-  **A noun with no row draws its English name rather than «key»**, which is right on a screen and is
-  the exact shape of failure nobody notices — one English word among forty Chinese ones reads as a
-  proper noun somebody chose to leave alone. `StringProbe` closes that: it enumerates every noun by
-  reading `resources/` rather than a list, so a weapon added next month is checked the day it is
-  added, and it names the missing row.
+  **A third locale is now nearly free**, which was the argument for building a table at all: one column
+  in `art-src/ui/strings.csv`, one row in `Strings`, and a font re-cut. No code.
 
-  **What is left is the two kinds of sentence that are composed rather than stored.** The unlock
-  conditions (`extract without firing a gun`) are prose in `UnlockBook`, and the shop's summary line
-  (`6 dmg  3.2/s  1.6 m  bleed`) is assembled in `ShopCatalogue` out of numbers and a trait name.
-  Neither is a noun and neither is a whole string anybody can translate as it stands; both need
-  splitting into a format and its arguments first, the way `CharacterResource.AbilityLine` was.
+  Three hazards have assertions under them and the fourth is a screenshot. A field that holds a key and
+  is drawn raw is caught by `BaseLoopProbe`'s page walk. A noun with no row is caught by `StringProbe`,
+  which enumerates the shelves in `resources/` rather than a list, so a weapon added next month is
+  checked the day it is added. A character the subset cannot draw is caught by `FontProbe` and, at the
+  other end, by `build_font.py`'s exit code. **Whether a translated sentence still fits its column is
+  not assertable** — it is `godot --script test/BaseShot.cs -- rich at:Armoury locale:zh_TW`, and every
+  page was checked that way.
 
   The failure mode this track has already produced once is a field that *is* a key being interpolated
   rather than resolved: the base screen drew "playing as RIN — character.rin.blurb" from the moment the

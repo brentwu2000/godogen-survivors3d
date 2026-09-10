@@ -230,22 +230,27 @@ screen nobody screenshots" and "the build stops".
 
 ## What this breaks, which is most of the work
 
-- **Around 320 literals become keys**, and each one is a small decision about where the placeholder
-  goes. This is the bulk of the phase and it is unavoidable.
+- ~~**Around 320 literals become keys**~~ — it was 350, and each one was a small decision about where
+  the placeholder goes. Done.
 - **Column alignment everywhere.** See constraint 2 — every padded column in every page.
-- **Content names live in `.tres` files.** Weapon, gear, character, contract and item names are written
-  by the `Build*` tools into resources, and read straight onto the screen. Either the tools write keys
-  and the screens translate them, or the resources gain a per-locale field. The former is consistent
-  with everything else here; it also means `WeaponProbe`'s dominance stage, which prints weapon names,
-  starts printing keys.
+- **Content names live in `.tres` files**, and *neither* of the two options this entry offered was
+  taken, because both were wrong. The names are **identities**: `Profile.Stash` is a dictionary keyed
+  by item name, `Collected` is an array of them, and `TypeName` resolves a baked body's path. Writing
+  keys into the resource breaks every save on disk; a per-locale field makes what a save *contains*
+  depend on the language it was written in. `Strings.Noun` looks the drawn form up *beside* the name
+  instead. `WeaponProbe` still prints English, which is the right outcome rather than a lucky one.
 - **Probes that assert on English text.** `HudProbe`, `DebriefProbe`, `ShopProbe` and `BaseLoopProbe`
   read rendered strings. They should force `en` at startup rather than be rewritten — a probe that
   passes in one locale and fails in another is testing the translation, not the game.
 - **`Presentation.cs` and every capture script** film text. The proof video is already three phases
   stale; it will be four.
-- **Profile Version 2 → 3.**
-- **The touch layer.** `TouchHud`'s four buttons are labelled, and its labels are the one place where a
-  longer translated word cannot simply wrap.
+- ~~**Profile Version 2 → 3.**~~ Not needed. The language field defaults to empty and empty means
+  "ask the system", so a save written before the setting existed reads back as a player who has not
+  chosen yet — which is what they are.
+- ~~**The touch layer.**~~ **It was never at risk, and this entry was wrong when it was written.**
+  `TouchHud`'s buttons carry single characters — `F`, `Q`, `G`, `⇄`, `↓` — which are the keyboard keys
+  and two arrows, not words. Nothing there translates and nothing there can overflow. Checked against
+  the file rather than remembered.
 
 ---
 
@@ -359,22 +364,28 @@ Each step is playable before the next starts and closes against a probe, per the
 **Steps 1 and 2 are worth doing even if the rest is deferred.** The font is the risk, and the table is
 the thing every later locale is free against.
 
-**What remains is the two kinds of sentence that are composed rather than stored.** The unlock
-conditions — `extract without firing a gun`, `kill the boss and walk out` — are prose in `UnlockBook`.
-The shop's summary line under the cursor — `6 dmg  3.2/s  1.6 m  bleed` — is assembled in
-`ShopCatalogue` out of four numbers and a trait name. Neither is a noun and neither is a whole string
-anybody can hand a translator: they have to be split into a format and its arguments first, the way
-`CharacterResource.AbilityLine` was, because Chinese does not put the number where English does.
+**Nothing remains.** Every string the game draws comes out of the table: the roster, the Console
+fitting, the HUD, the growth cards, the debrief, the shelter's prompts, the base screen's six pages and
+its messages, the 68 content nouns, the eight unlock conditions, the contract board and the shop's
+summary line. 350 keys across two locales, against a 585-glyph subset.
 
-`Contract.Describe` is the same shape and the same job. Its subject already resolves — a contract asks
-for 行屍 rather than for `walker` — and the sentence around it does not.
+**The two hardest pieces were the ones this file had filed as mechanical.** The content names turned
+out to be identities in the save file, so they are looked up *beside* rather than replaced. And the
+shop's summary line turned out to be a caching bug wearing a translation problem: it was composed once
+when the catalogue was built, which was correct while it was numbers and wrong the moment it had words
+in it — the Console fitting switches language without leaving the room, so the shop would have kept
+saying "+2 armour" under a Chinese cursor until the player launched a run and came back. It composes
+from a held resource now: no load, no directory scan, and nothing cached that a language can
+invalidate.
 
-**The column arithmetic held all the way through.** Every padded column on the armoury page lines up in
-Chinese: `[已裝上]` is six cells where `[equipped]` is eleven, `格鬥刀` is six where `Combat Knife` is
-twelve, and `Strings.Pad` counts cells. The last three places still counting characters — the shop
-rows, the contract descriptions and the reward column — were converted with the pages.
+**Three hazards, three assertions, and the fourth thing is a screenshot.** A field that holds a key and
+is drawn raw is caught by `BaseLoopProbe`'s page walk. A noun with no row is caught by `StringProbe`,
+which enumerates the shelves in `resources/` rather than a list. A character the subset cannot draw is
+caught by `FontProbe` and, at the other end, by `build_font.py`'s exit code. What none of them can see
+is whether a translated sentence still *fits* the column it is in — that is
+`godot --script test/BaseShot.cs -- rich at:Armoury locale:zh_TW`, and it is how every page in this
+phase was checked.
 
-The two hazards left both have an assertion under them. A field that holds a key and is drawn raw is
-caught by `BaseLoopProbe`'s page walk; a noun with no row, and a character the subset cannot draw, are
-caught by `StringProbe` and `FontProbe`. What none of them can see is whether a translated sentence
-still *fits* — that is a screenshot, and `test/BaseShot.cs -- locale:zh_TW` is how it is taken.
+**A third locale is now nearly free**, which was the whole argument for step 2. It is one column in
+`art-src/ui/strings.csv`, one row in `Strings`, and a font re-cut — no code, and `StringProbe` will
+name every key whose placeholders do not agree with English before anybody sees a screen.

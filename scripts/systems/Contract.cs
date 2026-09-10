@@ -76,14 +76,14 @@ public readonly struct Contract
 
     public string Describe(RunLog? log = null) => Kind switch
     {
-        ContractKind.BankValue => $"extract with {Target} banked",
-        ContractKind.KillVariant => $"kill {Target} {VariantName(log)}",
-        ContractKind.KillTotal => $"kill {Target} and get out",
-        ContractKind.LootCrates => $"empty {Target} crates and get out",
-        ContractKind.SurviveSeconds => $"extract after {Target}s",
-        ContractKind.ExtractBefore => $"extract before {Target}s",
-        ContractKind.NoConsumables => "extract without using an item",
-        ContractKind.ThrowItems => $"throw {Target} items and get out",
+        ContractKind.BankValue => Strings.Get("contract.bank", Target),
+        ContractKind.KillVariant => Strings.Get("contract.variant", Target, VariantName(log)),
+        ContractKind.KillTotal => Strings.Get("contract.kills", Target),
+        ContractKind.LootCrates => Strings.Get("contract.crates", Target),
+        ContractKind.SurviveSeconds => Strings.Get("contract.survive", Target),
+        ContractKind.ExtractBefore => Strings.Get("contract.before", Target),
+        ContractKind.NoConsumables => Strings.Get("contract.noitems"),
+        ContractKind.ThrowItems => Strings.Get("contract.throw", Target),
         _ => Kind.ToString(),
     };
 
@@ -98,9 +98,11 @@ public readonly struct Contract
             : $"0/{Target}",
         ContractKind.KillTotal => $"{run.Kills}/{Target}",
         ContractKind.LootCrates => $"{run.CratesLooted}/{Target}",
-        ContractKind.SurviveSeconds => $"{run.Seconds:F0}s/{Target}s",
-        ContractKind.ExtractBefore => $"{run.Seconds:F0}s vs {Target}s",
-        ContractKind.NoConsumables => run.ItemsUsed == 0 ? "none used" : $"{run.ItemsUsed} used",
+        ContractKind.SurviveSeconds => Strings.Get("contract.progress.secs", $"{run.Seconds:F0}", Target),
+        ContractKind.ExtractBefore => Strings.Get("contract.progress.vs", $"{run.Seconds:F0}", Target),
+        ContractKind.NoConsumables => run.ItemsUsed == 0
+            ? Strings.Get("contract.progress.none")
+            : Strings.Get("contract.progress.used", run.ItemsUsed),
         ContractKind.ThrowItems => $"{run.ItemsThrown}/{Target}",
         _ => "",
     };

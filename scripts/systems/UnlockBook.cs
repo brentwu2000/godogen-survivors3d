@@ -19,6 +19,9 @@ public enum UnlockKind
 public sealed class Unlock
 {
     public required string Id { get; init; }
+
+    /// What it grants, by name. **The identity** — `Strings.Noun` looks the drawn
+    /// form up beside it, the same way it does for a weapon or an item.
     public required string Name { get; init; }
 
     /// Shown to the player, word for word, next to the locked entry.
@@ -27,6 +30,11 @@ public sealed class Unlock
     /// that the bow exists, that a run can be finished with one weapon, and that
     /// extracting is something you can plan for — three things no menu was going
     /// to teach them.
+    ///
+    /// **A key, not the sentence** — `unlock.bow.condition` — and stored in the
+    /// case it is drawn in, which is lower. The two call sites used to lowercase
+    /// it themselves; casing is a property of a language rather than of a call
+    /// site, and `ToLower` on Han is a no-op that reads like a rule.
     public required string Condition { get; init; }
 
     public required UnlockKind Kind { get; init; }
@@ -63,7 +71,7 @@ public static class UnlockBook
         {
             Id = "bow",
             Name = "Hunting Bow",
-            Condition = "Extract without firing a gun",
+            Condition = "unlock.bow.condition",
             Kind = UnlockKind.ShopStock,
             Grants = "res://resources/weapons/hunting_bow.tres",
 
@@ -90,7 +98,7 @@ public static class UnlockBook
         {
             Id = "ignite",
             Name = "Ignite",
-            Condition = "Kill 60 in a single run",
+            Condition = "unlock.ignite.condition",
             Kind = UnlockKind.Growth,
             Grants = nameof(GrowthOption.Ignite),
             Met = (run, _) => run.Kills >= 60,
@@ -100,7 +108,7 @@ public static class UnlockBook
         {
             Id = "service_rifle",
             Name = "Service Rifle",
-            Condition = "Extract three runs in a row",
+            Condition = "unlock.service_rifle.condition",
             Kind = UnlockKind.ShopStock,
             Grants = "res://resources/weapons/service_rifle.tres",
             Met = (_, profile) => profile.Streak >= 3,
@@ -110,7 +118,7 @@ public static class UnlockBook
         {
             Id = "scythe",
             Name = "Reaper Scythe",
-            Condition = "Kill the boss and walk out",
+            Condition = "unlock.scythe.condition",
             Kind = UnlockKind.ShopStock,
             Grants = "res://resources/weapons/reaper_scythe.tres",
             Met = (run, _) => run.Survived && run.BossesKilled > 0,
@@ -120,7 +128,7 @@ public static class UnlockBook
         {
             Id = "detonate",
             Name = "Detonate",
-            Condition = "Kill 8 with one thrown item",
+            Condition = "unlock.detonate.condition",
             Kind = UnlockKind.Growth,
             Grants = nameof(GrowthOption.Detonate),
 
@@ -134,7 +142,7 @@ public static class UnlockBook
         {
             Id = "thorns",
             Name = "Thorns",
-            Condition = "Survive a run that took you below 15 health",
+            Condition = "unlock.thorns.condition",
             Kind = UnlockKind.Growth,
             Grants = nameof(GrowthOption.Thorns),
             Met = (run, _) => run.Survived && run.LowestHealth <= 15.0f,
@@ -144,7 +152,7 @@ public static class UnlockBook
         {
             Id = "lifesteal",
             Name = "Lifesteal",
-            Condition = "Search 6 crates in one run",
+            Condition = "unlock.lifesteal.condition",
             Kind = UnlockKind.Growth,
             Grants = nameof(GrowthOption.Lifesteal),
             Met = (run, _) => run.CratesLooted >= 6,
@@ -154,7 +162,7 @@ public static class UnlockBook
         {
             Id = "fortune",
             Name = "Fortune",
-            Condition = "Extract with a multiplier of 2.5 or better",
+            Condition = "unlock.fortune.condition",
             Kind = UnlockKind.Growth,
             Grants = nameof(GrowthOption.Fortune),
             Met = (run, _) => run.Survived && run.Multiplier >= 2.5f,
@@ -220,7 +228,15 @@ public static class UnlockBook
         if (!TierAllows(profile, tier))
         {
             int needed = TierOpensAt(tier) - profile.RunsSurvived;
-            return $"Extract {needed} more time{(needed == 1 ? "" : "s")}";
+
+            // Two keys rather than one with a plural suffix stitched on. English
+            // inflects the noun and Chinese does not, so "time{s}" is a rule
+            // about English that a translator cannot switch off — and the row
+            // for one is a different sentence, not the same one with a letter
+            // removed.
+            return needed == 1
+                ? Strings.Get("unlock.tier.one")
+                : Strings.Get("unlock.tier.many", needed);
         }
 
         foreach (Unlock unlock in All)
@@ -229,7 +245,7 @@ public static class UnlockBook
                 && unlock.Grants == path
                 && !profile.HasUnlocked(unlock.Id))
             {
-                return unlock.Condition;
+                return Strings.Get(unlock.Condition);
             }
         }
 

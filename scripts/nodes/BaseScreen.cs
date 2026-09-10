@@ -261,7 +261,7 @@ public partial class BaseScreen : Control
         // player off to earn credits that will not help.
         if (UnlockBook.ShopLockReason(_profile, entry.Path, entry.Tier) is { } reason)
         {
-            _message = Strings.Get("msg.locked", Strings.Noun(entry.Name), reason.ToLower());
+            _message = Strings.Get("msg.locked", Strings.Noun(entry.Name), reason);
             return false;
         }
 
@@ -874,7 +874,7 @@ public partial class BaseScreen : Control
                 : entry.Price > 0 ? Strings.Get("base.state.price", entry.Price)
                 : Strings.Get("base.state.none");
 
-            string note = locked != null ? $"  {locked.ToLower()}"
+            string note = locked != null ? $"  {locked}"
                 : !Profile.IsStartingKit(entry.Path) && owned ? "  " + Strings.Get("base.note.lost")
                 : "";
 

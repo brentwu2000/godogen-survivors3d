@@ -20,14 +20,28 @@ public sealed class ShopCatalogue
 
         public bool IsWeapon => Slot == null;
 
-        /// The line the base screen prints under the cursor, composed once when
-        /// the catalogue is built.
+        /// The resource this row was read from, held so the summary can be
+        /// composed from it rather than stored.
+        public required Resource Source { get; init; }
+
+        /// The line the base screen prints under the cursor.
         ///
-        /// It used to be composed in `Redraw`, which meant a `GD.Load` of the
-        /// selected resource on every keypress — cheap, cached, and still a file
-        /// system call per cursor move for a string that cannot change while the
-        /// screen is open.
-        public required string Summary { get; init; }
+        /// **Composed on read, from a resource that is already in hand.** It was
+        /// composed once when the catalogue was built, for a good reason that
+        /// stopped being the whole reason: composing it in `Redraw` used to mean
+        /// a `GD.Load` of the selected resource on every keypress, which is a
+        /// file system call per cursor move for a string that cannot change while
+        /// the screen is open.
+        ///
+        /// Except that it can, and it did the moment the summary had words in it.
+        /// The Console fitting switches language without leaving the room, and a
+        /// string built at construction stays in the language the catalogue was
+        /// built in — so the shop would have kept saying "+2 armour" under a
+        /// Chinese cursor until the player launched a run and came back.
+        ///
+        /// Holding the resource answers both: no load, no directory scan, and
+        /// nothing cached that a language can invalidate.
+        public string Summary => Describe(Source);
     }
 
     public System.Collections.Generic.List<Entry> Weapons { get; } = new();
@@ -56,10 +70,10 @@ public sealed class ShopCatalogue
             Weapons.Add(new Entry
             {
                 Path = path,
+                Source = weapon,
                 Name = weapon.WeaponName,
                 Price = weapon.Price,
                 Tier = weapon.Tier,
-                Summary = Describe(weapon),
             });
         }
 
@@ -77,11 +91,11 @@ public sealed class ShopCatalogue
             Gear.Add(new Entry
             {
                 Path = path,
+                Source = piece,
                 Name = piece.GearName,
                 Price = piece.Price,
                 Tier = piece.Tier,
                 Slot = piece.Slot,
-                Summary = Describe(piece),
             });
         }
 
@@ -116,6 +130,14 @@ public sealed class ShopCatalogue
         return paths;
     }
 
+    /// Whichever of the two shelves this row came from.
+    private static string Describe(Resource source) => source switch
+    {
+        WeaponResource weapon => Describe(weapon),
+        GearResource gear => Describe(gear),
+        _ => "",
+    };
+
     /// One line of what a piece actually does, read off the resource.
     ///
     /// Every non-zero field and nothing else. A curated sentence per item would
@@ -125,68 +147,80 @@ public sealed class ShopCatalogue
     {
         var parts = new System.Collections.Generic.List<string>();
 
-        Add(parts, "health", gear.HealthBonus);
-        Add(parts, "armour", gear.ArmourBonus);
-        Add(parts, "speed", gear.MoveSpeedBonus);
-        Add(parts, "carry", gear.CarryBonus);
-        Add(parts, "safe box", gear.SafeBoxBonus);
-        Add(parts, "pierce", gear.PierceBonus);
-        Add(parts, "area", gear.AreaBonus);
-        Add(parts, "thorns", gear.ThornsBonus);
-        Add(parts, "regen", gear.RegenBonus);
-        Add(parts, "knockback", gear.KnockbackBonus);
-        Add(parts, "dodge", gear.DodgeBonus);
+        Add(parts, "stat.health", gear.HealthBonus);
+        Add(parts, "stat.armour", gear.ArmourBonus);
+        Add(parts, "stat.speed", gear.MoveSpeedBonus);
+        Add(parts, "stat.carry", gear.CarryBonus);
+        Add(parts, "stat.safebox", gear.SafeBoxBonus);
+        Add(parts, "stat.pierce", gear.PierceBonus);
+        Add(parts, "stat.area", gear.AreaBonus);
+        Add(parts, "stat.thorns", gear.ThornsBonus);
+        Add(parts, "stat.regen", gear.RegenBonus);
+        Add(parts, "stat.knockback", gear.KnockbackBonus);
+        Add(parts, "stat.dodge", gear.DodgeBonus);
 
         // The ceilings are half of what a piece is, and the half a player cannot
         // discover by wearing it for ten seconds.
         var caps = new System.Collections.Generic.List<string>();
-        Cap(caps, "health", gear.HealthUpgradeCap);
-        Cap(caps, "armour", gear.ArmourUpgradeCap);
-        Cap(caps, "speed", gear.SpeedUpgradeCap);
-        Cap(caps, "search", gear.SearchUpgradeCap);
-        Cap(caps, "pierce", gear.PierceUpgradeCap);
-        Cap(caps, "crit", gear.CritUpgradeCap);
-        Cap(caps, "area", gear.AreaUpgradeCap);
-        Cap(caps, "thorns", gear.ThornsUpgradeCap);
-        Cap(caps, "regen", gear.RegenUpgradeCap);
-        Cap(caps, "knockback", gear.KnockbackUpgradeCap);
-        Cap(caps, "dodge", gear.DodgeUpgradeCap);
-        Cap(caps, "fortune", gear.FortuneUpgradeCap);
+        Cap(caps, "stat.health", gear.HealthUpgradeCap);
+        Cap(caps, "stat.armour", gear.ArmourUpgradeCap);
+        Cap(caps, "stat.speed", gear.SpeedUpgradeCap);
+        Cap(caps, "stat.search", gear.SearchUpgradeCap);
+        Cap(caps, "stat.pierce", gear.PierceUpgradeCap);
+        Cap(caps, "stat.crit", gear.CritUpgradeCap);
+        Cap(caps, "stat.area", gear.AreaUpgradeCap);
+        Cap(caps, "stat.thorns", gear.ThornsUpgradeCap);
+        Cap(caps, "stat.regen", gear.RegenUpgradeCap);
+        Cap(caps, "stat.knockback", gear.KnockbackUpgradeCap);
+        Cap(caps, "stat.dodge", gear.DodgeUpgradeCap);
+        Cap(caps, "stat.fortune", gear.FortuneUpgradeCap);
 
         if (caps.Count > 0)
-            parts.Add($"upgrades: {string.Join(" ", caps)}");
+            parts.Add(Strings.Get("shop.upgrades", string.Join(" ", caps)));
 
-        return parts.Count > 0 ? string.Join("   ", parts) : "grants nothing";
+        return parts.Count > 0 ? string.Join("   ", parts) : Strings.Get("shop.nothing");
     }
 
     private static string Describe(WeaponResource weapon)
     {
         var parts = new System.Collections.Generic.List<string>
         {
-            $"{weapon.BaseDamage:F0} dmg",
-            $"{weapon.BaseAttackSpeed:F1}/s",
-            $"{weapon.BaseRange:F1} m",
+            Strings.Get("shop.damage", $"{weapon.BaseDamage:F0}"),
+            Strings.Get("shop.rate", $"{weapon.BaseAttackSpeed:F1}"),
+            Strings.Get("shop.range", $"{weapon.BaseRange:F1}"),
         };
 
+        // `trait.burst` and not `Burst.ToString().ToLower()`. The enum name was
+        // doing double duty as a label, which reads fine in English and is a
+        // word nobody can translate — it is not in the table, so nothing would
+        // have reported it missing either.
         if (weapon.Trait != WeaponTrait.None)
-            parts.Add(weapon.Trait.ToString().ToLower());
+            parts.Add(Strings.Get($"trait.{weapon.Trait.ToString().ToLower()}"));
 
         return string.Join("   ", parts);
     }
 
-    private static void Add(System.Collections.Generic.List<string> parts, string name, float amount)
+    /// **The signed amount is one argument and the label is the other.** English
+    /// puts the number first — "+2 armour" — and Chinese puts it last, 「護甲 +2」,
+    /// so the two cannot be one interpolation with a word swapped in it. Same
+    /// reason `CharacterResource.AbilityLine` is assembled from seven keys.
+    private static void Add(System.Collections.Generic.List<string> parts, string key, float amount)
     {
         if (amount != 0.0f)
-            parts.Add($"{(amount > 0.0f ? "+" : "")}{amount:0.##} {name}");
+        {
+            parts.Add(Strings.Get("shop.stat",
+                                  $"{(amount > 0.0f ? "+" : "")}{amount:0.##}",
+                                  Strings.Get(key)));
+        }
     }
 
-    private static void Cap(System.Collections.Generic.List<string> caps, string name, int value)
+    private static void Cap(System.Collections.Generic.List<string> caps, string key, int value)
     {
         // -1 is "no opinion" and 0 is "none allowed". Printing them the same way
         // would hide the entire cost side of a sidegrade: the bandolier's zero
         // fortune is the reason its five pierce is a trade.
         if (value >= 0)
-            caps.Add($"{name} {value}");
+            caps.Add(Strings.Get("shop.cap", Strings.Get(key), value));
     }
 
     /// What the stash is worth if sold. Face value: the multiplier was earned by

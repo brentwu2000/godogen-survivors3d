@@ -170,6 +170,14 @@ public partial class StringProbe : SceneTree
         foreach (CollectionBook.Set set in CollectionBook.All)
             wanted.Add(set.Name);
 
+        // What an unlock grants, which is a weapon name for three of them and a
+        // growth option's name for the other five. The weapons are already on
+        // the shelf above; the growth options exist nowhere else, so without
+        // this line "Lifesteal" would be the one word on the debrief that never
+        // got translated and nothing would say so.
+        foreach (Unlock unlock in UnlockBook.All)
+            wanted.Add(unlock.Name);
+
         bool ok = true;
 
         foreach (string name in wanted)

@@ -289,3 +289,63 @@ biome.the_flats.blurb,"nothing in the way, in either direction",兩個方向都�
 biome.ash_district.blurb,"long streets, blind corners; the crowd comes down one",長街與盲角；人潮只從一條下來
 biome.cold_storage.blurb,rooms and doorways; nothing has a long shot,房間與門洞；沒有東西打得遠
 hud.curiosity,CURIOSITY — {0}  ({1} {2}/{3}),收藏品 — {0}  （{1} {2}/{3}）
+noun.ignite,Ignite,引燃
+noun.detonate,Detonate,引爆
+noun.thorns,Thorns,荊棘
+noun.lifesteal,Lifesteal,吸血
+noun.fortune,Fortune,幸運
+unlock.bow.condition,extract without firing a gun,不開槍就撤離
+unlock.ignite.condition,kill 60 in a single run,單場擊殺 60
+unlock.service_rifle.condition,extract three runs in a row,連續三場撤離
+unlock.scythe.condition,kill the boss and walk out,殺掉首領並走出去
+unlock.detonate.condition,kill 8 with one thrown item,一次投擲擊殺 8
+unlock.thorns.condition,survive a run that took you below 15 health,生命掉到 15 以下之後還活著撤離
+unlock.lifesteal.condition,search 6 crates in one run,單場搜刮 6 個補給箱
+unlock.fortune.condition,extract with a multiplier of 2.5 or better,以 2.5 以上的倍率撤離
+unlock.tier.one,extract 1 more time,再撤離 1 次
+unlock.tier.many,extract {0} more times,再撤離 {0} 次
+contract.bank,extract with {0} banked,帶回 {0} 並撤離
+contract.variant,kill {0} {1},擊殺 {0} 隻{1}
+contract.kills,kill {0} and get out,擊殺 {0} 並走出去
+contract.crates,empty {0} crates and get out,清空 {0} 個補給箱並走出去
+contract.survive,extract after {0}s,撐過 {0} 秒再撤離
+contract.before,extract before {0}s,{0} 秒前撤離
+contract.noitems,extract without using an item,不使用任何道具就撤離
+contract.throw,throw {0} items and get out,投擲 {0} 個道具並走出去
+contract.progress.none,none used,沒有使用
+contract.progress.used,{0} used,使用了 {0} 個
+contract.progress.secs,{0}s/{1}s,{0} 秒/{1} 秒
+contract.progress.vs,{0}s vs {1}s,{0} 秒，限 {1} 秒
+shop.stat,{0} {1},{1} {0}
+shop.cap,{0} {1},{0} {1}
+shop.upgrades,upgrades: {0},可升級：{0}
+shop.nothing,grants nothing,沒有加成
+shop.damage,{0} dmg,傷害 {0}
+shop.rate,{0}/s,{0} 次/秒
+shop.range,{0} m,射程 {0} 米
+stat.health,health,生命
+stat.armour,armour,護甲
+stat.speed,speed,移速
+stat.carry,carry,負重
+stat.safebox,safe box,保險箱
+stat.pierce,pierce,穿透
+stat.area,area,範圍
+stat.thorns,thorns,荊棘
+stat.regen,regen,回復
+stat.knockback,knockback,擊退
+stat.dodge,dodge,閃避
+stat.search,search,搜刮
+stat.crit,crit,暴擊
+stat.fortune,fortune,幸運
+trait.burst,burst,連發
+trait.bleed,bleed,流血
+trait.ricochet,ricochet,跳彈
+trait.cleave,cleave,橫掃
+trait.spread,spread,散射
+trait.charge,charge,蓄力
+trait.chill,chill,冰緩
+trait.mark,mark,標記
+trait.blast,blast,爆風
+trait.shatter,shatter,碎裂
+trait.shock,shock,電擊
+hud.weapon.unarmed,unarmed,赤手

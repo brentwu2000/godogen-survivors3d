@@ -430,7 +430,7 @@ public partial class Hud : CanvasLayer
     {
         if (_weapons?.Weapon is not { } weapon)
         {
-            _arms.Text = "unarmed";
+            _arms.Text = Strings.Get("hud.weapon.unarmed");
             _level.Fill.Visible = false;
             _level.Text.Text = "";
             _keys.Text = "";

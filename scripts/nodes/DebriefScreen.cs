@@ -183,7 +183,8 @@ public partial class DebriefScreen : CanvasLayer
         // did to get it learns what this game rewards, which is the only part
         // that changes what they do next.
         foreach (Unlock unlock in meta.NewUnlocks)
-            text.AppendLine(Strings.Get("debrief.unlocked", unlock.Name, unlock.Condition.ToLower()));
+            text.AppendLine(Strings.Get("debrief.unlocked", Strings.Noun(unlock.Name),
+                                        Strings.Get(unlock.Condition)));
 
         // "\r\n" from AppendLine draws as two breaks in a Godot Label. Same fix
         // as the base screen; the debrief has been double-spaced for as long.
